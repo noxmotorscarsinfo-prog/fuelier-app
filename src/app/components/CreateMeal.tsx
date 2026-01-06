@@ -1,13 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ArrowLeft, Plus, X, Save, Info, ChefHat, Sparkles, Search, Check } from 'lucide-react';
 import { Meal, MealType } from '../types';
 import { saveCustomMeal } from '../data/customMeals';
-import { INGREDIENTS_DATABASE, calculateMacrosFromIngredients, getCustomIngredients, saveCustomIngredient as saveDBIngredient, Ingredient as DBIngredient } from '../../data/ingredientsDatabase';
+import { INGREDIENTS_DATABASE, calculateMacrosFromIngredients, Ingredient as DBIngredient, saveCustomIngredient as saveDBIngredient } from '../../data/ingredientsDatabase';
+import { getCustomIngredients, createCustomIngredient, getBaseIngredients } from '../utils/supabase';
 
 interface CreateMealProps {
   mealType?: MealType;
   onBack: () => void;
-  onSave: (meal: Meal) => void; // ⭐ Ahora recibe el meal creado
+  onSave: (meal: Meal) => void;
+  userEmail: string; // NUEVO: Para cargar ingredientes personalizados del usuario
 }
 
 interface IngredientInput {
@@ -26,7 +28,7 @@ interface NewIngredientData {
   fat: string;
 }
 
-export default function CreateMeal({ mealType, onBack, onSave }: CreateMealProps) {
+export default function CreateMeal({ mealType, onBack, onSave, userEmail }: CreateMealProps) {
   const [mealName, setMealName] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<MealType[]>(mealType ? [mealType] : []);
   const [ingredients, setIngredients] = useState<IngredientInput[]>([
@@ -45,6 +47,57 @@ export default function CreateMeal({ mealType, onBack, onSave }: CreateMealProps
     fat: ''
   });
   const [currentIngredientId, setCurrentIngredientId] = useState<string | null>(null);
+
+  // ⭐ NUEVO: Estados para ingredientes de diferentes fuentes
+  const [baseIngredients, setBaseIngredients] = useState<DBIngredient[]>([]); // Ingredientes globales de Supabase
+  const [customIngredients, setCustomIngredients] = useState<DBIngredient[]>([]); // Ingredientes personalizados del usuario
+
+  // ⭐ NUEVO: Cargar ingredientes globales y personalizados desde Supabase al montar
+  useEffect(() => {
+    const loadAllIngredients = async () => {
+      try {
+        // 1. Cargar ingredientes globales (creados por admin en Supabase)
+        const globalIngredients = await getBaseIngredients();
+        console.log(`✅ Loaded ${globalIngredients?.length || 0} global ingredients from Supabase`);
+        
+        // 2. Cargar ingredientes personalizados del usuario
+        const userIngredients = await getCustomIngredients(userEmail);
+        console.log(`✅ Loaded ${userIngredients?.length || 0} custom ingredients from Supabase`);
+        
+        // Convertir ingredientes de Supabase al formato DBIngredient
+        const formattedGlobal = (globalIngredients || []).map((ing: any) => ({
+          id: ing.id,
+          name: ing.name,
+          category: ing.category || 'otros',
+          caloriesPer100g: ing.calories_per_100g,
+          proteinPer100g: ing.protein_per_100g,
+          carbsPer100g: ing.carbs_per_100g,
+          fatPer100g: ing.fat_per_100g,
+          isCustom: false
+        }));
+        
+        const formattedCustom = (userIngredients || []).map((ing: any) => ({
+          id: ing.id,
+          name: ing.name,
+          category: ing.category || 'otros',
+          caloriesPer100g: ing.calories_per_100g,
+          proteinPer100g: ing.protein_per_100g,
+          carbsPer100g: ing.carbs_per_100g,
+          fatPer100g: ing.fat_per_100g,
+          isCustom: true
+        }));
+        
+        setBaseIngredients(formattedGlobal);
+        setCustomIngredients(formattedCustom);
+      } catch (error) {
+        console.error('Error loading ingredients:', error);
+        setBaseIngredients([]);
+        setCustomIngredients([]);
+      }
+    };
+
+    loadAllIngredients();
+  }, [userEmail]);
 
   // ⭐ Calcular macros automáticamente
   const calculatedMacros = useMemo(() => {
@@ -121,7 +174,8 @@ export default function CreateMeal({ mealType, onBack, onSave }: CreateMealProps
   const getFilteredSuggestions = (searchText: string) => {
     if (!searchText || searchText.length < 1) return [];
     
-    const allIngredients: DBIngredient[] = [...INGREDIENTS_DATABASE, ...getCustomIngredients()];
+    // ⭐ FIXED: Combinar ingredientes base + personalizados de forma síncrona
+    const allIngredients: DBIngredient[] = [...INGREDIENTS_DATABASE, ...baseIngredients, ...customIngredients];
     const lowerSearch = searchText.toLowerCase();
     
     return allIngredients

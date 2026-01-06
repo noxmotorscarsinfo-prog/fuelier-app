@@ -4,8 +4,8 @@ import { BREAKFASTS_FROM_DB, LUNCHES_FROM_DB, SNACKS_FROM_DB, DINNERS_FROM_DB } 
 import { ArrowLeft, Plus, Edit, Trash2, Save, X, Coffee, UtensilsCrossed, Apple, Moon, FileText, Package, Search, Check, Sparkles, AlertCircle } from 'lucide-react';
 import { generateSystemDocumentationPDF } from '../utils/generateSystemDocumentation';
 import * as api from '../utils/api';
-import { baseIngredients, getIngredients, saveCustomIngredient } from '../data/ingredients';
-import { MealIngredientReference, INGREDIENTS_DATABASE, Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientsDatabase';
+import { INGREDIENTS_DATABASE, getCustomIngredients, saveCustomIngredient, getAllIngredients } from '../../data/ingredientsDatabase';
+import { MealIngredientReference, Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientsDatabase';
 import { migrateMealsToStructured } from '../utils/mealMigration';
 
 // Interface para ingredientes seleccionados en el formulario
@@ -128,9 +128,9 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     }
     
     if (ingredients.length === 0) {
-      // Cargar ingredientes existentes de la app
-      allIngredients = baseIngredients;
-      console.log('✅ Cargados', baseIngredients.length, 'ingredientes existentes de la app');
+      // Cargar ingredientes existentes de la app (sistema + personalizados)
+      allIngredients = INGREDIENTS_DATABASE;
+      console.log('✅ Cargados', INGREDIENTS_DATABASE.length, 'ingredientes del sistema');
     }
     
     // Organizar comidas por tipo
@@ -167,6 +167,30 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
   };
 
   // ==================== FUNCIONES DE INGREDIENTES PARA PLATOS ====================
+
+  // Función auxiliar para buscar un ingrediente en todas las fuentes disponibles
+  const findIngredientById = (ingredientId: string): DBIngredient | null => {
+    // 1. Buscar en INGREDIENTS_DATABASE (hardcodeados)
+    const fromDB = INGREDIENTS_DATABASE.find(ing => ing.id === ingredientId);
+    if (fromDB) return fromDB;
+    
+    // 2. Buscar en globalIngredients (creados por admin en Supabase)
+    const fromGlobal = globalIngredients.find(gi => gi.id === ingredientId);
+    if (fromGlobal) {
+      return {
+        id: fromGlobal.id,
+        name: fromGlobal.name,
+        category: fromGlobal.category as any,
+        caloriesPer100g: fromGlobal.calories,
+        proteinPer100g: fromGlobal.protein,
+        carbsPer100g: fromGlobal.carbs,
+        fatPer100g: fromGlobal.fat,
+        isCustom: false
+      };
+    }
+    
+    return null;
+  };
 
   const handleAddIngredientToMeal = (ingredientId: string) => {
     // Verificar si ya está añadido
@@ -210,10 +234,37 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
   // Filtrar ingredientes para el selector
   const filteredIngredients = useMemo(() => {
-    return INGREDIENTS_DATABASE.filter(ing =>
+    // ⭐ FIXED: Combinar ingredientes hardcodeados + ingredientes globales de Supabase
+    const allAvailableIngredients: DBIngredient[] = [
+      ...INGREDIENTS_DATABASE,
+      // Convertir globalIngredients (formato Ingredient) a DBIngredient
+      ...globalIngredients.map(gi => ({
+        id: gi.id,
+        name: gi.name,
+        category: gi.category as any,
+        caloriesPer100g: gi.calories,
+        proteinPer100g: gi.protein,
+        carbsPer100g: gi.carbs,
+        fatPer100g: gi.fat,
+        isCustom: false
+      }))
+    ];
+    
+    // Eliminar duplicados por NOMBRE (case-insensitive) - prioriza ingredientes hardcodeados
+    const seenNames = new Set<string>();
+    const uniqueIngredients = allAvailableIngredients.filter(ing => {
+      const nameLower = ing.name.toLowerCase();
+      if (seenNames.has(nameLower)) {
+        return false; // Ya existe, omitir duplicado
+      }
+      seenNames.add(nameLower);
+      return true;
+    });
+    
+    return uniqueIngredients.filter(ing =>
       ing.name.toLowerCase().includes(ingredientSearchTerm.toLowerCase())
     );
-  }, [ingredientSearchTerm]);
+  }, [ingredientSearchTerm, globalIngredients]);
 
   // ==================== FUNCIONES DE PREPARACIÓN Y TIPS ====================
 
@@ -327,7 +378,7 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
     // Generar ingredientes como strings para legacy
     const ingredientStrings = selectedMealIngredients.map(si => {
-      const dbIng = INGREDIENTS_DATABASE.find(ing => ing.id === si.ingredientId);
+      const dbIng = findIngredientById(si.ingredientId);
       return dbIng ? `${si.amountInGrams}g ${dbIng.name}` : '';
     }).filter(s => s);
 
@@ -719,7 +770,7 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
               ) : (
                 <div className="space-y-3">
                   {selectedMealIngredients.map((si) => {
-                    const dbIng = INGREDIENTS_DATABASE.find(ing => ing.id === si.ingredientId);
+                    const dbIng = findIngredientById(si.ingredientId);
                     if (!dbIng) return null;
 
                     // Calcular macros para esta cantidad
@@ -1362,7 +1413,7 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
                     <p className="text-xs font-medium text-neutral-600 mb-2">Ingredientes:</p>
                     <div className="space-y-1">
                       {meal.ingredientReferences.slice(0, 3).map((ref, i) => {
-                        const dbIng = INGREDIENTS_DATABASE.find(ing => ing.id === ref.ingredientId);
+                        const dbIng = findIngredientById(ref.ingredientId);
                         return dbIng ? (
                           <div key={i} className="text-xs text-neutral-600">
                             • {ref.amountInGrams}g de {dbIng.name}

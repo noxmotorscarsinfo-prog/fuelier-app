@@ -3,7 +3,7 @@ import { Meal, MealIngredient } from '../types';
 import { ArrowLeft, Check, Flame, Beef, Wheat, Droplet, ChefHat, Clock, Lightbulb, ShoppingBasket, ArrowRight, TrendingUp, TrendingDown, Edit, Target, UtensilsCrossed, Trash2, Plus, Zap } from 'lucide-react';
 import { generateDetailedIngredients, generatePreparationSteps, generateCookingTips, generateMealVariations } from '../utils/mealDetails';
 import { getMealsData } from '../data/meals';
-import { getIngredients } from '../data/ingredients';
+import { getAllIngredients } from '../../data/ingredientsDatabase';
 import IngredientEditor from './IngredientEditor';
 import ComplementSelector from './ComplementSelector';
 import { getMealGoals, getRemainingForMeal, calculateOptimalPortion, getMealTypeName } from '../utils/mealDistribution';

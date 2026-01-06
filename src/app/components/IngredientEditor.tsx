@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus, Minus, Trash2, Save, X, Search } from 'lucide-react';
 import { MealIngredient } from '../types';
-import { getIngredients, getIngredientById } from '../data/ingredients';
+import { getAllIngredients, getIngredientById } from '../../data/ingredientsDatabase';
 
 interface IngredientEditorProps {
   initialIngredients: MealIngredient[];
@@ -15,7 +15,7 @@ export default function IngredientEditor({ initialIngredients, onSave, onCancel,
   const [showIngredientPicker, setShowIngredientPicker] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const allIngredients = getIngredients();
+  const allIngredients = getAllIngredients();
   const filteredIngredients = allIngredients.filter(ing =>
     ing.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -40,10 +40,10 @@ export default function IngredientEditor({ initialIngredients, onSave, onCancel,
       ingredientId,
       ingredientName,
       amount,
-      calories: (ingredient.calories * amount) / 100,
-      protein: (ingredient.protein * amount) / 100,
-      carbs: (ingredient.carbs * amount) / 100,
-      fat: (ingredient.fat * amount) / 100
+      calories: (ingredient.caloriesPer100g * amount) / 100,
+      protein: (ingredient.proteinPer100g * amount) / 100,
+      carbs: (ingredient.carbsPer100g * amount) / 100,
+      fat: (ingredient.fatPer100g * amount) / 100
     };
 
     const updatedIngredients = [...editedIngredients, newIngredient];

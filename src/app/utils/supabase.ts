@@ -1,12 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
+import { projectId, publicAnonKey } from '/utils/supabase/info';
 
 // Importar las credenciales de Supabase
-// Nota: En producción, estas deben estar en variables de entorno
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Prioridad: Variables de entorno > Credenciales del archivo info.tsx
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || `https://${projectId}.supabase.co`;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || publicAnonKey;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('⚠️ Supabase credentials not found! Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables.');
+} else {
+  console.log('✅ Supabase initialized successfully');
+  console.log('🔗 URL:', supabaseUrl);
 }
 
 // Crear cliente de Supabase

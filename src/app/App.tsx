@@ -1284,10 +1284,11 @@ export default function App() {
             }}
           />
         )}
-        {currentScreen === 'create-ingredient' && (
+        {currentScreen === 'create-ingredient' && user && (
           <CreateIngredient
-            user={user}
-            onBack={handleBack}
+            userId={user.email}
+            onBack={() => setCurrentScreen('settings')}
+            onCreated={() => setCurrentScreen('settings')}
           />
         )}
         {currentScreen === 'edit-custom-meal' && (

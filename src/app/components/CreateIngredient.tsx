@@ -1,22 +1,25 @@
 import { useState } from 'react';
 import { ArrowLeft, Plus, Info } from 'lucide-react';
 import { Ingredient } from '../types';
-import { saveCustomIngredient } from '../data/ingredients';
+import { createCustomIngredient } from '../utils/supabase';
 
 interface CreateIngredientProps {
   onBack: () => void;
   onCreated: () => void;
+  userId: string; // CAMBIADO: Ahora recibe userId directamente
 }
 
-export default function CreateIngredient({ onBack, onCreated }: CreateIngredientProps) {
+export default function CreateIngredient({ onBack, onCreated, userId }: CreateIngredientProps) {
   const [name, setName] = useState('');
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     // Validación
     if (!name.trim()) {
       setError('El nombre del ingrediente es obligatorio');
@@ -38,19 +41,36 @@ export default function CreateIngredient({ onBack, onCreated }: CreateIngredient
       return;
     }
 
-    // Crear ingrediente
-    const newIngredient: Ingredient = {
-      id: `custom_ing_${Date.now()}`,
-      name: name.trim(),
-      calories: cals,
-      protein: prot,
-      carbs: carb,
-      fat: fats,
-      isCustom: true
-    };
+    setIsLoading(true);
+    setError('');
 
-    saveCustomIngredient(newIngredient);
-    onCreated();
+    try {
+      // Crear ingrediente en Supabase
+      const ingredientData = {
+        id: `custom_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: name.trim(),
+        calories: cals,
+        protein: prot,
+        carbs: carb,
+        fat: fats
+      };
+
+      await createCustomIngredient(userId, ingredientData);
+
+      console.log('✅ Ingrediente creado en Supabase:', ingredientData);
+      
+      // Mostrar mensaje de éxito
+      setSuccess(true);
+      
+      // Esperar 1.5 segundos para que el usuario vea el mensaje y luego volver
+      setTimeout(() => {
+        onCreated();
+      }, 1500);
+    } catch (error) {
+      console.error('❌ Error al crear ingrediente:', error);
+      setError('Error al crear el ingrediente. Por favor, intenta de nuevo.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -182,12 +202,27 @@ export default function CreateIngredient({ onBack, onCreated }: CreateIngredient
           </div>
         )}
 
+        {/* Success */}
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-700">
+            Ingrediente creado exitosamente
+          </div>
+        )}
+
         {/* Botón Crear */}
         <button
           onClick={handleCreate}
           className="w-full bg-blue-600 text-white py-4 rounded-2xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-98"
+          disabled={isLoading}
         >
-          <Plus className="w-5 h-5" />
+          {isLoading ? (
+            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.928l3-2.647z"></path>
+            </svg>
+          ) : (
+            <Plus className="w-5 h-5" />
+          )}
           <span className="font-medium">Crear Ingrediente</span>
         </button>
       </div>
