@@ -727,7 +727,18 @@ export default function App() {
       
       console.log(`[handleSignup] Signup successful, starting onboarding`);
       
-      // Iniciar proceso de onboarding
+      // El backend ya retorna access_token directamente
+      if (!result.access_token) {
+        console.error('[handleSignup] ❌ No access_token received from backend');
+        alert('❌ Error al crear cuenta. Por favor, inicia sesión manualmente.');
+        setCurrentScreen('login');
+        return;
+      }
+      
+      // El token ya se guardó en api.signup, solo iniciar onboarding
+      console.log(`[handleSignup] ✅ Auth token set, starting onboarding`);
+      
+      // Guardar credenciales temporalmente
       setTempData({ email, name });
       setCurrentScreen('onboarding-sex');
     } catch (error: any) {

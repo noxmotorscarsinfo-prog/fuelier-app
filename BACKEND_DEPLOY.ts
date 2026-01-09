@@ -24,80 +24,59 @@ app.get("/make-server-b0e879f0/health", (c) => {
 
 app.post("/make-server-b0e879f0/auth/signup", async (c) => {
   try {
-    const body = await c.req.json();
-    const email = body.email;
-    const password = body.password;
-    const name = body.name;
-    
-    console.log("SIGNUP - Email:", email);
+    const { email, password, name } = await c.req.json();
+    console.log("Signup attempt:", email);
     
     if (!email || !password || !name) {
-      console.error("SIGNUP - Missing fields");
       return c.json({ error: "Missing required fields" }, 400);
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const listResult = await supabase.auth.admin.listUsers();
-    const existingUsers = listResult.data;
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
     const userExists = existingUsers?.users?.some(u => u.email === email);
     
     if (userExists) {
-      console.log("SIGNUP - User already exists:", email);
       return c.json({ 
         error: "Email already registered",
         code: "email_exists"
       }, 409);
     }
     
-    console.log("SIGNUP - Creating user in Supabase Auth...");
-    const createResult = await supabase.auth.admin.createUser({
-      email: email,
-      password: password,
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
       email_confirm: true,
-      user_metadata: { name: name }
+      user_metadata: { name }
     });
 
-    const authData = createResult.data;
-    const authError = createResult.error;
-
     if (authError) {
-      console.error("SIGNUP - Auth error:", authError.message);
-      const msg = authError.message || "";
-      if (msg.includes('already been registered')) {
+      if (authError.message?.includes('already been registered')) {
         return c.json({ error: "Email already registered", code: "email_exists" }, 409);
       }
-      if (msg.includes('password')) {
+      if (authError.message?.includes('password')) {
         return c.json({ error: "Password too weak", code: "weak_password" }, 400);
       }
-      return c.json({ error: msg }, 400);
+      return c.json({ error: authError.message }, 400);
     }
 
     if (!authData.user) {
-      console.error("SIGNUP - No user returned");
       return c.json({ error: "Failed to create user" }, 500);
     }
 
-    console.log("SIGNUP - User created, ID:", authData.user.id);
-    console.log("SIGNUP - Testing login to get token...");
-
     const testSupabase = createClient(supabaseUrl, supabaseAnonKey);
-    const loginResult = await testSupabase.auth.signInWithPassword({
-      email: email,
-      password: password
+    const { data: loginData, error: loginError } = await testSupabase.auth.signInWithPassword({
+      email,
+      password
     });
     
-    const loginData = loginResult.data;
-    const loginError = loginResult.error;
-    
     if (loginError || !loginData.session) {
-      console.error('SIGNUP - Login test failed:', loginError?.message);
-      console.error('SIGNUP - Deleting user...');
+      console.error('Login test failed, deleting user');
       await supabase.auth.admin.deleteUser(authData.user.id);
       return c.json({ error: "Account creation failed", code: "login_test_failed" }, 500);
     }
     
-    console.log("SIGNUP - SUCCESS! Returning token");
+    console.log("Signup success:", email);
     
     return c.json({ 
       success: true, 
@@ -105,53 +84,42 @@ app.post("/make-server-b0e879f0/auth/signup", async (c) => {
       user: {
         id: authData.user.id,
         email: authData.user.email,
-        name: name
+        name
       }
     });
   } catch (error) {
-    console.error("SIGNUP - Exception:", error);
-    return c.json({ error: "Failed to sign up" }, 500);
+    console.error("Signup error:", error);
+    return c.json({ error: "Failed to sign up", details: String(error) }, 500);
   }
 });
 
 app.post("/make-server-b0e879f0/auth/signin", async (c) => {
   try {
-    const body = await c.req.json();
-    const email = body.email;
-    const password = body.password;
-    
-    console.log("SIGNIN - Email:", email);
+    const { email, password } = await c.req.json();
+    console.log("Signin attempt:", email);
     
     if (!email || !password) {
-      console.error("SIGNIN - Missing fields");
       return c.json({ error: "Email and password required" }, 400);
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
     
-    console.log("SIGNIN - Attempting signin...");
-    const result = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
     });
 
-    const data = result.data;
-    const error = result.error;
-
     if (error) {
-      console.error("SIGNIN - Error:", error.message, "Code:", error.code);
+      console.error("Signin error:", error.message);
       
       if (error.code === 'invalid_credentials') {
         const diagSupabase = createClient(supabaseUrl, supabaseServiceKey);
-        const listResult = await diagSupabase.auth.admin.listUsers();
-        const allUsers = listResult.data;
+        const { data: allUsers } = await diagSupabase.auth.admin.listUsers();
         const userExists = allUsers?.users?.find(u => u.email === email);
         
         if (!userExists) {
-          console.log("SIGNIN - User not found in database");
           return c.json({ error: "User not found", code: "user_not_found" }, 401);
         } else {
-          console.log("SIGNIN - User exists but wrong password");
           return c.json({ error: "Wrong password", code: "wrong_password" }, 401);
         }
       }
@@ -160,11 +128,10 @@ app.post("/make-server-b0e879f0/auth/signin", async (c) => {
     }
 
     if (!data.session) {
-      console.error("SIGNIN - No session created");
       return c.json({ error: "Failed to create session" }, 500);
     }
     
-    console.log("SIGNIN - SUCCESS! User ID:", data.user.id);
+    console.log("Signin success:", email);
 
     return c.json({ 
       success: true,
@@ -175,8 +142,8 @@ app.post("/make-server-b0e879f0/auth/signin", async (c) => {
       }
     });
   } catch (error) {
-    console.error("SIGNIN - Exception:", error);
-    return c.json({ error: "Failed to sign in" }, 500);
+    console.error("Signin error:", error);
+    return c.json({ error: "Failed to sign in", details: String(error) }, 500);
   }
 });
 
@@ -190,9 +157,7 @@ app.get("/make-server-b0e879f0/auth/session", async (c) => {
     const token = authHeader.replace('Bearer ', '');
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
     
-    const result = await supabase.auth.getUser(token);
-    const data = result.data;
-    const error = result.error;
+    const { data, error } = await supabase.auth.getUser(token);
 
     if (error || !data.user) {
       return c.json({ error: "Invalid token" }, 401);
@@ -206,7 +171,7 @@ app.get("/make-server-b0e879f0/auth/session", async (c) => {
       }
     });
   } catch (error) {
-    console.error("SESSION - Exception:", error);
+    console.error("Session error:", error);
     return c.json({ error: "Failed to get session" }, 500);
   }
 });
@@ -221,16 +186,15 @@ app.post("/make-server-b0e879f0/auth/signout", async (c) => {
     const token = authHeader.replace('Bearer ', '');
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
     
-    const result = await supabase.auth.admin.signOut(token);
-    const error = result.error;
+    const { error } = await supabase.auth.admin.signOut(token);
 
     if (error) {
-      console.error("SIGNOUT - Error:", error);
+      console.error("Signout error:", error);
     }
 
     return c.json({ success: true });
   } catch (error) {
-    console.error("SIGNOUT - Exception:", error);
+    console.error("Signout error:", error);
     return c.json({ error: "Failed to sign out" }, 500);
   }
 });
@@ -238,25 +202,20 @@ app.post("/make-server-b0e879f0/auth/signout", async (c) => {
 app.get("/make-server-b0e879f0/user/:email", async (c) => {
   try {
     const email = c.req.param("email");
-    console.log("GET USER - Email:", email);
+    console.log("Get user:", email);
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const result = await supabase
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
       .single();
     
-    const data = result.data;
-    const error = result.error;
-    
     if (error) {
       if (error.code === 'PGRST116') {
-        console.log("GET USER - Not found");
         return c.json({ error: "User not found" }, 404);
       }
-      console.error("GET USER - Error:", error);
       return c.json({ error: "Failed to get user" }, 500);
     }
     
@@ -301,10 +260,9 @@ app.get("/make-server-b0e879f0/user/:email", async (c) => {
       isAdmin: data.is_admin || false
     };
     
-    console.log("GET USER - SUCCESS");
     return c.json(user);
   } catch (error) {
-    console.error("GET USER - Exception:", error);
+    console.error("Get user error:", error);
     return c.json({ error: "Failed to get user" }, 500);
   }
 });
@@ -312,31 +270,23 @@ app.get("/make-server-b0e879f0/user/:email", async (c) => {
 app.post("/make-server-b0e879f0/user", async (c) => {
   try {
     const user = await c.req.json();
-    console.log("SAVE USER - Email:", user.email);
+    console.log("Save user:", user.email);
     
     if (!user.email || !user.name || !user.sex) {
-      console.error("SAVE USER - Missing fields");
       return c.json({ error: "Missing required fields" }, 400);
     }
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const listResult = await supabase.auth.admin.listUsers();
-    const authUsers = listResult.data;
-    const authError = listResult.error;
-    
+    const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
     if (authError) {
-      console.error("SAVE USER - Auth error:", authError);
       return c.json({ error: "Failed to get auth user" }, 500);
     }
     
     const authUser = authUsers.users.find(u => u.email === user.email);
     if (!authUser) {
-      console.error("SAVE USER - Auth user not found");
       return c.json({ error: "Auth user not found" }, 404);
     }
-    
-    console.log("SAVE USER - Found auth user, ID:", authUser.id);
     
     const dbUser = {
       id: authUser.id,
@@ -375,26 +325,22 @@ app.post("/make-server-b0e879f0/user", async (c) => {
       updated_at: new Date().toISOString()
     };
     
-    console.log("SAVE USER - Upserting to database...");
-    const saveResult = await supabase
+    const { data, error } = await supabase
       .from('users')
       .upsert(dbUser, { onConflict: 'id' })
       .select()
       .single();
     
-    const data = saveResult.data;
-    const error = saveResult.error;
-    
     if (error) {
-      console.error("SAVE USER - Database error:", error);
+      console.error("Save user error:", error);
       return c.json({ error: "Failed to save user" }, 500);
     }
     
-    console.log("SAVE USER - SUCCESS");
+    console.log("Save user success:", user.email);
     
-    return c.json({ success: true, user: user });
+    return c.json({ success: true, user });
   } catch (error) {
-    console.error("SAVE USER - Exception:", error);
+    console.error("Save user error:", error);
     return c.json({ error: "Failed to save user" }, 500);
   }
 });
