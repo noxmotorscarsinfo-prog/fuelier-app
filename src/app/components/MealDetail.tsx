@@ -609,26 +609,26 @@ export default function MealDetail({ meal, onConfirm, onBack, onSelectVariation,
           )}
           
           {/* Quick Macros - Cantidad ya calculada y personalizada */}
-          <div className="grid grid-cols-4 gap-2 mt-4">
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mt-4">
             <div className="text-center bg-red-50 rounded-xl p-2 sm:p-3">
               <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 mx-auto mb-0.5 sm:mb-1" />
-              <p className="text-base sm:text-lg text-red-600 font-medium">{macros.calories}</p>
-              <p className="text-[10px] sm:text-xs text-neutral-500">kcal</p>
+              <p className="text-sm sm:text-base lg:text-lg text-red-600 font-semibold leading-tight">{macros.calories}</p>
+              <p className="text-[10px] sm:text-xs text-neutral-500 font-medium">kcal</p>
             </div>
             <div className="text-center bg-blue-50 rounded-xl p-2 sm:p-3">
               <Beef className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 mx-auto mb-0.5 sm:mb-1" />
-              <p className="text-base sm:text-lg text-blue-600 font-medium">{macros.protein}g</p>
-              <p className="text-[10px] sm:text-xs text-neutral-500">Prot</p>
+              <p className="text-sm sm:text-base lg:text-lg text-blue-600 font-semibold leading-tight">{macros.protein}g</p>
+              <p className="text-[10px] sm:text-xs text-neutral-500 font-medium">Prot</p>
             </div>
             <div className="text-center bg-amber-50 rounded-xl p-2 sm:p-3">
               <Wheat className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 mx-auto mb-0.5 sm:mb-1" />
-              <p className="text-base sm:text-lg text-amber-600 font-medium">{macros.carbs}g</p>
-              <p className="text-[10px] sm:text-xs text-neutral-500">Carb</p>
+              <p className="text-sm sm:text-base lg:text-lg text-amber-600 font-semibold leading-tight">{macros.carbs}g</p>
+              <p className="text-[10px] sm:text-xs text-neutral-500 font-medium">Carb</p>
             </div>
             <div className="text-center bg-orange-50 rounded-xl p-2 sm:p-3">
               <Droplet className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500 mx-auto mb-0.5 sm:mb-1" />
-              <p className="text-base sm:text-lg text-orange-600 font-medium">{macros.fat}g</p>
-              <p className="text-[10px] sm:text-xs text-neutral-500">Grasa</p>
+              <p className="text-sm sm:text-base lg:text-lg text-orange-600 font-semibold leading-tight">{macros.fat}g</p>
+              <p className="text-[10px] sm:text-xs text-neutral-500 font-medium">Grasa</p>
             </div>
           </div>
         </div>

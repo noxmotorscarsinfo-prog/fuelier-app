@@ -1,9 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = `https://fzvsbpgqfubbqmqqxmwv.supabase.co`;
-const supabaseAnonKey = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6dnNicGdxZnViYnFtcXF4bXd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5NTA4OTIsImV4cCI6MjA4MjUyNjg5Mn0.tLKyWdfwluNOVZoHBZn0l2oTA1RdSRUCgCamnDqUJwM`;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Re-export del cliente singleton de Supabase para evitar múltiples instancias
+// Este archivo redirige a la instancia única en /src/app/utils/supabase.ts
+export { supabase } from '../app/utils/supabase';
 
 // ============================================
 // TIPOS DE BASE DE DATOS

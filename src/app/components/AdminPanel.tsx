@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Meal, MealType, User, Ingredient } from '../types';
 import { BREAKFASTS_FROM_DB, LUNCHES_FROM_DB, SNACKS_FROM_DB, DINNERS_FROM_DB } from '../../data/mealsWithIngredients';
-import { ArrowLeft, Plus, Edit, Trash2, Save, X, Coffee, UtensilsCrossed, Apple, Moon, FileText, Package, Search, Check, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, Save, X, Coffee, UtensilsCrossed, Apple, Moon, FileText, Package, Search, Check, Sparkles, AlertCircle, Upload, Download } from 'lucide-react';
 import { generateSystemDocumentationPDF } from '../utils/generateSystemDocumentation';
 import * as api from '../utils/api';
 import { INGREDIENTS_DATABASE, getCustomIngredients, saveCustomIngredient, getAllIngredients } from '../../data/ingredientsDatabase';
 import { MealIngredientReference, Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientsDatabase';
 import { migrateMealsToStructured } from '../utils/mealMigration';
+import CSVImporter from './CSVImporter';
+import * as XLSX from 'xlsx';
 
 // Interface para ingredientes seleccionados en el formulario
 interface SelectedIngredient {
@@ -71,6 +73,16 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
   const [tips, setTips] = useState<string[]>(['']);
   const [showTips, setShowTips] = useState(false);
   
+  // NUEVO: Estado para importador CSV
+  const [showCSVImporter, setShowCSVImporter] = useState(false);
+  const [csvImporterType, setCSVImporterType] = useState<'ingredients' | 'meals'>('ingredients');
+  
+  // NUEVO: Estado para selección múltiple de ingredientes
+  const [selectedIngredientIds, setSelectedIngredientIds] = useState<Set<string>>(new Set());
+  
+  // NUEVO: Estado para eliminar desde un número específico
+  const [deleteFromNumber, setDeleteFromNumber] = useState<string>('');
+  
   // Estados del formulario de comida (simplificado - solo nombre y tipos)
   const [mealFormData, setMealFormData] = useState({
     name: '',
@@ -96,8 +108,12 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
   const loadGlobalData = async () => {
     setIsLoading(true);
+    console.log('🔄 Cargando datos globales desde el servidor...');
+    
     let meals = await api.getGlobalMeals();
     const ingredients = await api.getGlobalIngredients();
+    
+    console.log(`📊 Recibidos del servidor: ${meals.length} platos, ${ingredients.length} ingredientes`);
     
     // 🔄 MIGRACIÓN AUTOMÁTICA: Convertir platos viejos sin ingredientes
     const originalMealsCount = meals.length;
@@ -124,13 +140,15 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
         ...DINNERS_FROM_DB
       ];
       allMeals = existingMeals;
-      console.log('✅ Cargados', existingMeals.length, 'platos con ingredientes detallados');
+      console.log('✅ Cargados', existingMeals.length, 'platos con ingredientes detallados desde hardcode');
     }
     
     if (ingredients.length === 0) {
       // Cargar ingredientes existentes de la app (sistema + personalizados)
       allIngredients = INGREDIENTS_DATABASE;
-      console.log('✅ Cargados', INGREDIENTS_DATABASE.length, 'ingredientes del sistema');
+      console.log('✅ Cargados', INGREDIENTS_DATABASE.length, 'ingredientes del sistema desde hardcode');
+    } else {
+      console.log(`✅ Usando ${ingredients.length} ingredientes del servidor`);
     }
     
     // Organizar comidas por tipo
@@ -144,6 +162,138 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     setGlobalMeals(organized);
     setGlobalIngredients(allIngredients);
     setIsLoading(false);
+  };
+
+  // Función para exportar ingredientes a CSV
+  const exportIngredientsToCSV = () => {
+    if (globalIngredients.length === 0) {
+      alert('No hay ingredientes para exportar');
+      return;
+    }
+
+    // Crear el contenido CSV
+    const headers = 'nombre,calorias,proteinas,carbohidratos,grasas,categoria,porcion';
+    const rows = globalIngredients.map(ing => {
+      return `${ing.name},${ing.calories},${ing.protein},${ing.carbs},${ing.fat},${ing.category || 'general'},${ing.portion || '100g'}`;
+    });
+    
+    const csvContent = headers + '\n' + rows.join('\n');
+    
+    // Crear y descargar el archivo
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const now = new Date();
+    const timestamp = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const filename = `fuelier_ingredientes_${timestamp}.csv`;
+    
+    link.href = url;
+    link.download = filename;
+    link.click();
+    
+    URL.revokeObjectURL(url);
+    
+    console.log(`✅ Exportados ${globalIngredients.length} ingredientes a CSV`);
+  };
+
+  // Función para exportar comidas a CSV
+  const exportMealsToCSV = () => {
+    const allMeals = [
+      ...globalMeals.breakfast,
+      ...globalMeals.lunch,
+      ...globalMeals.snack,
+      ...globalMeals.dinner
+    ];
+
+    if (allMeals.length === 0) {
+      alert('No hay comidas para exportar');
+      return;
+    }
+
+    // Crear el contenido CSV
+    const headers = 'nombre,calorias,proteinas,carbohidratos,grasas,categoria,tipo';
+    const rows = allMeals.map(meal => {
+      const types = Array.isArray(meal.type) ? meal.type.join('|') : meal.type;
+      return `${meal.name},${meal.calories},${meal.protein},${meal.carbs},${meal.fat},${meal.category || 'general'},${types}`;
+    });
+    
+    const csvContent = headers + '\n' + rows.join('\n');
+    
+    // Crear y descargar el archivo
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const now = new Date();
+    const timestamp = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const filename = `fuelier_comidas_${timestamp}.csv`;
+    
+    link.href = url;
+    link.download = filename;
+    link.click();
+    
+    URL.revokeObjectURL(url);
+    
+    console.log(`✅ Exportadas ${allMeals.length} comidas a CSV`);
+  };
+
+  // Función para exportar ingredientes y comidas a Excel con dos hojas
+  const exportToExcel = () => {
+    if (globalIngredients.length === 0) {
+      alert('No hay ingredientes para exportar');
+      return;
+    }
+
+    // Preparar datos de ingredientes
+    const ingredientsData = globalIngredients.map(ing => ({
+      nombre: ing.name,
+      calorias: ing.calories,
+      proteinas: ing.protein,
+      carbohidratos: ing.carbs,
+      grasas: ing.fat,
+      categoria: ing.category || 'general',
+      porcion: ing.portion || '100g'
+    }));
+
+    // Preparar datos de comidas
+    const allMeals = [
+      ...globalMeals.breakfast,
+      ...globalMeals.lunch,
+      ...globalMeals.snack,
+      ...globalMeals.dinner
+    ];
+
+    const mealsData = allMeals.map(meal => ({
+      nombre: meal.name,
+      calorias: meal.calories,
+      proteinas: meal.protein,
+      carbohidratos: meal.carbs,
+      grasas: meal.fat,
+      categoria: meal.category || 'general',
+      tipo: Array.isArray(meal.type) ? meal.type.join('|') : meal.type
+    }));
+
+    // Crear libro de trabajo
+    const workbook = XLSX.utils.book_new();
+
+    // Crear hoja de ingredientes
+    const ingredientsSheet = XLSX.utils.json_to_sheet(ingredientsData);
+    XLSX.utils.book_append_sheet(workbook, ingredientsSheet, 'Ingredientes');
+
+    // Crear hoja de comidas
+    const mealsSheet = XLSX.utils.json_to_sheet(mealsData);
+    XLSX.utils.book_append_sheet(workbook, mealsSheet, 'Comidas');
+
+    // Generar archivo
+    const now = new Date();
+    const timestamp = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const filename = `fuelier_datos_completos_${timestamp}.xlsx`;
+
+    // Descargar archivo
+    XLSX.writeFile(workbook, filename);
+
+    console.log(`✅ Exportados ${globalIngredients.length} ingredientes y ${allMeals.length} comidas a Excel`);
   };
 
   const getMealTypeLabel = (type: MealType) => {
@@ -533,6 +683,72 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     }
   };
 
+  // ==================== FUNCIONES DE SELECCIÓN MÚLTIPLE ====================
+
+  const toggleIngredientSelection = (ingredientId: string) => {
+    setSelectedIngredientIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(ingredientId)) {
+        newSet.delete(ingredientId);
+      } else {
+        newSet.add(ingredientId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllIngredients = () => {
+    const allIds = new Set(globalIngredients.map(ing => ing.id));
+    setSelectedIngredientIds(allIds);
+  };
+
+  const deselectAllIngredients = () => {
+    setSelectedIngredientIds(new Set());
+  };
+
+  const handleDeleteSelectedIngredients = async () => {
+    if (selectedIngredientIds.size === 0) {
+      alert('No hay ingredientes seleccionados');
+      return;
+    }
+
+    if (confirm(`¿Estás seguro de eliminar ${selectedIngredientIds.size} ingrediente(s)? Esto lo quitará para TODOS los usuarios.`)) {
+      const updatedIngredients = globalIngredients.filter(
+        ing => !selectedIngredientIds.has(ing.id)
+      );
+      
+      await api.saveGlobalIngredients(updatedIngredients);
+      await loadGlobalData();
+      setSelectedIngredientIds(new Set());
+    }
+  };
+
+  const handleDeleteFromNumber = async () => {
+    const startIndex = parseInt(deleteFromNumber);
+    
+    if (isNaN(startIndex) || startIndex < 1) {
+      alert('Por favor ingresa un número válido (mayor a 0)');
+      return;
+    }
+
+    if (startIndex > globalIngredients.length) {
+      alert(`No hay ingredientes a partir del #${startIndex}. Total: ${globalIngredients.length}`);
+      return;
+    }
+
+    const ingredientsToDelete = globalIngredients.length - startIndex + 1;
+    
+    if (confirm(`¿Estás seguro de eliminar ${ingredientsToDelete} ingrediente(s) desde el #${startIndex} hasta el #${globalIngredients.length}? Esto lo quitará para TODOS los usuarios.`)) {
+      // Mantener solo los ingredientes antes del índice especificado
+      const updatedIngredients = globalIngredients.slice(0, startIndex - 1);
+      
+      await api.saveGlobalIngredients(updatedIngredients);
+      await loadGlobalData();
+      setSelectedIngredientIds(new Set());
+      setDeleteFromNumber('');
+    }
+  };
+
   const handleCancel = () => {
     setEditingMeal(null);
     setEditingIngredient(null);
@@ -556,6 +772,8 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       fat: 0,
       category: 'otro'
     });
+    // Limpiar selección múltiple
+    setSelectedIngredientIds(new Set());
   };
 
   if (isLoading) {
@@ -572,26 +790,27 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
   return (
     <div className="min-h-screen bg-neutral-50">
       {/* Header - RESPONSIVE */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-700 text-white px-4 md:px-6 pt-8 md:pt-12 pb-4 md:pb-6 sticky top-0 z-20 shadow-lg">
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-700 text-white px-4 sm:px-6 pt-10 sm:pt-12 pb-4 sm:pb-6 sticky top-0 z-20 shadow-lg">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center gap-3 mb-4 md:mb-6">
+          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
             <button
               onClick={onBack}
-              className="bg-white/20 p-2 rounded-xl hover:bg-white/30 transition-all"
+              className="bg-white/20 p-2 rounded-xl hover:bg-white/30 transition-all active:scale-95"
+              aria-label="Volver"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-            <div className="flex-1">
-              <h1 className="text-xl md:text-2xl font-bold">Panel de Administración</h1>
-              <p className="text-purple-100 text-xs md:text-sm">Gestiona platos e ingredientes globales • Sin límites</p>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate">Panel de Administración</h1>
+              <p className="text-purple-100 text-[10px] sm:text-xs md:text-sm truncate">Gestiona platos e ingredientes globales • Sin límites</p>
             </div>
           </div>
 
           {/* Main Tabs - Comidas vs Ingredientes */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-3 sm:mb-4">
             <button
               onClick={() => setAdminTab('meals')}
-              className={`flex-1 px-4 py-2.5 rounded-lg transition-all font-semibold flex items-center justify-center gap-2 ${
+              className={`flex-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-all font-semibold flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base active:scale-95 ${
                 adminTab === 'meals'
                   ? 'bg-white text-purple-600'
                   : 'bg-white/20 text-white hover:bg-white/30'
@@ -603,7 +822,7 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
             </button>
             <button
               onClick={() => setAdminTab('ingredients')}
-              className={`flex-1 px-4 py-2.5 rounded-lg transition-all font-semibold flex items-center justify-center gap-2 ${
+              className={`flex-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-all font-semibold flex items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base active:scale-95 ${
                 adminTab === 'ingredients'
                   ? 'bg-white text-purple-600'
                   : 'bg-white/20 text-white hover:bg-white/30'
@@ -617,19 +836,19 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
           {/* Meal Type Tabs - Solo si estamos en "meals" */}
           {adminTab === 'meals' && (
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
               {(['breakfast', 'lunch', 'snack', 'dinner'] as MealType[]).map(type => (
                 <button
                   key={type}
                   onClick={() => setSelectedMealType(type)}
-                  className={`flex-shrink-0 px-3 md:px-4 py-2 rounded-lg transition-all flex items-center gap-2 text-sm ${
+                  className={`flex-shrink-0 px-3 sm:px-4 py-2 rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm active:scale-95 ${
                     selectedMealType === type
                       ? 'bg-white text-purple-600 font-semibold'
                       : 'bg-white/20 text-white hover:bg-white/30'
                   }`}
                 >
                   {getMealTypeIcon(type)}
-                  <span className="hidden sm:inline">{getMealTypeLabel(type)}</span>
+                  <span className="hidden sm:inline whitespace-nowrap">{getMealTypeLabel(type)}</span>
                   <span className="bg-purple-600/20 px-1.5 py-0.5 rounded text-xs font-bold">
                     {globalMeals[type].length}
                   </span>
@@ -640,72 +859,110 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {/* Botón Descargar Documentación */}
-        <div className="mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-2xl p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h3 className="font-bold text-indigo-900 mb-1 flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                Documentación Técnica del Sistema
+        <div className="mb-4 sm:mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-xl sm:rounded-2xl p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 sm:justify-between">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-indigo-900 mb-1 flex items-center gap-2 text-sm sm:text-base">
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                <span className="truncate">Documentación Técnica del Sistema</span>
               </h3>
-              <p className="text-sm text-indigo-700">
-                Descarga el PDF completo que documenta la arquitectura, lógica y funcionamiento del sistema de comidas y macros de Fuelier
+              <p className="text-xs sm:text-sm text-indigo-700 line-clamp-2 sm:line-clamp-none">
+                Descarga el PDF completo que documenta la arquitectura, lógica y funcionamiento del sistema
               </p>
             </div>
             <button
               onClick={generateSystemDocumentationPDF}
-              className="ml-4 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all font-semibold shadow-lg flex items-center gap-2 whitespace-nowrap"
+              className="sm:ml-4 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all font-semibold shadow-lg flex items-center justify-center gap-2 whitespace-nowrap text-sm sm:text-base active:scale-95"
             >
-              <FileText className="w-5 h-5" />
-              Descargar PDF
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Descargar PDF</span>
+              <span className="sm:hidden">Descargar</span>
             </button>
           </div>
         </div>
 
         {/* Botón Crear Nuevo */}
         {adminTab === 'meals' && !isCreating && !editingMeal && (
-          <div className="mb-6">
+          <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={handleCreateMeal}
-              className="px-6 py-3 rounded-xl font-semibold flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg"
+              className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg text-sm sm:text-base active:scale-95"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               Crear Nuevo Plato
+            </button>
+            <button
+              onClick={() => {
+                setCSVImporterType('meals');
+                setShowCSVImporter(true);
+              }}
+              className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg text-sm sm:text-base active:scale-95"
+            >
+              <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
+              Importar desde CSV
+            </button>
+            <button
+              onClick={exportToExcel}
+              disabled={globalIngredients.length === 0}
+              className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg text-sm sm:text-base active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+              Exportar Excel
             </button>
           </div>
         )}
 
         {adminTab === 'ingredients' && !isCreating && !editingIngredient && (
-          <div className="mb-6">
+          <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={handleCreateIngredient}
-              className="px-6 py-3 rounded-xl font-semibold flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg"
+              className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg text-sm sm:text-base active:scale-95"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               Crear Nuevo Ingrediente
+            </button>
+            <button
+              onClick={() => {
+                setCSVImporterType('ingredients');
+                setShowCSVImporter(true);
+              }}
+              className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg text-sm sm:text-base active:scale-95"
+            >
+              <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
+              Importar desde CSV
+            </button>
+            <button
+              onClick={exportToExcel}
+              disabled={globalIngredients.length === 0}
+              className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg text-sm sm:text-base active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+              Exportar Excel
             </button>
           </div>
         )}
 
         {/* ==================== FORMULARIO DE EDICIÓN/CREACIÓN - PLATOS ==================== */}
         {adminTab === 'meals' && (editingMeal || isCreating) && (
-          <div className="bg-white border-2 border-purple-300 rounded-2xl p-6 mb-6 shadow-lg">
+          <div className="bg-white border-2 border-purple-300 rounded-xl sm:rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-lg">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-neutral-800">
+              <h2 className="text-base sm:text-xl font-bold text-neutral-800">
                 {editingMeal ? 'Editar Plato Global' : 'Crear Nuevo Plato Global'}
               </h2>
               <button
                 onClick={handleCancel}
-                className="text-neutral-400 hover:text-neutral-600 transition-colors"
+                className="text-neutral-400 hover:text-neutral-600 transition-colors active:scale-95"
+                aria-label="Cerrar"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
 
             {/* Nombre del Plato */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
+            <div className="mb-4 sm:mb-6">
+              <label className="block text-xs sm:text-sm font-medium text-neutral-700 mb-2">
                 Nombre del Plato *
               </label>
               <input
@@ -713,28 +970,28 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
                 value={mealFormData.name}
                 onChange={(e) => setMealFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Ej: Pollo a la Plancha con Arroz Integral"
-                className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 
             {/* Tipos de Comida */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
+            <div className="mb-4 sm:mb-6">
+              <label className="block text-xs sm:text-sm font-medium text-neutral-700 mb-2">
                 Tipos de Comida * (Selecciona uno o varios)
               </label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {(['breakfast', 'lunch', 'snack', 'dinner'] as MealType[]).map(type => (
                   <button
                     key={type}
                     onClick={() => toggleMealType(type)}
-                    className={`px-4 py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                    className={`px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 sm:gap-2 active:scale-95 ${
                       mealFormData.types.includes(type)
                         ? 'bg-purple-600 text-white font-semibold'
                         : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                     }`}
                   >
                     {getMealTypeIcon(type)}
-                    <span className="text-sm">
+                    <span className="text-xs sm:text-sm">
                       {type === 'breakfast' && 'Desayuno'}
                       {type === 'lunch' && 'Comida'}
                       {type === 'snack' && 'Merienda'}
@@ -746,14 +1003,14 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
             </div>
 
             {/* Ingredientes Seleccionados */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-neutral-700">
+            <div className="mb-4 sm:mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3">
+                <label className="block text-xs sm:text-sm font-medium text-neutral-700">
                   Ingredientes * ({selectedMealIngredients.length})
                 </label>
                 <button
                   onClick={() => setShowIngredientSelector(true)}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all flex items-center gap-2 text-sm font-semibold"
+                  className="px-3 sm:px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   Añadir Ingrediente
@@ -761,14 +1018,14 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
               </div>
 
               {selectedMealIngredients.length === 0 ? (
-                <div className="bg-neutral-50 border-2 border-dashed border-neutral-300 rounded-xl p-6 text-center">
-                  <Package className="w-12 h-12 text-neutral-400 mx-auto mb-2" />
-                  <p className="text-neutral-500 text-sm">
+                <div className="bg-neutral-50 border-2 border-dashed border-neutral-300 rounded-xl p-4 sm:p-6 text-center">
+                  <Package className="w-10 h-10 sm:w-12 sm:h-12 text-neutral-400 mx-auto mb-2" />
+                  <p className="text-neutral-500 text-xs sm:text-sm">
                     No hay ingredientes añadidos. Haz clic en "Añadir Ingrediente" para empezar.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {selectedMealIngredients.map((si) => {
                     const dbIng = findIngredientById(si.ingredientId);
                     if (!dbIng) return null;
@@ -781,31 +1038,32 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
                     const fat = Math.round(dbIng.fatPer100g * factor * 10) / 10;
 
                     return (
-                      <div key={si.ingredientId} className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-neutral-800">{dbIng.name}</h4>
-                            <p className="text-xs text-neutral-500">
+                      <div key={si.ingredientId} className="bg-neutral-50 border border-neutral-200 rounded-xl p-3 sm:p-4">
+                        <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-neutral-800 text-sm sm:text-base truncate">{dbIng.name}</h4>
+                            <p className="text-[10px] sm:text-xs text-neutral-500 truncate">
                               {cals} kcal • {prot}g prot • {carb}g carbs • {fat}g grasas
                             </p>
                           </div>
                           <button
                             onClick={() => handleRemoveIngredientFromMeal(si.ingredientId)}
-                            className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                            className="text-red-500 hover:bg-red-50 p-1.5 sm:p-2 rounded-lg transition-colors active:scale-95 flex-shrink-0"
+                            aria-label="Eliminar ingrediente"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <label className="text-sm text-neutral-600 font-medium">Cantidad:</label>
+                          <label className="text-xs sm:text-sm text-neutral-600 font-medium">Cantidad:</label>
                           <input
                             type="number"
                             value={si.amountInGrams}
                             onChange={(e) => handleUpdateIngredientAmount(si.ingredientId, parseInt(e.target.value) || 0)}
                             min="1"
-                            className="w-24 px-3 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className="w-20 sm:w-24 px-2 sm:px-3 py-1.5 sm:py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                           />
-                          <span className="text-sm text-neutral-600">g</span>
+                          <span className="text-xs sm:text-sm text-neutral-600">g</span>
                         </div>
                       </div>
                     );
@@ -816,26 +1074,26 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
             {/* Macros Calculados */}
             {selectedMealIngredients.length > 0 && (
-              <div className="mb-6 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-4">
-                <h3 className="font-semibold text-emerald-900 mb-3 flex items-center gap-2">
+              <div className="mb-4 sm:mb-6 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-3 sm:p-4">
+                <h3 className="font-semibold text-emerald-900 mb-2 sm:mb-3 flex items-center gap-2 text-sm sm:text-base">
                   📊 Macros Totales (calculados automáticamente)
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-white rounded-lg p-3">
-                    <p className="text-xs text-neutral-500 mb-1">Calorías</p>
-                    <p className="text-xl font-bold text-red-600">{calculatedMacros.calories}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                  <div className="bg-white rounded-lg p-2 sm:p-3">
+                    <p className="text-[10px] sm:text-xs text-neutral-500 mb-0.5 sm:mb-1">Calorías</p>
+                    <p className="text-base sm:text-xl font-bold text-red-600">{calculatedMacros.calories}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-3">
-                    <p className="text-xs text-neutral-500 mb-1">Proteína</p>
-                    <p className="text-xl font-bold text-blue-600">{calculatedMacros.protein}g</p>
+                  <div className="bg-white rounded-lg p-2 sm:p-3">
+                    <p className="text-[10px] sm:text-xs text-neutral-500 mb-0.5 sm:mb-1">Proteína</p>
+                    <p className="text-base sm:text-xl font-bold text-blue-600">{calculatedMacros.protein}g</p>
                   </div>
-                  <div className="bg-white rounded-lg p-3">
-                    <p className="text-xs text-neutral-500 mb-1">Carbohidratos</p>
-                    <p className="text-xl font-bold text-amber-600">{calculatedMacros.carbs}g</p>
+                  <div className="bg-white rounded-lg p-2 sm:p-3">
+                    <p className="text-[10px] sm:text-xs text-neutral-500 mb-0.5 sm:mb-1">Carbohidratos</p>
+                    <p className="text-base sm:text-xl font-bold text-amber-600">{calculatedMacros.carbs}g</p>
                   </div>
-                  <div className="bg-white rounded-lg p-3">
-                    <p className="text-xs text-neutral-500 mb-1">Grasas</p>
-                    <p className="text-xl font-bold text-orange-600">{calculatedMacros.fat}g</p>
+                  <div className="bg-white rounded-lg p-2 sm:p-3">
+                    <p className="text-[10px] sm:text-xs text-neutral-500 mb-0.5 sm:mb-1">Grasas</p>
+                    <p className="text-base sm:text-xl font-bold text-orange-600">{calculatedMacros.fat}g</p>
                   </div>
                 </div>
               </div>
@@ -1363,65 +1621,67 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
         {/* ==================== LISTA DE PLATOS ==================== */}
         {adminTab === 'meals' && !isCreating && !editingMeal && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {globalMeals[selectedMealType].map((meal, index) => (
               <div
                 key={meal.id}
-                className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all"
+                className="bg-white border border-neutral-200 rounded-xl sm:rounded-2xl p-3 sm:p-5 shadow-sm hover:shadow-md transition-all"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded-lg">
+                      <span className="bg-purple-100 text-purple-700 text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg flex-shrink-0">
                         #{index + 1}
                       </span>
-                      <h3 className="font-bold text-neutral-800">{meal.name}</h3>
+                      <h3 className="font-bold text-neutral-800 text-sm sm:text-base truncate">{meal.name}</h3>
                     </div>
-                    <div className="flex gap-2 text-xs mt-2">
-                      <span className="bg-red-50 text-red-700 px-2 py-1 rounded-lg font-medium">
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2 text-[10px] sm:text-xs mt-2">
+                      <span className="bg-red-50 text-red-700 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg font-medium whitespace-nowrap">
                         {meal.calories} kcal
                       </span>
-                      <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-lg font-medium">
+                      <span className="bg-blue-50 text-blue-700 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg font-medium whitespace-nowrap">
                         {meal.protein}g prot
                       </span>
-                      <span className="bg-amber-50 text-amber-700 px-2 py-1 rounded-lg font-medium">
+                      <span className="bg-amber-50 text-amber-700 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg font-medium whitespace-nowrap">
                         {meal.carbs}g carbs
                       </span>
-                      <span className="bg-orange-50 text-orange-700 px-2 py-1 rounded-lg font-medium">
+                      <span className="bg-orange-50 text-orange-700 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg font-medium whitespace-nowrap">
                         {meal.fat}g grasas
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-2 ml-3">
+                  <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
                     <button
                       onClick={() => handleEditMeal(meal)}
-                      className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"
+                      className="bg-blue-50 text-blue-600 p-1.5 sm:p-2 rounded-lg hover:bg-blue-100 transition-colors active:scale-95"
+                      aria-label="Editar plato"
                     >
-                      <Edit className="w-4 h-4" />
+                      <Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                     <button
                       onClick={() => handleDeleteMeal(meal.id)}
-                      className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition-colors"
+                      className="bg-red-50 text-red-600 p-1.5 sm:p-2 rounded-lg hover:bg-red-100 transition-colors active:scale-95"
+                      aria-label="Eliminar plato"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                   </div>
                 </div>
 
                 {meal.ingredientReferences && meal.ingredientReferences.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-neutral-200">
-                    <p className="text-xs font-medium text-neutral-600 mb-2">Ingredientes:</p>
-                    <div className="space-y-1">
+                  <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-neutral-200">
+                    <p className="text-[10px] sm:text-xs font-medium text-neutral-600 mb-1.5 sm:mb-2">Ingredientes:</p>
+                    <div className="space-y-0.5 sm:space-y-1">
                       {meal.ingredientReferences.slice(0, 3).map((ref, i) => {
                         const dbIng = findIngredientById(ref.ingredientId);
                         return dbIng ? (
-                          <div key={i} className="text-xs text-neutral-600">
+                          <div key={i} className="text-[10px] sm:text-xs text-neutral-600 truncate">
                             • {ref.amountInGrams}g de {dbIng.name}
                           </div>
                         ) : null;
                       })}
                       {meal.ingredientReferences.length > 3 && (
-                        <div className="text-xs text-neutral-500">
+                        <div className="text-[10px] sm:text-xs text-neutral-500">
                           +{meal.ingredientReferences.length - 3} más
                         </div>
                       )}
@@ -1432,16 +1692,16 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
             ))}
 
             {globalMeals[selectedMealType].length === 0 && (
-              <div className="md:col-span-2 text-center py-12">
-                <div className="text-6xl mb-4">🍽️</div>
-                <p className="text-neutral-500">
+              <div className="sm:col-span-2 text-center py-8 sm:py-12">
+                <div className="text-4xl sm:text-6xl mb-3 sm:mb-4">🍽️</div>
+                <p className="text-neutral-500 text-sm sm:text-base mb-3 sm:mb-4">
                   No hay platos creados aún para {getMealTypeLabel(selectedMealType).toLowerCase()}
                 </p>
                 <button
                   onClick={handleCreateMeal}
-                  className="mt-4 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-lg flex items-center gap-2 mx-auto"
+                  className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-lg flex items-center gap-2 mx-auto text-sm sm:text-base active:scale-95"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                   Crear Primer Plato
                 </button>
               </div>
@@ -1451,33 +1711,115 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
         {/* ==================== LISTA DE INGREDIENTES ==================== */}
         {adminTab === 'ingredients' && !isCreating && !editingIngredient && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {globalIngredients.map((ingredient, index) => (
+          <>
+            {/* Barra de Herramientas de Selección */}
+            {globalIngredients.length > 0 && (
+              <div className="mb-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-xl p-4 space-y-3">
+                {/* Primera fila: Selección */}
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={selectAllIngredients}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-semibold text-sm flex items-center gap-2"
+                    >
+                      <Check className="w-4 h-4" />
+                      Seleccionar Todos
+                    </button>
+                    <button
+                      onClick={deselectAllIngredients}
+                      className="px-4 py-2 bg-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-300 transition-all font-semibold text-sm"
+                    >
+                      Deseleccionar Todos
+                    </button>
+                  </div>
+                  
+                  {selectedIngredientIds.size > 0 && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-purple-700">
+                        {selectedIngredientIds.size} seleccionado(s)
+                      </span>
+                      <button
+                        onClick={handleDeleteSelectedIngredients}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-semibold text-sm flex items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar Seleccionados
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Segunda fila: Eliminar desde número específico */}
+                <div className="pt-3 border-t border-purple-200">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <label className="text-sm font-medium text-purple-700">
+                      Eliminar desde el ingrediente #:
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={globalIngredients.length}
+                      value={deleteFromNumber}
+                      onChange={(e) => setDeleteFromNumber(e.target.value)}
+                      placeholder="Ej: 63"
+                      className="w-24 px-3 py-2 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    />
+                    <button
+                      onClick={handleDeleteFromNumber}
+                      disabled={!deleteFromNumber}
+                      className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-all font-semibold text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Eliminar desde #{deleteFromNumber || '?'}
+                    </button>
+                    <span className="text-xs text-purple-600">
+                      Total: {globalIngredients.length} ingredientes
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {globalIngredients.map((ingredient, index) => {
+                const isSelected = selectedIngredientIds.has(ingredient.id);
+                return (
               <div
                 key={ingredient.id}
-                className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all"
+                className={`rounded-2xl p-5 shadow-sm hover:shadow-md transition-all bg-white border-2 ${
+                  isSelected ? 'border-purple-500 bg-purple-50' : 'border-neutral-200'
+                }`}
               >
                 <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded-lg">
-                        #{index + 1}
-                      </span>
-                      <h3 className="font-bold text-neutral-800">{ingredient.name}</h3>
-                    </div>
-                    <div className="flex gap-2 text-xs mt-2">
-                      <span className="bg-red-50 text-red-700 px-2 py-1 rounded-lg font-medium">
-                        {ingredient.calories} kcal
-                      </span>
-                      <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-lg font-medium">
-                        {ingredient.protein}g prot
-                      </span>
-                      <span className="bg-amber-50 text-amber-700 px-2 py-1 rounded-lg font-medium">
-                        {ingredient.carbs}g carbs
-                      </span>
-                      <span className="bg-orange-50 text-orange-700 px-2 py-1 rounded-lg font-medium">
-                        {ingredient.fat}g grasas
-                      </span>
+                  <div className="flex items-start gap-3 flex-1">
+                    {/* Checkbox de selección */}
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleIngredientSelection(ingredient.id)}
+                      className="mt-1 w-5 h-5 text-purple-600 border-neutral-300 rounded focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded-lg">
+                          #{index + 1}
+                        </span>
+                        <h3 className="font-bold text-neutral-800">{ingredient.name}</h3>
+                      </div>
+                      <div className="flex gap-2 text-xs mt-2">
+                        <span className="bg-red-50 text-red-700 px-2 py-1 rounded-lg font-medium">
+                          {ingredient.calories} kcal
+                        </span>
+                        <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-lg font-medium">
+                          {ingredient.protein}g prot
+                        </span>
+                        <span className="bg-amber-50 text-amber-700 px-2 py-1 rounded-lg font-medium">
+                          {ingredient.carbs}g carbs
+                        </span>
+                        <span className="bg-orange-50 text-orange-700 px-2 py-1 rounded-lg font-medium">
+                          {ingredient.fat}g grasas
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2 ml-3">
@@ -1496,7 +1838,8 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
                   </div>
                 </div>
               </div>
-            ))}
+                );
+              })}
 
             {globalIngredients.length === 0 && (
               <div className="md:col-span-2 text-center py-12">
@@ -1513,9 +1856,24 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
                 </button>
               </div>
             )}
-          </div>
+            </div>
+          </>
         )}
       </div>
+
+      {/* CSV Importer Modal */}
+      {showCSVImporter && (
+        <CSVImporter
+          type={csvImporterType}
+          onClose={() => setShowCSVImporter(false)}
+          onSuccess={async () => {
+            setShowCSVImporter(false);
+            // Pequeño delay adicional para asegurar que el servidor ha persistido completamente
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await loadGlobalData();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,24 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
+// =====================================================
+// RE-EXPORTACIÓN DEL CLIENTE SINGLETON DE SUPABASE
+// =====================================================
+// Este archivo solo re-exporta el cliente singleton principal
+// NO crear instancias adicionales aquí - todo viene de /src/app/utils/supabase.ts
+// Mantiene compatibilidad con imports existentes
+// =====================================================
 
-// Obtener las variables de entorno de Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Faltan las variables de entorno de Supabase. ' +
-    'Por favor configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY'
-  );
-}
-
-// Cliente de Supabase (singleton)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  }
-});
+export { supabase } from '../../app/utils/supabase';
 
 // Tipos de la base de datos
 export interface Database {

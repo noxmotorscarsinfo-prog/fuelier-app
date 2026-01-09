@@ -171,17 +171,17 @@ export default function FoodPreferences({ onComplete }: FoodPreferencesProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
-      <div className="px-6 py-12">
+      <div className="px-4 sm:px-6 py-8 sm:py-12 max-w-3xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl text-neutral-800 mb-3">Preferencias Alimenticias</h1>
-          <p className="text-neutral-500">
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-neutral-800 mb-2 sm:mb-3 px-2">Preferencias Alimenticias</h1>
+          <p className="text-sm sm:text-base text-neutral-500 px-4">
             Ayúdanos a personalizar tus recomendaciones
           </p>
         </div>
 
         {/* Tabs */}
-        <div className="grid grid-cols-2 gap-2 mb-6">
+        <div className="grid grid-cols-2 gap-2 mb-5 sm:mb-6">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
@@ -190,10 +190,10 @@ export default function FoodPreferences({ onComplete }: FoodPreferencesProps) {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`p-3 rounded-xl border-2 transition-all ${colors.border} ${colors.bg}`}
+                className={`p-2.5 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all active:scale-[0.98] ${colors.border} ${colors.bg}`}
               >
-                <Icon className={`w-5 h-5 mx-auto mb-1 ${colors.iconColor}`} />
-                <p className={`text-xs ${colors.textColor}`}>
+                <Icon className={`w-4 h-4 sm:w-5 sm:h-5 mx-auto mb-1 ${colors.iconColor}`} />
+                <p className={`text-[10px] sm:text-xs font-medium ${colors.textColor}`}>
                   {tab.label}
                 </p>
               </button>
@@ -202,8 +202,8 @@ export default function FoodPreferences({ onComplete }: FoodPreferencesProps) {
         </div>
 
         {/* Info */}
-        <div className={`${getColorClasses(true).infoBg} border ${getColorClasses(true).infoBorder} rounded-2xl p-4 mb-6`}>
-          <p className={`text-sm ${getColorClasses(true).infoText}`}>
+        <div className={`${getColorClasses(true).infoBg} border ${getColorClasses(true).infoBorder} rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-5 sm:mb-6`}>
+          <p className={`text-xs sm:text-sm leading-relaxed ${getColorClasses(true).infoText}`}>
             {activeTab === 'likes' && '💚 Selecciona los alimentos que disfrutas comer'}
             {activeTab === 'dislikes' && '❌ Indica qué alimentos prefieres evitar'}
             {activeTab === 'intolerances' && '⚠️ Marca si tienes dificultades para digerir ciertos alimentos'}
@@ -213,16 +213,16 @@ export default function FoodPreferences({ onComplete }: FoodPreferencesProps) {
 
         {/* Selected Items */}
         {getCurrentList().length > 0 && (
-          <div className="mb-4">
-            <p className="text-sm text-neutral-600 mb-2">Seleccionados:</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="mb-4 sm:mb-5">
+            <p className="text-xs sm:text-sm font-medium text-neutral-600 mb-2">Seleccionados:</p>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {getCurrentList().map((item) => {
                 const colors = getColorClasses(true);
                 return (
                   <button
                     key={item}
                     onClick={() => toggleItem(item)}
-                    className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 ${colors.tagBg} ${colors.tagText} border ${colors.tagBorder}`}
+                    className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm flex items-center gap-1 ${colors.tagBg} ${colors.tagText} border ${colors.tagBorder} active:scale-95 transition-all`}
                   >
                     <span>{item}</span>
                     <X className="w-3 h-3" />
@@ -234,9 +234,9 @@ export default function FoodPreferences({ onComplete }: FoodPreferencesProps) {
         )}
 
         {/* Common Options */}
-        <div className="mb-6">
-          <p className="text-sm text-neutral-600 mb-3">Opciones comunes:</p>
-          <div className="flex flex-wrap gap-2">
+        <div className="mb-5 sm:mb-6">
+          <p className="text-xs sm:text-sm font-medium text-neutral-600 mb-2 sm:mb-3">Opciones comunes:</p>
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {commonFoods[activeTab].map((food) => {
               const isSelected = getCurrentList().includes(food);
               const colors = getColorClasses(isSelected);
@@ -244,7 +244,7 @@ export default function FoodPreferences({ onComplete }: FoodPreferencesProps) {
                 <button
                   key={food}
                   onClick={() => toggleItem(food)}
-                  className={`px-4 py-2 rounded-xl text-sm transition-all border-2 ${colors.buttonBg} ${colors.buttonText} ${colors.buttonBorder} ${!isSelected && 'hover:border-neutral-300'}`}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm transition-all border-2 active:scale-95 ${colors.buttonBg} ${colors.buttonText} ${colors.buttonBorder} ${!isSelected && 'hover:border-neutral-300'}`}
                 >
                   {food}
                 </button>
@@ -254,8 +254,8 @@ export default function FoodPreferences({ onComplete }: FoodPreferencesProps) {
         </div>
 
         {/* Custom Input */}
-        <div className="mb-6">
-          <p className="text-sm text-neutral-600 mb-2">¿No encuentras algo?</p>
+        <div className="mb-6 sm:mb-8">
+          <p className="text-xs sm:text-sm font-medium text-neutral-600 mb-2">¿No encuentras algo?</p>
           <div className="flex gap-2">
             <input
               type="text"
@@ -263,31 +263,31 @@ export default function FoodPreferences({ onComplete }: FoodPreferencesProps) {
               onChange={(e) => setCustomInput(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && addCustomItem()}
               placeholder="Escribe aquí..."
-              className="flex-1 px-4 py-3 border-2 border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-neutral-200 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
             <button
               onClick={addCustomItem}
-              className={`px-4 py-3 ${getColorClasses(true).buttonBg} text-white rounded-xl hover:${getColorClasses(true).buttonHoverBg} transition-all`}
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 ${getColorClasses(true).buttonBg} text-white rounded-lg sm:rounded-xl hover:${getColorClasses(true).buttonHoverBg} active:scale-95 transition-all`}
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
         {/* Skip/Continue Buttons */}
-        <div className="flex gap-3">
+        <div className="flex gap-2 sm:gap-3">
           <button
             onClick={handleContinue}
-            className="flex-1 bg-neutral-100 text-neutral-700 py-4 rounded-2xl hover:bg-neutral-200 transition-all"
+            className="flex-1 bg-neutral-100 text-neutral-700 py-3 sm:py-4 rounded-xl sm:rounded-2xl hover:bg-neutral-200 active:scale-[0.98] transition-all font-semibold text-sm sm:text-base"
           >
             Omitir
           </button>
           <button
             onClick={handleContinue}
-            className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg"
+            className="flex-1 bg-emerald-600 text-white py-3 sm:py-4 rounded-xl sm:rounded-2xl hover:bg-emerald-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg font-semibold text-sm sm:text-base"
           >
             <span>Finalizar</span>
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>

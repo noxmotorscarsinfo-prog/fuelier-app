@@ -578,7 +578,7 @@ export default function MealSelection({
           
           onSelectMeal(mealToSave);
         }}
-        className={`w-full border-2 rounded-2xl p-5 shadow-sm hover:shadow-lg transition-all cursor-pointer relative ${
+        className={`w-full border-2 rounded-xl sm:rounded-2xl p-3 sm:p-5 shadow-sm hover:shadow-lg transition-all cursor-pointer relative active:scale-[0.99] ${
           isTopRecommended 
             ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-400 hover:border-emerald-500' 
             : 'bg-white border-neutral-200 hover:border-emerald-300'
@@ -586,9 +586,9 @@ export default function MealSelection({
       >
         {/* Badge especial para CENA - Muestra compatibilidad de proporciones */}
         {mealType === 'dinner' && isTopRecommended && topNumber && (
-          <div className="absolute -top-2 -right-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full px-3 py-1.5 text-xs flex items-center gap-1 shadow-md z-10">
-            <span>{proportionCategory.emoji}</span>
-            <span className="font-semibold">
+          <div className="absolute -top-1.5 sm:-top-2 -right-1.5 sm:-right-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1 shadow-md z-10">
+            <span className="text-xs sm:text-sm">{proportionCategory.emoji}</span>
+            <span className="font-semibold whitespace-nowrap">
               {proportionCompatibility >= 85 ? 'Perfecto' : 'Top'} #{topNumber} ({Math.round(proportionCompatibility)}%)
             </span>
           </div>
@@ -596,25 +596,25 @@ export default function MealSelection({
         
         {/* Badge normal para otras comidas */}
         {mealType !== 'dinner' && isTopRecommended && topNumber && (
-          <div className="absolute -top-2 -right-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full px-3 py-1.5 text-xs flex items-center gap-1 shadow-md z-10">
+          <div className="absolute -top-1.5 sm:-top-2 -right-1.5 sm:-right-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1 shadow-md z-10">
             <Sparkles className="w-3 h-3" />
-            <span className="font-semibold">Recomendado #{topNumber}</span>
+            <span className="font-semibold whitespace-nowrap">Recomendado #{topNumber}</span>
           </div>
         )}
 
         {/* Badge de "Ajuste Perfecto" con porcentaje */}
         {!isTopRecommended && macroFit.isPerfect && (
-          <div className="absolute -top-2 -right-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-full px-3 py-1.5 text-xs flex items-center gap-1 shadow-md z-10">
+          <div className="absolute -top-1.5 sm:-top-2 -right-1.5 sm:-right-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-full px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1 shadow-md z-10">
             <Check className="w-3 h-3" />
-            <span className="font-semibold">Ajuste Perfecto {Math.round(macroFit.overallMatch)}%</span>
+            <span className="font-semibold whitespace-nowrap">Ajuste Perfecto {Math.round(macroFit.overallMatch)}%</span>
           </div>
         )}
 
         {/* Badge de "Buen Ajuste" con porcentaje */}
         {!isTopRecommended && !macroFit.isPerfect && macroFit.isGood && (
-          <div className="absolute -top-2 -right-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full px-3 py-1.5 text-xs flex items-center gap-1 shadow-md z-10">
+          <div className="absolute -top-1.5 sm:-top-2 -right-1.5 sm:-right-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1 shadow-md z-10">
             <Star className="w-3 h-3" />
-            <span className="font-semibold">Buen Ajuste {Math.round(macroFit.overallMatch)}%</span>
+            <span className="font-semibold whitespace-nowrap">Buen Ajuste {Math.round(macroFit.overallMatch)}%</span>
           </div>
         )}
 
@@ -622,38 +622,38 @@ export default function MealSelection({
         
         {/* NUEVO: Badge de historial si tiene alta probabilidad de aceptación */}
         {userAcceptanceProbability && userAcceptanceProbability > 85 && !isTopRecommended && (
-          <div className="absolute top-3 right-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full px-2 py-1 text-xs flex items-center gap-1 shadow-md">
+          <div className="absolute top-2 sm:top-3 right-2 sm:right-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1 shadow-md">
             <Star className="w-3 h-3 fill-current" />
-            <span>Lo aceptas {Math.round(userAcceptanceProbability)}%</span>
+            <span className="whitespace-nowrap">Lo aceptas {Math.round(userAcceptanceProbability)}%</span>
           </div>
         )}
 
         {meal.isCustom && !isTopRecommended && !userAcceptanceProbability && (
-          <div className="absolute top-3 right-3 bg-purple-500 text-white rounded-full px-2 py-1 text-xs flex items-center gap-1">
+          <div className="absolute top-2 sm:top-3 right-2 sm:right-3 bg-purple-500 text-white rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1">
             <ChefHat className="w-3 h-3" />
             <span>Tuyo</span>
           </div>
         )}
 
         {currentMeal?.id === meal.id && !isTopRecommended && (
-          <div className="absolute top-3 right-3 bg-emerald-500 text-white rounded-full p-1">
+          <div className="absolute top-2 sm:top-3 right-2 sm:right-3 bg-emerald-500 text-white rounded-full p-1">
             <Check className="w-4 h-4" />
           </div>
         )}
         
-        <div className="flex items-start gap-4">
-          <div className={`flex-shrink-0 ${isTopRecommended ? 'w-16 h-16' : 'w-12 h-12'} bg-neutral-100 rounded-xl flex items-center justify-center text-2xl`}>
+        <div className="flex items-start gap-3 sm:gap-4">
+          <div className={`flex-shrink-0 ${isTopRecommended ? 'w-12 h-12 sm:w-16 sm:h-16' : 'w-10 h-10 sm:w-12 sm:h-12'} bg-neutral-100 rounded-xl flex items-center justify-center text-xl sm:text-2xl`}>
             {meal.isCustom ? '👨‍🍳' : getMealTypeIcon()}
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between mb-2">
-              <div className="flex-1 pr-2">
-                <h3 className={`${isTopRecommended ? 'text-lg font-bold' : 'font-semibold'} text-neutral-800 mb-1`}>
+              <div className="flex-1 pr-2 min-w-0">
+                <h3 className={`${isTopRecommended ? 'text-base sm:text-lg font-bold' : 'text-sm sm:text-base font-semibold'} text-neutral-800 mb-1 truncate`}>
                   {meal.name}
                 </h3>
                 {meal.variant && (
-                  <p className="text-sm text-neutral-500">{meal.variant}</p>
+                  <p className="text-xs sm:text-sm text-neutral-500 truncate">{meal.variant}</p>
                 )}
                 
                 {/* NUEVO: Indicador de compatibilidad de proporciones para CENA */}
@@ -691,39 +691,40 @@ export default function MealSelection({
 
               <button
                 onClick={(e) => handleToggleFavorite(e, meal.id)}
-                className={`flex-shrink-0 p-2 rounded-full transition-all ${
+                className={`flex-shrink-0 p-1.5 sm:p-2 rounded-full transition-all active:scale-95 ${
                   meal.isFavorite 
                     ? 'bg-red-100 text-red-500 hover:bg-red-200' 
                     : 'bg-neutral-100 text-neutral-400 hover:bg-neutral-200 hover:text-red-500'
                 }`}
+                aria-label={meal.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
               >
-                <Heart className={`w-5 h-5 ${meal.isFavorite ? 'fill-current' : ''}`} />
+                <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${meal.isFavorite ? 'fill-current' : ''}`} />
               </button>
             </div>
 
             {/* Macros Grid - Mejorado para mejor visualización */}
-            <div className="grid grid-cols-4 gap-2 mb-3">
-              <div className={`px-2 py-2 rounded-lg text-center ${isTopRecommended ? 'bg-white border border-emerald-300' : 'bg-neutral-50'}`}>
-                <p className="text-[10px] text-neutral-500 mb-0.5">Calorías</p>
-                <p className={`text-sm font-bold ${isTopRecommended ? 'text-emerald-600' : 'text-neutral-800'}`}>
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+              <div className={`px-1.5 sm:px-2 py-1.5 sm:py-2 rounded-lg text-center ${isTopRecommended ? 'bg-white border border-emerald-300' : 'bg-neutral-50'}`}>
+                <p className="text-[10px] sm:text-xs text-neutral-500 mb-0.5 font-medium">Kcal</p>
+                <p className={`text-xs sm:text-sm font-bold leading-tight ${isTopRecommended ? 'text-emerald-600' : 'text-neutral-800'}`}>
                   {Math.round(adjustedMeal.calories)}
                 </p>
               </div>
-              <div className={`px-2 py-2 rounded-lg text-center ${isTopRecommended ? 'bg-white border border-blue-300' : 'bg-neutral-50'}`}>
-                <p className="text-[10px] text-neutral-500 mb-0.5">Proteína</p>
-                <p className={`text-sm font-bold ${isTopRecommended ? 'text-blue-600' : 'text-neutral-800'}`}>
+              <div className={`px-1.5 sm:px-2 py-1.5 sm:py-2 rounded-lg text-center ${isTopRecommended ? 'bg-white border border-blue-300' : 'bg-neutral-50'}`}>
+                <p className="text-[10px] sm:text-xs text-neutral-500 mb-0.5 font-medium">Prot</p>
+                <p className={`text-xs sm:text-sm font-bold leading-tight ${isTopRecommended ? 'text-blue-600' : 'text-neutral-800'}`}>
                   {Math.round(adjustedMeal.protein)}g
                 </p>
               </div>
-              <div className={`px-2 py-2 rounded-lg text-center ${isTopRecommended ? 'bg-white border border-amber-300' : 'bg-neutral-50'}`}>
-                <p className="text-[10px] text-neutral-500 mb-0.5">Carbos</p>
-                <p className={`text-sm font-bold ${isTopRecommended ? 'text-amber-600' : 'text-neutral-800'}`}>
+              <div className={`px-1.5 sm:px-2 py-1.5 sm:py-2 rounded-lg text-center ${isTopRecommended ? 'bg-white border border-amber-300' : 'bg-neutral-50'}`}>
+                <p className="text-[10px] sm:text-xs text-neutral-500 mb-0.5 font-medium">Carb</p>
+                <p className={`text-xs sm:text-sm font-bold leading-tight ${isTopRecommended ? 'text-amber-600' : 'text-neutral-800'}`}>
                   {Math.round(adjustedMeal.carbs)}g
                 </p>
               </div>
-              <div className={`px-2 py-2 rounded-lg text-center ${isTopRecommended ? 'bg-white border border-orange-300' : 'bg-neutral-50'}`}>
-                <p className="text-[10px] text-neutral-500 mb-0.5">Grasas</p>
-                <p className={`text-sm font-bold ${isTopRecommended ? 'text-orange-600' : 'text-neutral-800'}`}>
+              <div className={`px-1.5 sm:px-2 py-1.5 sm:py-2 rounded-lg text-center ${isTopRecommended ? 'bg-white border border-orange-300' : 'bg-neutral-50'}`}>
+                <p className="text-[10px] sm:text-xs text-neutral-500 mb-0.5 font-medium">Gras</p>
+                <p className={`text-xs sm:text-sm font-bold leading-tight ${isTopRecommended ? 'text-orange-600' : 'text-neutral-800'}`}>
                   {Math.round(adjustedMeal.fat)}g
                 </p>
               </div>
@@ -731,9 +732,9 @@ export default function MealSelection({
 
             {/* NUEVO: Diferencias con macros restantes (SOLO para CENA) */}
             {mealType === 'dinner' && (
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg px-3 py-2 mb-3">
-                <p className="text-[10px] text-purple-700 font-semibold mb-1.5">📊 Diferencia vs. macros restantes:</p>
-                <div className="grid grid-cols-4 gap-2">
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg px-2.5 sm:px-3 py-2 mb-2 sm:mb-3">
+                <p className="text-[10px] sm:text-xs text-purple-700 font-semibold mb-1.5">📊 Diferencia vs. macros restantes:</p>
+                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                   {(() => {
                     const mealCals = Math.round(adjustedMeal.calories);
                     const mealProt = Math.round(adjustedMeal.protein);
@@ -748,22 +749,22 @@ export default function MealSelection({
                     return (
                       <>
                         <div className="text-center">
-                          <p className={`text-xs font-bold ${Math.abs(diffCals) < 50 ? 'text-emerald-600' : diffCals > 0 ? 'text-red-600' : 'text-orange-600'}`}>
+                          <p className={`text-xs sm:text-sm font-bold leading-tight ${Math.abs(diffCals) < 50 ? 'text-emerald-600' : diffCals > 0 ? 'text-red-600' : 'text-orange-600'}`}>
                             {diffCals > 0 ? '+' : ''}{diffCals}
                           </p>
                         </div>
                         <div className="text-center">
-                          <p className={`text-xs font-bold ${Math.abs(diffProt) < 3 ? 'text-emerald-600' : diffProt > 0 ? 'text-red-600' : 'text-orange-600'}`}>
+                          <p className={`text-xs sm:text-sm font-bold leading-tight ${Math.abs(diffProt) < 3 ? 'text-emerald-600' : diffProt > 0 ? 'text-red-600' : 'text-orange-600'}`}>
                             {diffProt > 0 ? '+' : ''}{diffProt}g
                           </p>
                         </div>
                         <div className="text-center">
-                          <p className={`text-xs font-bold ${Math.abs(diffCarbs) < 5 ? 'text-emerald-600' : diffCarbs > 0 ? 'text-red-600' : 'text-orange-600'}`}>
+                          <p className={`text-xs sm:text-sm font-bold leading-tight ${Math.abs(diffCarbs) < 5 ? 'text-emerald-600' : diffCarbs > 0 ? 'text-red-600' : 'text-orange-600'}`}>
                             {diffCarbs > 0 ? '+' : ''}{diffCarbs}g
                           </p>
                         </div>
                         <div className="text-center">
-                          <p className={`text-xs font-bold ${Math.abs(diffFat) < 3 ? 'text-emerald-600' : diffFat > 0 ? 'text-red-600' : 'text-orange-600'}`}>
+                          <p className={`text-xs sm:text-sm font-bold leading-tight ${Math.abs(diffFat) < 3 ? 'text-emerald-600' : diffFat > 0 ? 'text-red-600' : 'text-orange-600'}`}>
                             {diffFat > 0 ? '+' : ''}{diffFat}g
                           </p>
                         </div>
@@ -771,7 +772,7 @@ export default function MealSelection({
                     );
                   })()}
                 </div>
-                <p className="text-[9px] text-purple-600 mt-1 text-center">
+                <p className="text-[9px] sm:text-[10px] text-purple-600 mt-1 text-center leading-tight">
                   ✅ Verde = Perfecto | 🔴 Rojo = Exceso | 🟠 Naranja = Defecto
                 </p>
               </div>

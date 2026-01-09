@@ -234,6 +234,16 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
     return (weight / (heightInMeters * heightInMeters)).toFixed(1);
   };
   
+  // NUEVO: Calcular porcentaje de grasa corporal
+  const calculateBodyFat = () => {
+    const bmi = parseFloat(calculateBMI());
+    // Fórmula de Deurenberg: % Grasa = (1.20 × IMC) + (0.23 × Edad) - (10.8 × Género) - 5.4
+    // Género: Hombre = 1, Mujer = 0
+    const genderValue = user.sex === 'male' ? 1 : 0;
+    const bodyFat = (1.20 * bmi) + (0.23 * age) - (10.8 * genderValue) - 5.4;
+    return bodyFat.toFixed(1);
+  };
+  
   // Calcular TDEE y calorías objetivo con los valores actuales
   const tempUser: User = { ...user, weight, height, age, goal, trainingFrequency };
   
@@ -320,7 +330,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
               </div>
               <Zap className="w-8 h-8 text-blue-200" />
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="grid grid-cols-3 gap-2 text-sm">
               <div className="bg-white/10 rounded-lg p-2">
                 <p className="text-blue-100 text-xs">TMB</p>
                 <p>{bmr} kcal</p>
@@ -328,6 +338,10 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
               <div className="bg-white/10 rounded-lg p-2">
                 <p className="text-blue-100 text-xs">IMC</p>
                 <p>{calculateBMI()}</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-2">
+                <p className="text-blue-100 text-xs">% Grasa</p>
+                <p>{calculateBodyFat()}%</p>
               </div>
             </div>
           </div>

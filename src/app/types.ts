@@ -218,6 +218,16 @@ export interface User {
   customIngredients?: Ingredient[]; // NUEVO: Ingredientes personalizados del usuario
   favoriteIngredientIds?: string[]; // NUEVO: IDs de ingredientes favoritos del usuario
   isAdmin?: boolean; // true si el usuario es administrador
+  
+  // ===== ENTRENAMIENTO =====
+  trainingOnboarded?: boolean; // Si el usuario ha configurado su entrenamiento
+  trainingDays?: number; // Número de días de entrenamiento por semana
+  // ELIMINADO: trainingWeekPlan - ahora se guarda solo en KV Store (trainingPlan:${email})
+  createdAt?: string; // Fecha de creación de la cuenta
+  settings?: {
+    autoSaveDays?: boolean;
+    timezone?: string;
+  };
 }
 
 // NUEVO: Registro de adaptaciones de comidas para aprendizaje
@@ -298,7 +308,79 @@ export interface WeeklyProgressRecord {
   };
 }
 
-// ===== FEEDBACK DIARIO DEL USUARIO (SISTEMA DE APRENDIZAJE) =====
+// ============================================
+// TRAINING SYSTEM TYPES
+// ============================================
+
+export interface ExerciseSet {
+  setNumber: number;
+  weight: number; // kg
+  reps: number;
+  completed: boolean;
+  previousRecord?: { // Registro anterior para mostrar progresión
+    weight: number;
+    reps: number;
+    date: string;
+  };
+}
+
+export interface Exercise {
+  id: string;
+  name: string;
+  category: 'chest' | 'back' | 'shoulders' | 'legs' | 'arms' | 'core' | 'cardio' | 'other';
+  muscleGroup: string; // Ej: "Pectoral", "Cuádriceps"
+  icon?: string; // URL o nombre del icono
+  sets: ExerciseSet[];
+  notes?: string; // Notas del usuario sobre el ejercicio
+  isCustom?: boolean;
+}
+
+export interface WorkoutSession {
+  id: string;
+  date: string; // ISO date
+  dayOfWeek: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+  name: string; // Ej: "Push Day A", "Leg Day"
+  exercises: Exercise[];
+  completed: boolean;
+  duration?: number; // minutos
+  notes?: string;
+  userEmail: string;
+}
+
+export interface WeeklyRoutine {
+  id: string;
+  name: string; // Ej: "PPL 6 días", "Full Body"
+  userEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean; // true si es la rutina actual
+  schedule: {
+    monday?: string; // ID del template de workout o null si es día de descanso
+    tuesday?: string;
+    wednesday?: string;
+    thursday?: string;
+    friday?: string;
+    saturday?: string;
+    sunday?: string;
+  };
+}
+
+export interface WorkoutTemplate {
+  id: string;
+  name: string; // Ej: "Push Day A"
+  userEmail: string;
+  exercises: {
+    exerciseId: string;
+    exerciseName: string;
+    category: string;
+    sets: number;
+    targetReps: string; // Ej: "8-12", "15-20"
+    notes?: string;
+  }[];
+  isGlobal?: boolean; // Templates predefinidos del sistema
+  createdBy?: string;
+}
+
 export interface DailyFeedback {
   date: string; // Fecha (formato YYYY-MM-DD)
   

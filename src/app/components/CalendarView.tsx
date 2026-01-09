@@ -206,65 +206,66 @@ export default function CalendarView({ dailyLogs, onBack, onCopyDay, user }: Cal
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-blue-50">
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-6 pt-12 pb-8 sticky top-0 z-20 shadow-2xl">
+      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-4 sm:px-6 pt-10 sm:pt-12 pb-6 sm:pb-8 sticky top-0 z-20 shadow-2xl">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 sm:mb-6">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={onBack}
-                className="bg-white/20 backdrop-blur-sm p-3 rounded-2xl hover:bg-white/30 transition-all hover:scale-105 active:scale-95"
+                className="bg-white/20 backdrop-blur-sm p-2 sm:p-3 rounded-xl sm:rounded-2xl hover:bg-white/30 transition-all hover:scale-105 active:scale-95"
+                aria-label="Volver"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
               <div>
-                <h1 className="text-3xl font-bold mb-1">Calendario</h1>
-                <p className="text-emerald-100">{dailyLogs.length} días registrados</p>
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-0.5 sm:mb-1">Calendario</h1>
+                <p className="text-emerald-100 text-xs sm:text-sm">{dailyLogs.length} días registrados</p>
               </div>
             </div>
 
             {/* View Toggle */}
-            <div className="flex gap-2 bg-white/10 backdrop-blur-sm p-1 rounded-2xl">
+            <div className="flex gap-1.5 sm:gap-2 bg-white/10 backdrop-blur-sm p-1 rounded-xl sm:rounded-2xl w-full sm:w-auto">
               <button
                 onClick={() => setViewMode('month')}
-                className={`px-4 py-2 rounded-xl transition-all font-semibold flex items-center gap-2 ${
+                className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl transition-all font-semibold flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm ${
                   viewMode === 'month'
                     ? 'bg-white text-emerald-600 shadow-lg'
                     : 'text-white hover:bg-white/20'
                 }`}
               >
-                <LayoutGrid className="w-4 h-4" />
+                <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Mes
               </button>
               <button
                 onClick={() => setViewMode('week')}
-                className={`px-4 py-2 rounded-xl transition-all font-semibold flex items-center gap-2 ${
+                className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl transition-all font-semibold flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm ${
                   viewMode === 'week'
                     ? 'bg-white text-emerald-600 shadow-lg'
                     : 'text-white hover:bg-white/20'
                 }`}
               >
-                <LayoutList className="w-4 h-4" />
+                <LayoutList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Semana
               </button>
             </div>
           </div>
 
           {/* Navigation */}
-          <div className="flex items-center justify-between bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+          <div className="flex items-center justify-between bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4">
             <button
               onClick={viewMode === 'month' ? previousMonth : previousWeek}
-              className="p-2 hover:bg-white/20 rounded-xl transition-all"
+              className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg sm:rounded-xl transition-all active:scale-95"
+              aria-label="Anterior"
             >
-              <ChevronLeft className="w-6 h-6" />
+              <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
-            <h2 className="text-xl font-bold capitalize">
-              {viewMode === 'month' ? formatMonthYear(currentDate) : formatWeekRange(currentDate)}
-            </h2>
+            <h2 className="text-base sm:text-xl font-bold capitalize text-center flex-1">{viewMode === 'month' ? formatMonthYear(currentDate) : formatWeekRange(currentDate)}</h2>
             <button
               onClick={viewMode === 'month' ? nextMonth : nextWeek}
-              className="p-2 hover:bg-white/20 rounded-xl transition-all"
+              className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg sm:rounded-xl transition-all active:scale-95"
+              aria-label="Siguiente"
             >
-              <ChevronRight className="w-6 h-6" />
+              <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
         </div>

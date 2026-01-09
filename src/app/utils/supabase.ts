@@ -1,3 +1,11 @@
+// =====================================================
+// CLIENTE SINGLETON DE SUPABASE - INSTANCIA ÚNICA
+// =====================================================
+// ⚠️ IMPORTANTE: Este es el ÚNICO lugar donde se crea la instancia de Supabase
+// Todos los demás archivos deben importar desde aquí o desde /src/utils/supabase/client.ts
+// NO crear múltiples instancias de createClient() para evitar warnings de GoTrueClient
+// =====================================================
+
 import { createClient } from '@supabase/supabase-js';
 import { projectId, publicAnonKey } from '/utils/supabase/info';
 
@@ -8,13 +16,25 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || publicAnonKey;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('⚠️ Supabase credentials not found! Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables.');
-} else {
-  console.log('✅ Supabase initialized successfully');
-  console.log('🔗 URL:', supabaseUrl);
 }
 
-// Crear cliente de Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Crear cliente de Supabase como singleton para evitar múltiples instancias
+let supabaseInstance: ReturnType<typeof createClient> | null = null;
+
+export const supabase = (() => {
+  if (!supabaseInstance) {
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: window.localStorage
+      }
+    });
+    console.log('✅ Supabase client initialized successfully (singleton)');
+  }
+  return supabaseInstance;
+})();
 
 // =====================================================
 // AUTENTICACIÓN
@@ -113,13 +133,24 @@ export async function getAllProfiles() {
 // =====================================================
 
 export async function getBaseIngredients() {
-  const { data, error } = await supabase
-    .from('base_ingredients')
-    .select('*')
-    .order('name', { ascending: true });
-  
-  if (error) throw error;
-  return data;
+  // Usar el backend en lugar de llamada directa para evitar problemas de RLS
+  try {
+    const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-b0e879f0/global-ingredients`, {
+      headers: {
+        'Authorization': `Bearer ${publicAnonKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to get base ingredients');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error getting base ingredients:', error);
+    return [];
+  }
 }
 
 export async function createBaseIngredient(ingredient: any) {
@@ -159,14 +190,20 @@ export async function deleteBaseIngredient(id: string) {
 // =====================================================
 
 export async function getCustomIngredients(userId: string) {
+  // Temporalmente deshabilitado para evitar problemas de RLS
+  // Los ingredientes personalizados se agregarán en una futura versión
+  return [];
+  
+  /*
   const { data, error } = await supabase
     .from('custom_ingredients')
     .select('*')
     .eq('user_id', userId)
     .order('name', { ascending: true });
+  */
   
-  if (error) throw error;
-  return data;
+  // if (error) throw error;
+  // return data;
 }
 
 export async function createCustomIngredient(userId: string, ingredient: any) {

@@ -1,5 +1,5 @@
 import { DailyLog, MealType, User, BugReport, MealDistribution } from '../types';
-import { Flame, Beef, Wheat, Droplet, Plus, BarChart3, History, RotateCcw, Settings as SettingsIcon, User as UserIcon, Target, Zap, TrendingUp, Calendar, Award, Coffee, Save, CheckCircle, UtensilsCrossed, ChefHat, Scale, Users, Share2, Heart, BookmarkCheck, HelpCircle, X, Bug, Send, AlertCircle, MessageSquare, Shield, Sparkles, PieChart } from 'lucide-react';
+import { Flame, Beef, Wheat, Droplet, Plus, BarChart3, History, RotateCcw, Settings as SettingsIcon, User as UserIcon, Target, Zap, TrendingUp, Calendar, Award, Coffee, Save, CheckCircle, UtensilsCrossed, ChefHat, Scale, Users, Share2, Heart, BookmarkCheck, HelpCircle, X, Bug, Send, AlertCircle, MessageSquare, Shield, Sparkles, PieChart, Dumbbell } from 'lucide-react';
 import { calculateAllGoals } from '../utils/macroCalculations';
 import { getActiveMealTypes } from '../utils/mealDistribution';
 import { useState, useEffect, useRef } from 'react';
@@ -12,6 +12,9 @@ import WeightTracking from './WeightTracking';
 import { analyzeProgress, detectMetabolicAdaptation } from '../utils/adaptiveSystem';
 import ProgressHub from './ProgressHub';
 import WeeklyProgressWidget from './WeeklyProgressWidget';
+import { TrainingOnboarding } from './TrainingOnboarding';
+import { TrainingDashboardNew } from './TrainingDashboardNew';
+import * as api from '../utils/api';
 
 interface DashboardProps {
   user: User;
@@ -34,6 +37,7 @@ interface DashboardProps {
   onRemoveComplementaryMeal?: (index: number) => void; // Nueva prop para eliminar comida complementaria
   onViewMealDetail?: (type: MealType) => void; // NUEVA: Ver detalle de comida existente
   onUpdateMealDistribution?: (distribution: MealDistribution) => void; // NUEVA: Actualizar distribución de comidas
+  onUpdateUser?: (updatedUser: User) => void; // NUEVA: Actualizar usuario completo
 }
 
 export default function Dashboard({
@@ -56,7 +60,8 @@ export default function Dashboard({
   onNavigateToCreateMeal,
   onAddComplementaryMeals,
   onRemoveComplementaryMeal,
-  onUpdateMealDistribution
+  onUpdateMealDistribution,
+  onUpdateUser
 }: DashboardProps) {
   console.log('📊 Dashboard - Datos recibidos:');
   console.log('user:', user);
@@ -75,10 +80,61 @@ export default function Dashboard({
   const [showWeightTracking, setShowWeightTracking] = useState(false); // NUEVO: Modal de tracking de peso
   const [showAdaptiveAlert, setShowAdaptiveAlert] = useState(false); // NUEVO: Alerta de ajuste automático
   const [showProgressHub, setShowProgressHub] = useState(false); // NUEVO: Centro de progreso unificado
+  const [activeTab, setActiveTab] = useState<'diet' | 'training'>('diet'); // NUEVO: Tab activo (Dieta/Entrenamiento)
+
+  // NUEVO: Estado para entrenamiento
+  const [trainingOnboarded, setTrainingOnboarded] = useState(user.trainingOnboarded || false);
+  const [trainingDays, setTrainingDays] = useState(user.trainingDays || 0);
+  const [weekPlan, setWeekPlan] = useState<any[]>([]); // Se carga dinámicamente desde Supabase
+  const [showTrainingOnboarding, setShowTrainingOnboarding] = useState(false); // NUEVO: Modal de onboarding
+  const [isLoadingTrainingPlan, setIsLoadingTrainingPlan] = useState(false); // NUEVO: Estado de carga
 
   // NUEVO: Obtener tipos de comidas activas según configuración del usuario
   const activeMealTypes = getActiveMealTypes(user.mealsPerDay || 3, user.mealStructure);
   const totalActiveMeals = activeMealTypes.length;
+
+  // NUEVO: Cargar plan de entrenamiento desde Supabase cuando el componente monta
+  useEffect(() => {
+    const loadTrainingPlan = async () => {
+      if (!trainingOnboarded || !user.email) return;
+      
+      // Evitar recargas innecesarias si ya tenemos el plan
+      if (weekPlan.length > 0) return;
+      
+      setIsLoadingTrainingPlan(true);
+      try {
+        console.log('[Dashboard] 🏋️ Cargando plan de entrenamiento desde Supabase...');
+        const savedPlan = await api.getTrainingPlan(user.email);
+        
+        if (savedPlan && Array.isArray(savedPlan) && savedPlan.length > 0) {
+          // Validar estructura
+          const isValidPlan = savedPlan.every(day => 
+            day && 
+            typeof day === 'object' && 
+            'dayName' in day && 
+            'exercises' in day && 
+            Array.isArray(day.exercises)
+          );
+          
+          if (isValidPlan) {
+            console.log('[Dashboard] ✅ Plan cargado:', savedPlan.length, 'días');
+            setWeekPlan(savedPlan);
+            setTrainingDays(savedPlan.length);
+          } else {
+            console.warn('[Dashboard] ⚠️ Plan tiene estructura inválida');
+          }
+        } else {
+          console.log('[Dashboard] ℹ️ No hay plan guardado');
+        }
+      } catch (error) {
+        console.error('[Dashboard] ❌ Error cargando plan:', error);
+      } finally {
+        setIsLoadingTrainingPlan(false);
+      }
+    };
+    
+    loadTrainingPlan();
+  }, [trainingOnboarded, user.email]); // Solo ejecutar cuando cambia trainingOnboarded o email
 
   // NUEVO: Efecto para detectar cuando se completa la cena y mostrar el modal de macros complementarios
   // SOLO SE MUESTRA UNA VEZ después de la cena
@@ -338,12 +394,12 @@ export default function Dashboard({
       return (
         <button
           onClick={() => onAddMeal(type)}
-          className="w-full bg-white border-2 border-dashed border-neutral-200 rounded-2xl p-4 text-center hover:border-emerald-400 hover:bg-emerald-50 transition-all group"
+          className="w-full bg-white border-2 border-dashed border-neutral-200 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center hover:border-emerald-400 hover:bg-emerald-50 transition-all group active:scale-[0.98]"
         >
           <div className="flex items-center justify-center gap-2 text-neutral-400 group-hover:text-emerald-600 transition-colors">
-            <span className="text-2xl">{getMealIcon(type)}</span>
-            <Plus className="w-5 h-5" />
-            <span>Agregar {getMealLabel(type)}</span>
+            <span className="text-xl sm:text-2xl">{getMealIcon(type)}</span>
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="text-sm sm:text-base font-medium">Agregar {getMealLabel(type)}</span>
           </div>
         </button>
       );
@@ -352,46 +408,46 @@ export default function Dashboard({
     return (
       <div
         onClick={() => onViewMealDetail?.(type)}
-        className="bg-white border border-neutral-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+        className="bg-white border border-neutral-200 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group active:scale-[0.98]"
       >
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">{getMealIcon(type)}</span>
-            <div>
-              <p className="text-xs text-emerald-600 uppercase tracking-wide">{getMealLabel(type)}</p>
-              <h3 className="mt-1 text-neutral-800 group-hover:text-emerald-600 transition-colors">{meal.name}</h3>
-              {meal.variant && <p className="text-sm text-neutral-500">{meal.variant}</p>}
+        <div className="flex justify-between items-start mb-2.5 sm:mb-3">
+          <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+            <span className="text-xl sm:text-2xl flex-shrink-0">{getMealIcon(type)}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] sm:text-xs text-emerald-600 uppercase tracking-wide font-medium">{getMealLabel(type)}</p>
+              <h3 className="mt-0.5 sm:mt-1 text-sm sm:text-base font-medium text-neutral-800 group-hover:text-emerald-600 transition-colors truncate">{meal.name}</h3>
+              {meal.variant && <p className="text-xs sm:text-sm text-neutral-500 truncate">{meal.variant}</p>}
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right flex-shrink-0 ml-2">
             <div className="flex items-center gap-1">
-              <Flame className="w-4 h-4 text-emerald-600" />
-              <p className="text-emerald-600 text-lg">{meal.calories}</p>
+              <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
+              <p className="text-emerald-600 text-base sm:text-lg font-semibold">{meal.calories}</p>
             </div>
-            <p className="text-xs text-neutral-400">kcal</p>
+            <p className="text-[10px] sm:text-xs text-neutral-400">kcal</p>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="bg-blue-50 rounded-lg p-2">
-            <div className="flex items-center justify-center gap-1 mb-1">
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 text-center">
+          <div className="bg-blue-50 rounded-lg p-1.5 sm:p-2">
+            <div className="flex items-center justify-center gap-0.5 sm:gap-1 mb-0.5 sm:mb-1">
               <Beef className="w-3 h-3 text-blue-600" />
             </div>
-            <p className="text-sm text-blue-600">{meal.protein}g</p>
-            <p className="text-xs text-neutral-400">Prot</p>
+            <p className="text-xs sm:text-sm font-semibold text-blue-600">{meal.protein}g</p>
+            <p className="text-[10px] sm:text-xs text-neutral-400">Prot</p>
           </div>
-          <div className="bg-amber-50 rounded-lg p-2">
-            <div className="flex items-center justify-center gap-1 mb-1">
+          <div className="bg-amber-50 rounded-lg p-1.5 sm:p-2">
+            <div className="flex items-center justify-center gap-0.5 sm:gap-1 mb-0.5 sm:mb-1">
               <Wheat className="w-3 h-3 text-amber-600" />
             </div>
-            <p className="text-sm text-amber-600">{meal.carbs}g</p>
-            <p className="text-xs text-neutral-400">Carb</p>
+            <p className="text-xs sm:text-sm font-semibold text-amber-600">{meal.carbs}g</p>
+            <p className="text-[10px] sm:text-xs text-neutral-400">Carb</p>
           </div>
-          <div className="bg-orange-50 rounded-lg p-2">
-            <div className="flex items-center justify-center gap-1 mb-1">
+          <div className="bg-orange-50 rounded-lg p-1.5 sm:p-2">
+            <div className="flex items-center justify-center gap-0.5 sm:gap-1 mb-0.5 sm:mb-1">
               <Droplet className="w-3 h-3 text-orange-600" />
             </div>
-            <p className="text-sm text-orange-600">{meal.fat}g</p>
-            <p className="text-xs text-neutral-400">Grasa</p>
+            <p className="text-xs sm:text-sm font-semibold text-orange-600">{meal.fat}g</p>
+            <p className="text-[10px] sm:text-xs text-neutral-400">Grasa</p>
           </div>
         </div>
       </div>
@@ -414,22 +470,52 @@ export default function Dashboard({
     );
   };
 
+  // Handler para completar onboarding de entrenamiento
+  const handleTrainingOnboardingComplete = async (days: number, plan: any[]) => {
+    setTrainingDays(days);
+    setWeekPlan(plan);
+    setTrainingOnboarded(true);
+    setShowTrainingOnboarding(false);
+    setActiveTab('training');
+    
+    // Guardar flags en el usuario (sin el plan completo)
+    if (onUpdateUser) {
+      const updatedUser: User = {
+        ...user,
+        trainingOnboarded: true,
+        trainingDays: days
+      };
+      onUpdateUser(updatedUser);
+    }
+    
+    // Guardar el plan en Supabase (fuente de verdad única)
+    try {
+      await api.saveTrainingPlan(user.email, plan);
+      console.log('✅ Training plan saved to Supabase:', { days, plan });
+    } catch (error) {
+      console.error('❌ Error saving training plan to Supabase:', error);
+    }
+    
+    console.log('✅ Training onboarding completed:', { days, plan });
+  };
+
   return (
     <div className="min-h-screen bg-neutral-50">
       {/* Notification Banner - Macros Updated */}
       {showMacrosUpdated && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
-          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-4 rounded-2xl shadow-2xl border border-emerald-400 flex items-center gap-3 max-w-md">
-            <div className="bg-white/20 p-2 rounded-full">
-              <Zap className="w-5 h-5" />
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in px-4 w-full max-w-md">
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl shadow-2xl border border-emerald-400 flex items-center gap-2 sm:gap-3">
+            <div className="bg-white/20 p-1.5 sm:p-2 rounded-full flex-shrink-0">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className="flex-1">
-              <p className="font-semibold text-sm">¡Macros Actualizados!</p>
-              <p className="text-xs text-emerald-100">Tus objetivos se han recalculado con tu nuevo peso</p>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-xs sm:text-sm">¡Macros Actualizados!</p>
+              <p className="text-[10px] sm:text-xs text-emerald-100 leading-tight">Tus objetivos se han recalculado con tu nuevo peso</p>
             </div>
             <button
               onClick={() => setShowMacrosUpdated(false)}
-              className="bg-white/20 hover:bg-white/30 p-1 rounded-lg transition-colors"
+              className="bg-white/20 hover:bg-white/30 p-1 rounded-lg transition-colors active:scale-95 flex-shrink-0"
+              aria-label="Cerrar"
             >
               <X className="w-4 h-4" />
             </button>
@@ -441,7 +527,7 @@ export default function Dashboard({
       <div className="hidden md:block">
         <div className="max-w-7xl mx-auto px-6 py-8">
           {/* Header */}
-          <div className="flex justify-between items-start mb-8">
+          <div className="flex justify-between items-start mb-6">
             <div>
               <h1 className="text-3xl text-neutral-800 mb-2">Hola, {user.name} 👋</h1>
               <p className="text-neutral-500">
@@ -453,6 +539,48 @@ export default function Dashboard({
                 })}
               </p>
             </div>
+          </div>
+
+          {/* Botones de navegación con Dieta/Entrenamiento integrado */}
+          <div className="flex gap-3 justify-between items-center mb-8">
+            {/* Segmented Control - Dieta / Entrenamiento */}
+            <div className="inline-flex bg-gray-200 rounded-2xl p-1 shadow-sm">
+              <button
+                onClick={() => setActiveTab('diet')}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                  activeTab === 'diet'
+                    ? 'bg-white text-emerald-600 shadow-md'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <UtensilsCrossed className="w-5 h-5" />
+                Dieta
+              </button>
+              <button
+                onClick={() => {
+                  if (!trainingOnboarded) {
+                    setShowTrainingOnboarding(true);
+                  } else {
+                    setActiveTab('training');
+                  }
+                }}
+                className={`relative px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                  activeTab === 'training'
+                    ? 'bg-white text-emerald-600 shadow-md'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <Dumbbell className="w-5 h-5" />
+                Entrenamiento
+                {!trainingOnboarded && (
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+                    NEW
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Botones de acción */}
             <div className="flex gap-3">
               <button
                 onClick={onNavigateToSummary}
@@ -487,6 +615,40 @@ export default function Dashboard({
             </div>
           </div>
 
+          {/* Contenido Condicional */}
+          {activeTab === 'training' ? (
+            !trainingOnboarded ? (
+              <TrainingOnboarding
+                onComplete={handleTrainingOnboardingComplete}
+              />
+            ) : isLoadingTrainingPlan ? (
+              // Loading state mientras carga el plan
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-emerald-600 mb-4"></div>
+                <p className="text-neutral-600 text-lg font-medium">Cargando tu plan de entrenamiento...</p>
+                <p className="text-neutral-400 text-sm mt-2">Un momento por favor</p>
+              </div>
+            ) : weekPlan.length === 0 ? (
+              // Estado vacío si no hay plan después de cargar
+              <div className="flex flex-col items-center justify-center py-20">
+                <Dumbbell className="w-20 h-20 text-neutral-300 mb-4" />
+                <p className="text-neutral-600 text-lg font-medium">No se encontró tu plan de entrenamiento</p>
+                <button
+                  onClick={() => setShowTrainingOnboarding(true)}
+                  className="mt-4 bg-emerald-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-emerald-700 transition-all"
+                >
+                  Configurar Plan
+                </button>
+              </div>
+            ) : (
+              <TrainingDashboardNew
+                user={user}
+                trainingDays={trainingDays}
+                weekPlan={weekPlan}
+              />
+            )
+          ) : (
+          <>
           {/* Main Grid */}
           <div className="grid grid-cols-12 gap-6">
             {/* Left Sidebar - User Stats */}
@@ -531,11 +693,20 @@ export default function Dashboard({
                 {/* Título */}
                 <div className="flex items-center gap-2 mb-4 pb-3 border-b border-neutral-200">
                   <Target className="w-5 h-5 text-emerald-600" />
-                  <h3 className="text-neutral-800 font-medium">Tu Día</h3>
+                  <h3 className="text-neutral-800 font-medium">{activeTab === 'training' ? 'Tu Semana' : 'Tu Día'}</h3>
                 </div>
 
-                {/* Progreso de Comidas - Visual Grande */}
-                <div className="mb-6">
+                {activeTab === 'training' ? (
+                  /* Contenido de Entrenamiento - Sin estadísticas duplicadas */
+                  <div className="text-center py-8">
+                    <p className="text-neutral-500 text-sm">
+                      Estadísticas visibles en el header
+                    </p>
+                  </div>
+                ) : (
+                  /* Progreso de Comidas - Visual Grande */
+                  <>
+                  <div className="mb-6">
                   <div className="flex justify-center mb-3">
                     <div className="relative">
                       <svg className="w-32 h-32 transform -rotate-90">
@@ -624,7 +795,7 @@ export default function Dashboard({
                   </div>
                 </div>
 
-                {/* Metabolismo Section */}
+                {/* Metabolismo Section - Solo en Dieta */}
                 <div className="pt-4 border-t border-neutral-200">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -678,44 +849,46 @@ export default function Dashboard({
                       <p className="text-xs text-emerald-600">kcal/día</p>
                     </div>
                   </div>
-                </div>
 
-                {/* Resumen Explicativo */}
-                <div className="pt-4 border-t border-neutral-200 mt-4">
-                  <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-3">
-                    <div className="flex items-start gap-2">
-                      <div className="bg-emerald-500 text-white rounded-full p-1 mt-0.5 flex-shrink-0">
-                        <TrendingUp className="w-3 h-3" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-xs text-emerald-800 leading-relaxed">
-                          {activeMealsLogged === 0 && (
-                            <>¡Comienza tu día! Tu objetivo es consumir <strong>{goals.calories} kcal</strong> para {
-                              goals.calories < calculations.tdee ? 'perder peso de forma saludable' :
-                              goals.calories > calculations.tdee ? 'ganar masa muscular' :
-                              'mantener tu peso actual'
-                            }.</>
-                          )}
-                          {activeMealsLogged > 0 && activeMealsLogged < totalActiveMeals && (
-                            <>Llevas <strong>{totals.calories} kcal</strong> de {goals.calories}. {
-                              caloriesPercent < 50 ? `Te quedan ${goals.calories - totals.calories} kcal para alcanzar tu objetivo.` :
-                              caloriesPercent < 90 ? `¡Vas muy bien! Estás al ${Math.round(caloriesPercent)}% de tu meta.` :
-                              caloriesPercent < 110 ? `¡Perfecto! Estás justo en tu objetivo.` :
-                              `⚠️ Has superado tu objetivo por ${totals.calories - goals.calories} kcal. Controla las próximas comidas.`
-                            }</>
-                          )}
-                          {activeMealsLogged === totalActiveMeals && (
-                            <>¡Día completo! Has registrado <strong>{totals.calories} kcal</strong>. {
-                              caloriesPercent >= 95 && caloriesPercent <= 105 ? '🎯 ¡Perfecto cumplimiento de macros!' :
-                              caloriesPercent < 95 ? `Te faltan ${goals.calories - totals.calories} kcal para completar tu objetivo.` :
-                              `⚠️ Has excedido tu objetivo por ${totals.calories - goals.calories} kcal.`
-                            }</>
-                          )}
-                        </p>
+                  {/* Resumen Explicativo */}
+                  <div className="pt-4 border-t border-neutral-200 mt-4">
+                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-3">
+                      <div className="flex items-start gap-2">
+                        <div className="bg-emerald-500 text-white rounded-full p-1 mt-0.5 flex-shrink-0">
+                          <TrendingUp className="w-3 h-3" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-emerald-800 leading-relaxed">
+                            {activeMealsLogged === 0 && (
+                              <>¡Comienza tu día! Tu objetivo es consumir <strong>{goals.calories} kcal</strong> para {
+                                goals.calories < calculations.tdee ? 'perder peso de forma saludable' :
+                                goals.calories > calculations.tdee ? 'ganar masa muscular' :
+                                'mantener tu peso actual'
+                              }.</>
+                            )}
+                            {activeMealsLogged > 0 && activeMealsLogged < totalActiveMeals && (
+                              <>Llevas <strong>{totals.calories} kcal</strong> de {goals.calories}. {
+                                caloriesPercent < 50 ? `Te quedan ${goals.calories - totals.calories} kcal para alcanzar tu objetivo.` :
+                                caloriesPercent < 90 ? `¡Vas muy bien! Estás al ${Math.round(caloriesPercent)}% de tu meta.` :
+                                caloriesPercent < 110 ? `¡Perfecto! Estás justo en tu objetivo.` :
+                                `⚠️ Has superado tu objetivo por ${totals.calories - goals.calories} kcal. Controla las próximas comidas.`
+                              }</>
+                            )}
+                            {activeMealsLogged === totalActiveMeals && (
+                              <>¡Día completo! Has registrado <strong>{totals.calories} kcal</strong>. {
+                                caloriesPercent >= 95 && caloriesPercent <= 105 ? '🎯 ¡Perfecto cumplimiento de macros!' :
+                                caloriesPercent < 95 ? `Te faltan ${goals.calories - totals.calories} kcal para completar tu objetivo.` :
+                                `⚠️ Has excedido tu objetivo por ${totals.calories - goals.calories} kcal.`
+                              }</>
+                            )}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
+                </>
+                )}
               </div>
             </div>
 
@@ -970,17 +1143,19 @@ export default function Dashboard({
               <BugReportWidget onSubmit={onSubmitBugReport} />
             </div>
           </div>
+          </>
+        )}
         </div>
       </div>
 
       {/* Mobile Layout */}
       <div className="md:hidden pb-20">
         {/* Header */}
-        <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 text-white px-4 pt-10 pb-6 rounded-b-3xl shadow-lg">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h1 className="text-xl font-bold mb-0.5">Hola, {user.name.split(' ')[0]} 👋</h1>
-              <p className="text-emerald-100 text-xs">
+        <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 text-white px-4 pt-safe pt-8 pb-5 rounded-b-3xl shadow-lg">
+          <div className="flex justify-between items-start mb-3.5">
+            <div className="flex-1 min-w-0 pr-2">
+              <h1 className="text-lg sm:text-xl font-bold mb-1 truncate">Hola, {user.name.split(' ')[0]} 👋</h1>
+              <p className="text-emerald-100 text-xs leading-tight">
                 {new Date().toLocaleDateString('es-ES', { 
                   weekday: 'long',
                   day: 'numeric',
@@ -988,16 +1163,18 @@ export default function Dashboard({
                 })}
               </p>
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5 flex-shrink-0">
               <button
                 onClick={onNavigateToSummary}
                 className="bg-white/20 backdrop-blur-sm p-2 rounded-xl hover:bg-white/30 transition-all active:scale-95"
+                aria-label="Resumen"
               >
                 <BarChart3 className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setShowProgressHub(true)}
                 className="bg-white/20 backdrop-blur-sm p-2 rounded-xl hover:bg-white/30 transition-all active:scale-95"
+                aria-label="Progreso"
               >
                 <TrendingUp className="w-4 h-4" />
               </button>
@@ -1005,6 +1182,7 @@ export default function Dashboard({
                 <button
                   onClick={onOpenAdmin}
                   className="bg-white/20 backdrop-blur-sm p-2 rounded-xl hover:bg-white/30 transition-all active:scale-95"
+                  aria-label="Admin"
                 >
                   <Shield className="w-4 h-4" />
                 </button>
@@ -1012,27 +1190,119 @@ export default function Dashboard({
               <button
                 onClick={onNavigateToSettings}
                 className="bg-white/20 backdrop-blur-sm p-2 rounded-xl hover:bg-white/30 transition-all active:scale-95"
+                aria-label="Ajustes"
               >
                 <SettingsIcon className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3">
-              <p className="text-emerald-100 text-xs mb-0.5">Comidas</p>
-              <p className="text-xl font-bold">{activeMealsLogged}/{totalActiveMeals}</p>
+          {/* Quick Stats - Solo visible en modo Dieta */}
+          {activeTab === 'diet' && (
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                <p className="text-emerald-100 text-xs font-medium mb-1">Comidas</p>
+                <p className="text-2xl font-bold leading-none">{activeMealsLogged}<span className="text-lg text-emerald-200">/{totalActiveMeals}</span></p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                <p className="text-emerald-100 text-xs font-medium mb-1">Objetivo</p>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-2xl font-bold leading-none">{goals.calories}</p>
+                  <p className="text-xs text-emerald-100">kcal</p>
+                </div>
+              </div>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3">
-              <p className="text-emerald-100 text-xs mb-0.5">Objetivo</p>
-              <p className="text-xl font-bold">{goals.calories}</p>
-              <p className="text-emerald-100 text-xs">kcal/día</p>
+          )}
+
+          {/* Quick Stats - Solo visible en modo Entrenamiento */}
+          {activeTab === 'training' && (
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                <p className="text-emerald-100 text-xs font-medium mb-1">Completados</p>
+                <p className="text-2xl font-bold leading-none">0<span className="text-lg text-emerald-200">/{trainingDays}</span></p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                <p className="text-emerald-100 text-xs font-medium mb-1">Racha</p>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-2xl font-bold leading-none">0</p>
+                  <p className="text-xs text-emerald-100">semanas</p>
+                </div>
+              </div>
             </div>
+          )}
+        </div>
+
+        {/* Segmented Control - Dieta / Entrenamiento (Mobile) */}
+        <div className="px-4 pt-4 pb-0 bg-neutral-50">
+          <div className="flex bg-gray-200 rounded-2xl p-1 shadow-sm">
+            <button
+              onClick={() => setActiveTab('diet')}
+              className={`flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'diet'
+                  ? 'bg-white text-emerald-600 shadow-md'
+                  : 'text-gray-600'
+              }`}
+            >
+              <UtensilsCrossed className="w-4 h-4" />
+              Dieta
+            </button>
+            <button
+              onClick={() => {
+                if (!trainingOnboarded) {
+                  setShowTrainingOnboarding(true);
+                } else {
+                  setActiveTab('training');
+                }
+              }}
+              className={`relative flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'training'
+                  ? 'bg-white text-emerald-600 shadow-md'
+                  : 'text-gray-600'
+              }`}
+            >
+              <Dumbbell className="w-4 h-4" />
+              Entrenamiento
+              {!trainingOnboarded && (
+                <span className="absolute -top-1 -right-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+                  NEW
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
-        <div className="px-4 py-4 space-y-4">
+        {activeTab === 'training' ? (
+          !trainingOnboarded ? (
+            <TrainingOnboarding
+              onComplete={handleTrainingOnboardingComplete}
+            />
+          ) : isLoadingTrainingPlan ? (
+            // Loading state mientras carga el plan
+            <div className="flex flex-col items-center justify-center py-20 px-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-emerald-600 mb-4"></div>
+              <p className="text-neutral-600 text-base font-medium text-center">Cargando tu plan...</p>
+            </div>
+          ) : weekPlan.length === 0 ? (
+            // Estado vacío si no hay plan después de cargar
+            <div className="flex flex-col items-center justify-center py-20 px-4">
+              <Dumbbell className="w-16 h-16 text-neutral-300 mb-4" />
+              <p className="text-neutral-600 text-base font-medium text-center">No se encontró tu plan</p>
+              <button
+                onClick={() => setShowTrainingOnboarding(true)}
+                className="mt-4 bg-emerald-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-emerald-700 transition-all active:scale-95"
+              >
+                Configurar Plan
+              </button>
+            </div>
+          ) : (
+            <TrainingDashboardNew
+              user={user}
+              trainingDays={trainingDays}
+              weekPlan={weekPlan}
+            />
+          )
+        ) : (
+        <div className="px-4 pt-4 pb-4 space-y-4 bg-neutral-50">
           {/* Weekly Progress Widget - Mobile */}
           <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
@@ -1055,10 +1325,10 @@ export default function Dashboard({
           {/* Macros Summary */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-neutral-200">
             <div className="flex justify-between items-center mb-3">
-              <h2 className="font-bold text-neutral-800">Macros de Hoy</h2>
+              <h2 className="text-base font-bold text-neutral-800">Macros de Hoy</h2>
               <button
                 onClick={onResetDay}
-                className="text-xs text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all active:scale-95"
+                className="text-xs text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all active:scale-95 font-medium"
               >
                 Reiniciar
               </button>
@@ -1069,44 +1339,44 @@ export default function Dashboard({
               <div className="text-center">
                 <div className="bg-emerald-50 rounded-xl p-2 mb-1.5">
                   <Flame className="w-4 h-4 text-emerald-600 mx-auto mb-0.5" />
-                  <p className="font-bold text-emerald-600">{totals.calories}</p>
-                  <p className="text-[10px] text-neutral-400">/{goals.calories}</p>
+                  <p className="text-sm font-bold text-emerald-600 leading-tight">{totals.calories}</p>
+                  <p className="text-[10px] text-neutral-400 leading-tight">/{goals.calories}</p>
                 </div>
                 {renderProgressBar(totals.calories, goals.calories, 'emerald')}
-                <p className="text-[10px] text-neutral-500 mt-1">kcal</p>
+                <p className="text-[10px] text-neutral-500 mt-1 font-medium">kcal</p>
               </div>
 
               {/* Protein */}
               <div className="text-center">
                 <div className="bg-blue-50 rounded-xl p-2 mb-1.5">
                   <Beef className="w-4 h-4 text-blue-600 mx-auto mb-0.5" />
-                  <p className="font-bold text-blue-600">{totals.protein}</p>
-                  <p className="text-[10px] text-neutral-400">/{goals.protein}</p>
+                  <p className="text-sm font-bold text-blue-600 leading-tight">{totals.protein}</p>
+                  <p className="text-[10px] text-neutral-400 leading-tight">/{goals.protein}</p>
                 </div>
                 {renderProgressBar(totals.protein, goals.protein, 'blue')}
-                <p className="text-[10px] text-neutral-500 mt-1">Prot</p>
+                <p className="text-[10px] text-neutral-500 mt-1 font-medium">Prot</p>
               </div>
 
               {/* Carbs */}
               <div className="text-center">
                 <div className="bg-amber-50 rounded-xl p-2 mb-1.5">
                   <Wheat className="w-4 h-4 text-amber-600 mx-auto mb-0.5" />
-                  <p className="font-bold text-amber-600">{totals.carbs}</p>
-                  <p className="text-[10px] text-neutral-400">/{goals.carbs}</p>
+                  <p className="text-sm font-bold text-amber-600 leading-tight">{totals.carbs}</p>
+                  <p className="text-[10px] text-neutral-400 leading-tight">/{goals.carbs}</p>
                 </div>
                 {renderProgressBar(totals.carbs, goals.carbs, 'amber')}
-                <p className="text-[10px] text-neutral-500 mt-1">Carb</p>
+                <p className="text-[10px] text-neutral-500 mt-1 font-medium">Carb</p>
               </div>
 
               {/* Fat */}
               <div className="text-center">
                 <div className="bg-orange-50 rounded-xl p-2 mb-1.5">
                   <Droplet className="w-4 h-4 text-orange-600 mx-auto mb-0.5" />
-                  <p className="font-bold text-orange-600">{totals.fat}</p>
-                  <p className="text-[10px] text-neutral-400">/{goals.fat}</p>
+                  <p className="text-sm font-bold text-orange-600 leading-tight">{totals.fat}</p>
+                  <p className="text-[10px] text-neutral-400 leading-tight">/{goals.fat}</p>
                 </div>
                 {renderProgressBar(totals.fat, goals.fat, 'orange')}
-                <p className="text-[10px] text-neutral-500 mt-1">Grasa</p>
+                <p className="text-[10px] text-neutral-500 mt-1 font-medium">Grasa</p>
               </div>
             </div>
           </div>
@@ -1132,7 +1402,7 @@ export default function Dashboard({
           {/* Action Buttons */}
           <button
             onClick={onAddExtraFood}
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3.5 rounded-2xl hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 font-medium"
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 rounded-2xl hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-medium text-sm sm:text-base"
           >
             <Coffee className="w-5 h-5" />
             <span>Añadir Alimento Extra</span>
@@ -1141,7 +1411,7 @@ export default function Dashboard({
           {/* Guardar Día Button */}
           <button
             onClick={onSaveDay}
-            className={`w-full ${currentLog.isSaved ? 'bg-gradient-to-r from-green-600 to-green-700' : 'bg-gradient-to-r from-blue-600 to-blue-700'} text-white py-3.5 rounded-2xl hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 font-medium`}
+            className={`w-full ${currentLog.isSaved ? 'bg-gradient-to-r from-green-600 to-green-700' : 'bg-gradient-to-r from-blue-600 to-blue-700'} text-white py-3 rounded-2xl hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-medium text-sm sm:text-base`}
           >
             {currentLog.isSaved ? (
               <>
@@ -1275,6 +1545,7 @@ export default function Dashboard({
           {/* Bug Report Widget - Mobile */}
           <BugReportWidget onSubmit={onSubmitBugReport} />
         </div>
+        )}
       </div>
 
       {/* Chatbot - Floating */}
@@ -1337,6 +1608,24 @@ export default function Dashboard({
             setShowProgressHub(false);
           }}
         />
+      )}
+
+      {/* Training Onboarding Modal */}
+      {showTrainingOnboarding && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="min-h-screen">
+            <TrainingOnboarding
+              onComplete={handleTrainingOnboardingComplete}
+            />
+            {/* Botón de cerrar overlay */}
+            <button
+              onClick={() => setShowTrainingOnboarding(false)}
+              className="fixed top-6 right-6 z-50 bg-white/90 backdrop-blur-sm p-3 rounded-full shadow-xl hover:bg-white transition-all"
+            >
+              <X className="w-6 h-6 text-neutral-600" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

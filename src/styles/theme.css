@@ -202,6 +202,16 @@
     line-height: 1.5;
   }
 
+  /* Ocultar scrollbar pero mantener funcionalidad */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Estilos personalizados para slider de calorías */
   input[type="range"].slider-custom {
     -webkit-appearance: none;

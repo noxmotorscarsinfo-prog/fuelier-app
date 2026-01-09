@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User, Meal, MealType, DailyLog, SavedDiet, BugReport, MacroGoals, MealDistribution } from './types';
-import Login from './components/Login';
+import LoginAuth from './components/LoginAuth';
 import AdminLogin from './components/AdminLogin';
 import Dashboard from './components/Dashboard';
 import MealSelection from './components/MealSelection';
@@ -290,6 +290,47 @@ export default function App() {
           }
         }
       }
+      
+      // NUEVO: Load training plan from Supabase
+      try {
+        const trainingPlan = await api.getTrainingPlan(user.email);
+        if (trainingPlan && Array.isArray(trainingPlan) && trainingPlan.length > 0) {
+          // VALIDAR estructura del plan antes de usarlo
+          const isValidPlan = trainingPlan.every((day: any) => {
+            return (
+              day &&
+              typeof day === 'object' &&
+              typeof day.dayName === 'string' &&
+              Array.isArray(day.exercises) &&
+              day.exercises.every((ex: any) => 
+                ex &&
+                typeof ex === 'object' &&
+                typeof ex.id === 'string' &&
+                typeof ex.name === 'string' &&
+                typeof ex.sets === 'number' &&
+                typeof ex.reps === 'string' &&
+                typeof ex.restTime === 'number'
+              )
+            );
+          });
+          
+          if (isValidPlan) {
+            console.log(`✅ Loaded training plan with ${trainingPlan.length} days from Supabase`);
+            // Actualizar el objeto user con los datos del plan
+            setUser(prevUser => prevUser ? {
+              ...prevUser,
+              trainingOnboarded: true,
+              trainingDays: trainingPlan.length
+            } : prevUser);
+          } else {
+            console.error('⚠️ Training plan has invalid structure, ignoring');
+          }
+        } else {
+          console.log('ℹ️ No training plan found in Supabase');
+        }
+      } catch (error) {
+        console.error('Error loading training plan:', error);
+      }
     };
     
     loadUserData();
@@ -300,35 +341,48 @@ export default function App() {
     if (user) {
       // Guardar en ambos lugares durante la transición
       localStorage.setItem('dietUser', JSON.stringify(user));
-      api.saveUser(user);
+      api.saveUser(user).catch(error => {
+        console.error('❌ [CRITICAL] Error saving user to Supabase:', error);
+        // El usuario está en localStorage como backup
+      });
     }
   }, [user]);
 
   // Save logs to Supabase whenever they change
   useEffect(() => {
     if (user && dailyLogs.length >= 0) {
-      api.saveDailyLogs(user.email, dailyLogs);
+      api.saveDailyLogs(user.email, dailyLogs).catch(error => {
+        console.error('❌ [CRITICAL] Error saving daily logs to Supabase:', error);
+        // Los logs están en localStorage como backup
+      });
     }
   }, [dailyLogs, user]);
 
   // Save saved diets to Supabase whenever they change
   useEffect(() => {
     if (user && savedDiets.length >= 0) {
-      api.saveSavedDiets(user.email, savedDiets);
+      api.saveSavedDiets(user.email, savedDiets).catch(error => {
+        console.error('❌ [CRITICAL] Error saving diets to Supabase:', error);
+      });
     }
   }, [savedDiets, user]);
 
   // Save favorite meal IDs to Supabase when they change
   useEffect(() => {
     if (user && favoriteMealIds.length >= 0) {
-      api.saveFavoriteMeals(user.email, favoriteMealIds);
+      api.saveFavoriteMeals(user.email, favoriteMealIds).catch(error => {
+        console.error('❌ [CRITICAL] Error saving favorite meals to Supabase:', error);
+      });
     }
   }, [favoriteMealIds, user]);
 
   // Save bug reports to Supabase whenever they change
   useEffect(() => {
-    if (bugReports.length >= 0) {
-      api.saveBugReports(bugReports);
+    if (bugReports.length > 0) { // Solo guardar si hay bug reports
+      api.saveBugReports(bugReports).catch(error => {
+        console.error('❌ [CRITICAL] Error saving bug reports to Supabase:', error);
+        console.error('❌ [CRITICAL] Bug reports data:', JSON.stringify(bugReports, null, 2));
+      });
     }
   }, [bugReports]);
 
@@ -528,33 +582,24 @@ export default function App() {
     }
   };
 
-  const handleLogin = (email: string, name: string) => {
-    const savedUser = localStorage.getItem('dietUser');
-    if (savedUser) {
-      const existingUser = JSON.parse(savedUser);
-      if (existingUser.email === email) {
-        // Activar admin automáticamente para ciertos emails
-        const adminEmails = ['admin@fuelier.com', 'test@test.com', 'admin@admin.com'];
-        const isAdmin = adminEmails.includes(email.toLowerCase());
-        
-        // Actualizar usuario con isAdmin
-        const updatedUser = {
-          ...existingUser,
-          isAdmin: isAdmin || existingUser.isAdmin || false
-        };
-        
-        // Guardar usuario actualizado
-        if (updatedUser.isAdmin !== existingUser.isAdmin) {
-          localStorage.setItem('dietUser', JSON.stringify(updatedUser));
-        }
-        
-        setUser(updatedUser);
-        setCurrentScreen('dashboard');
-      } else {
-        alert('Usuario no encontrado. Por favor, regístrate.');
-      }
+  const handleLogin = async (email: string, name: string) => {
+    console.log(`[handleLogin] Attempting login for: ${email}`);
+    
+    // Cargar usuario desde Supabase
+    const userData = await api.getUser(email);
+    
+    if (userData) {
+      console.log(`[handleLogin] User found in database: ${email}`);
+      // Usuario encontrado en Supabase
+      setUser(userData);
+      setCurrentScreen('dashboard');
     } else {
-      alert('Usuario no encontrado. Por favor, regístrate.');
+      console.log(`[handleLogin] User NOT found in database: ${email}`);
+      console.log(`[handleLogin] Starting onboarding flow`);
+      
+      // No encontrado en Supabase, iniciar onboarding
+      setTempData({ email, name });
+      setCurrentScreen('onboarding-sex');
     }
   };
 
@@ -1090,9 +1135,8 @@ export default function App() {
 
   // Show login if no user
   if (!user || currentScreen === 'login') {
-    return <Login 
-      onLogin={handleLogin} 
-      onSignup={handleSignup} 
+    return <LoginAuth 
+      onLoginSuccess={handleLogin}
       onAdminAccess={() => {
         console.log('🔐 onAdminAccess called!');
         console.log('Current screen before:', currentScreen);
@@ -1163,6 +1207,17 @@ export default function App() {
               };
               const filteredLogs = dailyLogs.filter(log => log.date !== currentDate);
               setDailyLogs([...filteredLogs, updatedLog]);
+            }}
+            onUpdateUser={async (updatedUser) => {
+              setUser(updatedUser);
+              localStorage.setItem('dietUser', JSON.stringify(updatedUser));
+              // NUEVO: Guardar también en Supabase para persistencia real
+              try {
+                await api.saveUser(updatedUser);
+                console.log('✅ User updated in Supabase');
+              } catch (error) {
+                console.error('❌ Error saving user to Supabase:', error);
+              }
             }}
           />
         )}

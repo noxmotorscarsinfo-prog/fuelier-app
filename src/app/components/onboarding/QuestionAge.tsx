@@ -40,19 +40,19 @@ export default function QuestionAge({ onNext }: QuestionAgeProps) {
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl shadow-lg mb-4">
-            <span className="text-4xl">⛽</span>
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl sm:rounded-3xl shadow-lg mb-3 sm:mb-4">
+            <span className="text-3xl sm:text-4xl">⛽</span>
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
             Fuelier
           </h1>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-3xl shadow-xl p-8">
+        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl p-6 sm:p-8">
           {/* Progress */}
-          <div className="flex items-center gap-2 mb-8">
+          <div className="flex items-center gap-2 mb-6 sm:mb-8">
             <div className="flex-1 bg-emerald-500 h-1.5 rounded-full"></div>
             <div className="flex-1 bg-emerald-500 h-1.5 rounded-full"></div>
             <div className="flex-1 bg-neutral-200 h-1.5 rounded-full"></div>
@@ -61,45 +61,45 @@ export default function QuestionAge({ onNext }: QuestionAgeProps) {
           </div>
 
           {/* Icon */}
-          <div className="flex justify-center mb-6">
-            <div className="bg-gradient-to-br from-emerald-100 to-teal-100 p-4 rounded-2xl">
-              <Calendar className="w-12 h-12 text-emerald-600" />
+          <div className="flex justify-center mb-5 sm:mb-6">
+            <div className="bg-gradient-to-br from-emerald-100 to-teal-100 p-3 sm:p-4 rounded-xl sm:rounded-2xl">
+              <Calendar className="w-10 h-10 sm:w-12 sm:h-12 text-emerald-600" />
             </div>
           </div>
 
           {/* Title */}
-          <h2 className="text-2xl font-bold text-center text-neutral-900 mb-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-center text-neutral-900 mb-2">
             ¿Cuál es tu fecha de nacimiento?
           </h2>
-          <p className="text-center text-neutral-600 mb-8">
+          <p className="text-sm sm:text-base text-center text-neutral-600 mb-6 sm:mb-8 px-2">
             La edad es importante para calcular tu metabolismo basal
           </p>
 
           {/* Date Input */}
-          <div className="mb-6">
+          <div className="mb-5 sm:mb-6">
             <input
               type="date"
               value={birthdate}
               onChange={(e) => setBirthdate(e.target.value)}
               min={minDate}
               max={maxDate}
-              className="w-full px-4 py-4 text-lg text-center rounded-xl border-2 border-neutral-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all outline-none"
+              className="w-full px-4 py-3 sm:py-4 text-base sm:text-lg text-center rounded-xl border-2 border-neutral-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all outline-none"
             />
           </div>
 
           {/* Age Display */}
           {birthdate && (
-            <div className="mb-6">
-              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-6 text-center">
-                <p className="text-sm text-neutral-600 mb-2">Tu edad</p>
-                <div className="text-5xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+            <div className="mb-5 sm:mb-6">
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-5 sm:p-6 text-center">
+                <p className="text-xs sm:text-sm text-neutral-600 mb-2">Tu edad</p>
+                <div className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                   {age}
                 </div>
-                <div className="text-sm text-neutral-500 mt-1">años</div>
+                <div className="text-xs sm:text-sm text-neutral-500 mt-1">años</div>
                 
                 {!isValidAge && (
-                  <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
-                    <p className="text-sm text-red-700">
+                  <div className="mt-3 sm:mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-xs sm:text-sm text-red-700">
                       {age < 13 ? '⚠️ Debes tener al menos 13 años' : '⚠️ Edad no válida'}
                     </p>
                   </div>
@@ -109,8 +109,8 @@ export default function QuestionAge({ onNext }: QuestionAgeProps) {
           )}
 
           {/* Info Box */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-8">
-            <p className="text-sm text-blue-800">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4 mb-6 sm:mb-8">
+            <p className="text-xs sm:text-sm text-blue-800 leading-relaxed">
               <span className="font-semibold">💡 ¿Por qué lo necesitamos?</span>
               <br />
               La edad es un factor clave en la fórmula de Mifflin-St Jeor para calcular tu metabolismo basal (TMB) y tus necesidades calóricas diarias.
@@ -121,15 +121,15 @@ export default function QuestionAge({ onNext }: QuestionAgeProps) {
           <button
             onClick={handleSubmit}
             disabled={!isValidAge}
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-4 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3.5 sm:py-4 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="font-semibold">Continuar</span>
+            <span className="font-semibold text-base sm:text-lg">Continuar</span>
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>
 
         {/* Bottom Text */}
-        <p className="text-center text-neutral-500 text-sm mt-6">
+        <p className="text-center text-neutral-500 text-xs sm:text-sm mt-4 sm:mt-6">
           Paso 2 de 6 • Tu información está segura
         </p>
       </div>
