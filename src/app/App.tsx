@@ -582,24 +582,36 @@ export default function App() {
     }
   };
 
-  const handleLogin = async (email: string, name: string) => {
+  const handleLogin = async (email: string, password: string, name: string) => {
     console.log(`[handleLogin] Attempting login for: ${email}`);
     
-    // Cargar usuario desde Supabase
-    const userData = await api.getUser(email);
-    
-    if (userData) {
-      console.log(`[handleLogin] User found in database: ${email}`);
-      // Usuario encontrado en Supabase
-      setUser(userData);
-      setCurrentScreen('dashboard');
-    } else {
-      console.log(`[handleLogin] User NOT found in database: ${email}`);
-      console.log(`[handleLogin] Starting onboarding flow`);
+    try {
+      // Intentar hacer login con Supabase Auth
+      const result = await api.signin(email, password);
       
-      // No encontrado en Supabase, iniciar onboarding
-      setTempData({ email, name });
-      setCurrentScreen('onboarding-sex');
+      if (!result.success) {
+        alert(`❌ Error al iniciar sesión: ${result.error || 'Credenciales inválidas'}`);
+        return;
+      }
+      
+      console.log(`[handleLogin] Login successful, token saved`);
+      
+      // Cargar datos del usuario desde la base de datos
+      const userData = await api.getUser(email);
+      
+      if (userData) {
+        console.log(`[handleLogin] User data loaded from database: ${email}`);
+        setUser(userData);
+        setCurrentScreen('dashboard');
+      } else {
+        console.log(`[handleLogin] User authenticated but no profile found, starting onboarding`);
+        // Usuario autenticado pero sin perfil completo
+        setTempData({ email, name });
+        setCurrentScreen('onboarding-sex');
+      }
+    } catch (error: any) {
+      console.error('[handleLogin] Error during login:', error);
+      alert(`❌ Error al iniciar sesión: ${error.message || 'Error desconocido'}`);
     }
   };
 
@@ -662,9 +674,27 @@ export default function App() {
     setCurrentScreen('admin');
   };
 
-  const handleSignup = (email: string, name: string) => {
-    setTempData({ email, name });
-    setCurrentScreen('onboarding-sex');
+  const handleSignup = async (email: string, password: string, name: string) => {
+    console.log(`[handleSignup] Attempting signup for: ${email}`);
+    
+    try {
+      // Crear usuario en Supabase Auth
+      const result = await api.signup(email, password, name);
+      
+      if (!result.success) {
+        alert(`❌ Error al crear cuenta: ${result.error || 'Error desconocido'}`);
+        return;
+      }
+      
+      console.log(`[handleSignup] Signup successful, starting onboarding`);
+      
+      // Iniciar proceso de onboarding
+      setTempData({ email, name });
+      setCurrentScreen('onboarding-sex');
+    } catch (error: any) {
+      console.error('[handleSignup] Error during signup:', error);
+      alert(`❌ Error al crear cuenta: ${error.message || 'Error desconocido'}`);
+    }
   };
 
   const handleSexSelect = (sex: 'male' | 'female') => {
@@ -1137,6 +1167,7 @@ export default function App() {
   if (!user || currentScreen === 'login') {
     return <LoginAuth 
       onLoginSuccess={handleLogin}
+      onSignupSuccess={handleSignup}
       onAdminAccess={() => {
         console.log('🔐 onAdminAccess called!');
         console.log('Current screen before:', currentScreen);

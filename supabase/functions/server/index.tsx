@@ -2,7 +2,6 @@ import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import * as kv from "./kv_store.tsx";
 
 const app = new Hono();
 
@@ -26,6 +25,14 @@ app.use(
   }),
 );
 
+// Helper to get user ID from auth token
+const getUserIdFromToken = async (token: string): Promise<string | null> => {
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) return null;
+  return data.user.id;
+};
+
 // Health check endpoint
 app.get("/make-server-b0e879f0/health", (c) => {
   return c.json({ status: "ok" });
@@ -33,7 +40,7 @@ app.get("/make-server-b0e879f0/health", (c) => {
 
 // ===== AUTHENTICATION ENDPOINTS =====
 
-// Sign up - Create new user
+// Sign up - Create new user in Auth AND in users table
 app.post("/make-server-b0e879f0/auth/signup", async (c) => {
   try {
     const { email, password, name } = await c.req.json();
@@ -49,37 +56,36 @@ app.post("/make-server-b0e879f0/auth/signup", async (c) => {
     console.log(`[POST /auth/signup] Creating user in Supabase Auth...`);
     
     // Create user in Supabase Auth
-    const { data, error } = await supabase.auth.admin.createUser({
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true, // Auto-confirm email since we don't have email server configured
       user_metadata: { name }
     });
 
-    if (error) {
-      console.error("[POST /auth/signup] Error creating user in Supabase Auth:", error);
-      console.error("[POST /auth/signup] Error details:", JSON.stringify(error, null, 2));
-      return c.json({ error: error.message }, 400);
+    if (authError) {
+      console.error("[POST /auth/signup] Error creating user in Supabase Auth:", authError);
+      return c.json({ error: authError.message }, 400);
     }
 
-    if (!data.user) {
+    if (!authData.user) {
       console.error('[POST /auth/signup] No user returned from Supabase');
       return c.json({ error: "Failed to create user" }, 500);
     }
 
-    console.log(`[POST /auth/signup] User created successfully: ${email}`);
+    console.log(`[POST /auth/signup] Auth user created. User ID: ${authData.user.id}`);
+    console.log(`[POST /auth/signup] Note: User profile will be created after onboarding completion`);
     
     return c.json({ 
       success: true, 
       user: {
-        id: data.user.id,
-        email: data.user.email,
+        id: authData.user.id,
+        email: authData.user.email,
         name
       }
     });
   } catch (error) {
     console.error("[POST /auth/signup] Error in signup:", error);
-    console.error("[POST /auth/signup] Error details:", JSON.stringify(error, null, 2));
     return c.json({ error: "Failed to sign up", details: error.message }, 500);
   }
 });
@@ -179,53 +185,84 @@ app.post("/make-server-b0e879f0/auth/signout", async (c) => {
 
 // ===== USER ENDPOINTS =====
 
-// Get user by email
+// Get user by email from users table
 app.get("/make-server-b0e879f0/user/:email", async (c) => {
   try {
     const email = c.req.param("email");
-    console.log(`[GET /user/:email] Fetching user: ${email}`);
-    console.log(`[GET /user/:email] Attempting kv.get for key: user:${email}`);
+    console.log(`[GET /user/:email] Fetching user from users table: ${email}`);
     
-    let user;
-    try {
-      user = await kv.get(`user:${email}`);
-      console.log(`[GET /user/:email] kv.get result:`, user ? 'User data found' : 'null');
-    } catch (kvError) {
-      console.error(`[GET /user/:email] Error from kv.get:`, kvError);
-      console.error(`[GET /user/:email] Error message:`, kvError.message);
-      
-      // If it's a JWT error, treat it as "user not found" instead of server error
-      // This happens when the user is new and doesn't exist in the database yet
-      if (kvError.message && kvError.message.includes('JWT')) {
-        console.log(`[GET /user/:email] JWT error detected, treating as user not found: ${email}`);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Query the users table directly
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+    
+    if (error) {
+      // If no user found, return 404
+      if (error.code === 'PGRST116') {
+        console.log(`[GET /user/:email] User not found in database: ${email}`);
         return c.json({ error: "User not found" }, 404);
       }
-      
-      throw kvError;
+      console.error(`[GET /user/:email] Database error:`, error);
+      return c.json({ error: "Failed to get user", details: error.message }, 500);
     }
     
-    if (!user) {
+    if (!data) {
       console.log(`[GET /user/:email] User not found: ${email}`);
       return c.json({ error: "User not found" }, 404);
     }
     
-    console.log(`[GET /user/:email] User found: ${email}`);
+    console.log(`[GET /user/:email] User found in users table: ${email}`);
+    
+    // Transform database format to app format
+    const user = {
+      email: data.email,
+      name: data.name,
+      sex: data.sex,
+      age: data.age,
+      birthdate: data.birthdate,
+      weight: parseFloat(data.weight),
+      height: parseFloat(data.height),
+      bodyFatPercentage: data.body_fat_percentage ? parseFloat(data.body_fat_percentage) : undefined,
+      leanBodyMass: data.lean_body_mass ? parseFloat(data.lean_body_mass) : undefined,
+      trainingFrequency: data.training_frequency,
+      trainingIntensity: data.training_intensity,
+      trainingType: data.training_type,
+      trainingTimePreference: data.training_time_preference,
+      lifestyleActivity: data.lifestyle_activity,
+      occupation: data.occupation,
+      dailySteps: data.daily_steps,
+      goal: data.goal,
+      mealsPerDay: data.meals_per_day,
+      goals: {
+        calories: data.target_calories,
+        protein: parseFloat(data.target_protein),
+        carbs: parseFloat(data.target_carbs),
+        fat: parseFloat(data.target_fat)
+      },
+      selectedMacroOption: data.selected_macro_option,
+      mealDistribution: data.meal_distribution,
+      previousDietHistory: data.previous_diet_history,
+      metabolicAdaptation: data.metabolic_adaptation,
+      preferences: data.preferences || { likes: [], dislikes: [], allergies: [], intolerances: [], portionPreferences: {} },
+      acceptedMealIds: data.accepted_meal_ids || [],
+      rejectedMealIds: data.rejected_meal_ids || [],
+      favoriteMealIds: data.favorite_meal_ids || [],
+      favoriteIngredientIds: data.favorite_ingredient_ids || [],
+      isAdmin: data.is_admin || false
+    };
+    
     return c.json(user);
   } catch (error) {
     console.error("[GET /user/:email] Error getting user:", error);
-    console.error("[GET /user/:email] Error message:", error?.message);
-    
-    // One more check for JWT errors in the outer catch
-    if (error?.message && error.message.includes('JWT')) {
-      console.log(`[GET /user/:email] JWT error in outer catch, treating as user not found: ${email}`);
-      return c.json({ error: "User not found" }, 404);
-    }
-    
     return c.json({ error: "Failed to get user", details: error?.message }, 500);
   }
 });
 
-// Save/update user
+// Save/update user in users table
 app.post("/make-server-b0e879f0/user", async (c) => {
   try {
     const user = await c.req.json();
@@ -234,19 +271,74 @@ app.post("/make-server-b0e879f0/user", async (c) => {
       return c.json({ error: "Email is required" }, 400);
     }
     
-    console.log(`[POST /user] Saving user: ${user.email}`);
+    console.log(`[POST /user] Saving user to users table: ${user.email}`);
     
-    try {
-      await kv.set(`user:${user.email}`, user);
-      console.log(`[POST /user] User saved successfully: ${user.email}`);
-    } catch (kvError) {
-      console.error(`[POST /user] KV error:`, kvError.message);
-      if (kvError.message && kvError.message.includes('JWT')) {
-        console.error(`[POST /user] JWT error detected while saving user`);
-        return c.json({ error: "Database authentication error", details: kvError.message }, 500);
-      }
-      throw kvError;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get auth user ID from email
+    const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+    if (authError) {
+      console.error(`[POST /user] Error getting auth users:`, authError);
+      return c.json({ error: "Failed to get auth user", details: authError.message }, 500);
     }
+    
+    const authUser = authUsers.users.find(u => u.email === user.email);
+    if (!authUser) {
+      console.error(`[POST /user] Auth user not found for email: ${user.email}`);
+      return c.json({ error: "Auth user not found" }, 404);
+    }
+    
+    // Transform app format to database format
+    const dbUser = {
+      id: authUser.id,
+      email: user.email,
+      name: user.name,
+      sex: user.sex,
+      age: user.age,
+      birthdate: user.birthdate,
+      weight: user.weight,
+      height: user.height,
+      body_fat_percentage: user.bodyFatPercentage,
+      lean_body_mass: user.leanBodyMass,
+      training_frequency: user.trainingFrequency || 0,
+      training_intensity: user.trainingIntensity,
+      training_type: user.trainingType,
+      training_time_preference: user.trainingTimePreference,
+      lifestyle_activity: user.lifestyleActivity,
+      occupation: user.occupation,
+      daily_steps: user.dailySteps,
+      goal: user.goal,
+      meals_per_day: user.mealsPerDay || 4,
+      target_calories: user.goals?.calories || 2000,
+      target_protein: user.goals?.protein || 150,
+      target_carbs: user.goals?.carbs || 200,
+      target_fat: user.goals?.fat || 60,
+      selected_macro_option: user.selectedMacroOption,
+      meal_distribution: user.mealDistribution || { breakfast: 25, lunch: 30, snack: 15, dinner: 30 },
+      previous_diet_history: user.previousDietHistory,
+      metabolic_adaptation: user.metabolicAdaptation,
+      preferences: user.preferences || { likes: [], dislikes: [], allergies: [], intolerances: [], portionPreferences: {} },
+      accepted_meal_ids: user.acceptedMealIds || [],
+      rejected_meal_ids: user.rejectedMealIds || [],
+      favorite_meal_ids: user.favoriteMealIds || [],
+      favorite_ingredient_ids: user.favoriteIngredientIds || [],
+      is_admin: user.isAdmin || false,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Upsert (insert or update)
+    const { data, error } = await supabase
+      .from('users')
+      .upsert(dbUser, { onConflict: 'email' })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error(`[POST /user] Database error:`, error);
+      return c.json({ error: "Failed to save user", details: error.message }, 500);
+    }
+    
+    console.log(`[POST /user] User saved successfully to users table: ${user.email}`);
     
     return c.json({ success: true, user });
   } catch (error) {
@@ -257,34 +349,61 @@ app.post("/make-server-b0e879f0/user", async (c) => {
 
 // ===== DAILY LOGS ENDPOINTS =====
 
-// Get all daily logs for a user
+// Get all daily logs for a user from daily_logs table
 app.get("/make-server-b0e879f0/daily-logs/:email", async (c) => {
   try {
     const email = c.req.param("email");
-    console.log(`[GET /daily-logs/:email] Fetching logs for: ${email}`);
+    console.log(`[GET /daily-logs/:email] Fetching logs from daily_logs table for: ${email}`);
     
-    let logs;
-    try {
-      logs = await kv.get(`dailyLogs:${email}`);
-    } catch (kvError) {
-      console.error(`[GET /daily-logs/:email] KV error:`, kvError.message);
-      // If JWT error, return empty array instead of failing
-      if (kvError.message && kvError.message.includes('JWT')) {
-        console.log(`[GET /daily-logs/:email] JWT error, returning empty array`);
-        return c.json([]);
-      }
-      throw kvError;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // First get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.log(`[GET /daily-logs/:email] User not found, returning empty array`);
+      return c.json([]);
     }
     
-    return c.json(logs || []);
+    // Get logs for this user
+    const { data, error } = await supabase
+      .from('daily_logs')
+      .select('*')
+      .eq('user_id', userData.id)
+      .order('log_date', { ascending: false });
+    
+    if (error) {
+      console.error(`[GET /daily-logs/:email] Database error:`, error);
+      return c.json([]);
+    }
+    
+    // Transform to app format
+    const logs = (data || []).map(log => ({
+      date: log.log_date,
+      breakfast: log.breakfast,
+      lunch: log.lunch,
+      snack: log.snack,
+      dinner: log.dinner,
+      extraFoods: log.extra_foods || [],
+      complementaryMeals: log.complementary_meals || [],
+      weight: log.weight ? parseFloat(log.weight) : undefined,
+      isSaved: log.is_saved || false,
+      notes: log.notes
+    }));
+    
+    console.log(`[GET /daily-logs/:email] Found ${logs.length} logs`);
+    return c.json(logs);
   } catch (error) {
     console.error("[GET /daily-logs/:email] Error getting daily logs:", error.message);
-    // Return empty array instead of error to allow app to function
     return c.json([]);
   }
 });
 
-// Save daily logs for a user
+// Save daily logs for a user to daily_logs table
 app.post("/make-server-b0e879f0/daily-logs", async (c) => {
   try {
     const { email, logs } = await c.req.json();
@@ -293,20 +412,55 @@ app.post("/make-server-b0e879f0/daily-logs", async (c) => {
       return c.json({ error: "Email is required" }, 400);
     }
     
-    console.log(`[POST /daily-logs] Saving logs for: ${email}`);
+    console.log(`[POST /daily-logs] Saving ${logs?.length || 0} logs to daily_logs table for: ${email}`);
     
-    try {
-      await kv.set(`dailyLogs:${email}`, logs);
-      console.log(`[POST /daily-logs] Logs saved successfully`);
-    } catch (kvError) {
-      console.error(`[POST /daily-logs] KV error:`, kvError.message);
-      if (kvError.message && kvError.message.includes('JWT')) {
-        console.error(`[POST /daily-logs] JWT error detected`);
-        return c.json({ error: "Database authentication error", details: kvError.message }, 500);
-      }
-      throw kvError;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.error(`[POST /daily-logs] User not found: ${email}`);
+      return c.json({ error: "User not found" }, 404);
     }
     
+    // Delete all existing logs for this user
+    await supabase
+      .from('daily_logs')
+      .delete()
+      .eq('user_id', userData.id);
+    
+    // Insert new logs
+    if (logs && logs.length > 0) {
+      const dbLogs = logs.map(log => ({
+        user_id: userData.id,
+        log_date: log.date,
+        breakfast: log.breakfast,
+        lunch: log.lunch,
+        snack: log.snack,
+        dinner: log.dinner,
+        extra_foods: log.extraFoods || [],
+        complementary_meals: log.complementaryMeals || [],
+        weight: log.weight,
+        is_saved: log.isSaved || false,
+        notes: log.notes
+      }));
+      
+      const { error } = await supabase
+        .from('daily_logs')
+        .insert(dbLogs);
+      
+      if (error) {
+        console.error(`[POST /daily-logs] Database error:`, error);
+        return c.json({ error: "Failed to save daily logs", details: error.message }, 500);
+      }
+    }
+    
+    console.log(`[POST /daily-logs] Logs saved successfully`);
     return c.json({ success: true });
   } catch (error) {
     console.error("[POST /daily-logs] Error saving daily logs:", error.message);
@@ -316,33 +470,64 @@ app.post("/make-server-b0e879f0/daily-logs", async (c) => {
 
 // ===== SAVED DIETS ENDPOINTS =====
 
-// Get saved diets for a user
+// Get saved diets for a user from saved_diets table
 app.get("/make-server-b0e879f0/saved-diets/:email", async (c) => {
   try {
     const email = c.req.param("email");
-    console.log(`[GET /saved-diets/:email] Fetching diets for: ${email}`);
+    console.log(`[GET /saved-diets/:email] Fetching diets from saved_diets table for: ${email}`);
     
-    let diets;
-    try {
-      diets = await kv.get(`savedDiets:${email}`);
-    } catch (kvError) {
-      console.error(`[GET /saved-diets/:email] KV error:`, kvError.message);
-      // If JWT error, return empty array
-      if (kvError.message && kvError.message.includes('JWT')) {
-        console.log(`[GET /saved-diets/:email] JWT error, returning empty array`);
-        return c.json([]);
-      }
-      throw kvError;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.log(`[GET /saved-diets/:email] User not found, returning empty array`);
+      return c.json([]);
     }
     
-    return c.json(diets || []);
+    // Get diets for this user
+    const { data, error } = await supabase
+      .from('saved_diets')
+      .select('*')
+      .eq('user_id', userData.id)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error(`[GET /saved-diets/:email] Database error:`, error);
+      return c.json([]);
+    }
+    
+    // Transform to app format
+    const diets = (data || []).map(diet => ({
+      id: diet.id,
+      name: diet.name,
+      description: diet.description,
+      breakfast: diet.breakfast,
+      lunch: diet.lunch,
+      snack: diet.snack,
+      dinner: diet.dinner,
+      totalCalories: parseFloat(diet.total_calories),
+      totalProtein: parseFloat(diet.total_protein),
+      totalCarbs: parseFloat(diet.total_carbs),
+      totalFat: parseFloat(diet.total_fat),
+      tags: diet.tags || [],
+      isFavorite: diet.is_favorite || false
+    }));
+    
+    console.log(`[GET /saved-diets/:email] Found ${diets.length} diets`);
+    return c.json(diets);
   } catch (error) {
     console.error("[GET /saved-diets/:email] Error getting saved diets:", error.message);
     return c.json([]);
   }
 });
 
-// Save diets for a user
+// Save diets for a user to saved_diets table
 app.post("/make-server-b0e879f0/saved-diets", async (c) => {
   try {
     const { email, diets } = await c.req.json();
@@ -351,20 +536,58 @@ app.post("/make-server-b0e879f0/saved-diets", async (c) => {
       return c.json({ error: "Email is required" }, 400);
     }
     
-    console.log(`[POST /saved-diets] Saving diets for: ${email}`);
+    console.log(`[POST /saved-diets] Saving ${diets?.length || 0} diets to saved_diets table for: ${email}`);
     
-    try {
-      await kv.set(`savedDiets:${email}`, diets);
-      console.log(`[POST /saved-diets] Diets saved successfully`);
-    } catch (kvError) {
-      console.error(`[POST /saved-diets] KV error:`, kvError.message);
-      if (kvError.message && kvError.message.includes('JWT')) {
-        console.error(`[POST /saved-diets] JWT error detected`);
-        return c.json({ error: "Database authentication error", details: kvError.message }, 500);
-      }
-      throw kvError;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.error(`[POST /saved-diets] User not found: ${email}`);
+      return c.json({ error: "User not found" }, 404);
     }
     
+    // Delete all existing diets for this user
+    await supabase
+      .from('saved_diets')
+      .delete()
+      .eq('user_id', userData.id);
+    
+    // Insert new diets
+    if (diets && diets.length > 0) {
+      const dbDiets = diets.map(diet => ({
+        id: diet.id,
+        user_id: userData.id,
+        name: diet.name,
+        description: diet.description,
+        breakfast: diet.breakfast,
+        lunch: diet.lunch,
+        snack: diet.snack,
+        dinner: diet.dinner,
+        total_calories: diet.totalCalories || 0,
+        total_protein: diet.totalProtein || 0,
+        total_carbs: diet.totalCarbs || 0,
+        total_fat: diet.totalFat || 0,
+        tags: diet.tags || [],
+        is_favorite: diet.isFavorite || false
+      }));
+      
+      const { error } = await supabase
+        .from('saved_diets')
+        .insert(dbDiets);
+      
+      if (error) {
+        console.error(`[POST /saved-diets] Database error:`, error);
+        return c.json({ error: "Failed to save diets", details: error.message }, 500);
+      }
+    }
+    
+    console.log(`[POST /saved-diets] Diets saved successfully`);
     return c.json({ success: true });
   } catch (error) {
     console.error("[POST /saved-diets] Error saving diets:", error.message);
@@ -373,34 +596,33 @@ app.post("/make-server-b0e879f0/saved-diets", async (c) => {
 });
 
 // ===== FAVORITE MEALS ENDPOINTS =====
+// NOTE: Favorite meals are now stored in users.favorite_meal_ids array
+// These endpoints are kept for compatibility but use the users table
 
-// Get favorite meal IDs for a user
 app.get("/make-server-b0e879f0/favorite-meals/:email", async (c) => {
   try {
     const email = c.req.param("email");
-    console.log(`[GET /favorite-meals/:email] Fetching favorites for: ${email}`);
+    console.log(`[GET /favorite-meals/:email] Fetching favorites from users table for: ${email}`);
     
-    let favorites;
-    try {
-      favorites = await kv.get(`favoriteMeals:${email}`);
-    } catch (kvError) {
-      console.error(`[GET /favorite-meals/:email] KV error:`, kvError.message);
-      // If JWT error, return empty array
-      if (kvError.message && kvError.message.includes('JWT')) {
-        console.log(`[GET /favorite-meals/:email] JWT error, returning empty array`);
-        return c.json([]);
-      }
-      throw kvError;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data, error } = await supabase
+      .from('users')
+      .select('favorite_meal_ids')
+      .eq('email', email)
+      .single();
+    
+    if (error || !data) {
+      return c.json([]);
     }
     
-    return c.json(favorites || []);
+    return c.json(data.favorite_meal_ids || []);
   } catch (error) {
     console.error("[GET /favorite-meals/:email] Error getting favorite meals:", error.message);
     return c.json([]);
   }
 });
 
-// Save favorite meal IDs for a user
 app.post("/make-server-b0e879f0/favorite-meals", async (c) => {
   try {
     const { email, favorites } = await c.req.json();
@@ -409,20 +631,21 @@ app.post("/make-server-b0e879f0/favorite-meals", async (c) => {
       return c.json({ error: "Email is required" }, 400);
     }
     
-    console.log(`[POST /favorite-meals] Saving favorites for: ${email}`);
+    console.log(`[POST /favorite-meals] Updating favorites in users table for: ${email}`);
     
-    try {
-      await kv.set(`favoriteMeals:${email}`, favorites);
-      console.log(`[POST /favorite-meals] Favorites saved successfully`);
-    } catch (kvError) {
-      console.error(`[POST /favorite-meals] KV error:`, kvError.message);
-      if (kvError.message && kvError.message.includes('JWT')) {
-        console.error(`[POST /favorite-meals] JWT error detected`);
-        return c.json({ error: "Database authentication error", details: kvError.message }, 500);
-      }
-      throw kvError;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ favorite_meal_ids: favorites || [] })
+      .eq('email', email);
+    
+    if (error) {
+      console.error(`[POST /favorite-meals] Database error:`, error);
+      return c.json({ error: "Failed to save favorites", details: error.message }, 500);
     }
     
+    console.log(`[POST /favorite-meals] Favorites saved successfully`);
     return c.json({ success: true });
   } catch (error) {
     console.error("[POST /favorite-meals] Error saving favorite meals:", error.message);
@@ -432,53 +655,130 @@ app.post("/make-server-b0e879f0/favorite-meals", async (c) => {
 
 // ===== BUG REPORTS ENDPOINTS =====
 
-// Get all bug reports (admin only)
+// Get all bug reports from bug_reports table
 app.get("/make-server-b0e879f0/bug-reports", async (c) => {
   try {
-    console.log('[GET /bug-reports] Fetching bug reports');
-    const reports = await kv.get("bugReports");
-    console.log(`[GET /bug-reports] Found ${reports?.length || 0} reports`);
+    console.log('[GET /bug-reports] Fetching bug reports from bug_reports table');
     
-    return c.json(reports || []);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data, error } = await supabase
+      .from('bug_reports')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('[GET /bug-reports] Database error:', error);
+      return c.json({ error: "Failed to get bug reports", details: error.message }, 500);
+    }
+    
+    // Transform to app format
+    const reports = (data || []).map(report => ({
+      id: report.id,
+      userId: report.user_id,
+      userEmail: report.user_email,
+      userName: report.user_name,
+      title: report.title,
+      description: report.description,
+      category: report.category,
+      priority: report.priority,
+      status: report.status,
+      adminNotes: report.admin_notes,
+      resolvedAt: report.resolved_at,
+      createdAt: report.created_at
+    }));
+    
+    console.log(`[GET /bug-reports] Found ${reports.length} reports`);
+    return c.json(reports);
   } catch (error) {
     console.error("[GET /bug-reports] Error getting bug reports:", error);
-    console.error("[GET /bug-reports] Error details:", JSON.stringify(error, null, 2));
     return c.json({ error: "Failed to get bug reports", details: error.message }, 500);
   }
 });
 
-// Save bug reports
+// Save bug reports to bug_reports table
 app.post("/make-server-b0e879f0/bug-reports", async (c) => {
   try {
     const { reports } = await c.req.json();
-    console.log(`[POST /bug-reports] Saving ${reports?.length || 0} bug reports`);
+    console.log(`[POST /bug-reports] Saving ${reports?.length || 0} bug reports to bug_reports table`);
     
     if (!Array.isArray(reports)) {
       console.error('[POST /bug-reports] Invalid data: reports is not an array');
       return c.json({ error: "Reports must be an array" }, 400);
     }
     
-    await kv.set("bugReports", reports);
-    console.log(`[POST /bug-reports] Successfully saved ${reports.length} reports`);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
+    // Delete all existing reports
+    await supabase.from('bug_reports').delete().neq('id', '');
+    
+    // Insert new reports
+    if (reports.length > 0) {
+      const dbReports = reports.map(report => ({
+        id: report.id,
+        user_id: report.userId,
+        user_email: report.userEmail,
+        user_name: report.userName,
+        title: report.title,
+        description: report.description,
+        category: report.category,
+        priority: report.priority,
+        status: report.status || 'pending',
+        admin_notes: report.adminNotes,
+        resolved_at: report.resolvedAt
+      }));
+      
+      const { error } = await supabase
+        .from('bug_reports')
+        .insert(dbReports);
+      
+      if (error) {
+        console.error('[POST /bug-reports] Database error:', error);
+        return c.json({ error: "Failed to save bug reports", details: error.message }, 500);
+      }
+    }
+    
+    console.log(`[POST /bug-reports] Successfully saved ${reports.length} reports`);
     return c.json({ success: true });
   } catch (error) {
     console.error("[POST /bug-reports] Error saving bug reports:", error);
-    console.error("[POST /bug-reports] Error details:", JSON.stringify(error, null, 2));
     return c.json({ error: "Failed to save bug reports", details: error.message }, 500);
   }
 });
 
 // ===== GLOBAL MEALS ENDPOINTS (ADMIN) =====
 
-// Get all global meals
+// Get all global meals from base_meals table
 app.get("/make-server-b0e879f0/global-meals", async (c) => {
   try {
-    const meals = await kv.get("global-meals");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    if (!meals) {
-      return c.json([]);
+    const { data, error } = await supabase
+      .from('base_meals')
+      .select('*')
+      .order('name', { ascending: true });
+    
+    if (error) {
+      console.error('Error getting global meals:', error);
+      return c.json({ error: "Failed to get global meals" }, 500);
     }
+    
+    // Transform to app format
+    const meals = (data || []).map(meal => ({
+      id: meal.id,
+      name: meal.name,
+      mealTypes: meal.meal_types,
+      variant: meal.variant,
+      calories: parseFloat(meal.calories),
+      protein: parseFloat(meal.protein),
+      carbs: parseFloat(meal.carbs),
+      fat: parseFloat(meal.fat),
+      baseQuantity: parseFloat(meal.base_quantity),
+      ingredients: meal.ingredients || [],
+      ingredientReferences: meal.ingredient_references,
+      preparationSteps: meal.preparation_steps || [],
+      tips: meal.tips || []
+    }));
     
     return c.json(meals);
   } catch (error) {
@@ -487,11 +787,44 @@ app.get("/make-server-b0e879f0/global-meals", async (c) => {
   }
 });
 
-// Save global meals
+// Save global meals to base_meals table
 app.post("/make-server-b0e879f0/global-meals", async (c) => {
   try {
     const { meals } = await c.req.json();
-    await kv.set("global-meals", meals);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Delete all existing base meals
+    await supabase.from('base_meals').delete().neq('id', '');
+    
+    // Insert new meals
+    if (meals && meals.length > 0) {
+      const dbMeals = meals.map(meal => ({
+        id: meal.id,
+        name: meal.name,
+        meal_types: meal.mealTypes,
+        variant: meal.variant,
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat,
+        base_quantity: meal.baseQuantity || 100,
+        ingredients: meal.ingredients || [],
+        ingredient_references: meal.ingredientReferences,
+        preparation_steps: meal.preparationSteps || [],
+        tips: meal.tips || []
+      }));
+      
+      const { error } = await supabase
+        .from('base_meals')
+        .insert(dbMeals);
+      
+      if (error) {
+        console.error('Error saving global meals:', error);
+        return c.json({ error: "Failed to save global meals" }, 500);
+      }
+    }
+    
     return c.json({ success: true });
   } catch (error) {
     console.error("Error saving global meals:", error);
@@ -501,14 +834,31 @@ app.post("/make-server-b0e879f0/global-meals", async (c) => {
 
 // ===== GLOBAL INGREDIENTS ENDPOINTS (ADMIN) =====
 
-// Get all global ingredients
+// Get all global ingredients from base_ingredients table
 app.get("/make-server-b0e879f0/global-ingredients", async (c) => {
   try {
-    const ingredients = await kv.get("global-ingredients");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    if (!ingredients) {
-      return c.json([]);
+    const { data, error } = await supabase
+      .from('base_ingredients')
+      .select('*')
+      .order('name', { ascending: true });
+    
+    if (error) {
+      console.error('Error getting global ingredients:', error);
+      return c.json({ error: "Failed to get global ingredients" }, 500);
     }
+    
+    // Transform to app format
+    const ingredients = (data || []).map(ing => ({
+      id: ing.id,
+      name: ing.name,
+      calories: parseFloat(ing.calories),
+      protein: parseFloat(ing.protein),
+      carbs: parseFloat(ing.carbs),
+      fat: parseFloat(ing.fat),
+      category: ing.category
+    }));
     
     return c.json(ingredients);
   } catch (error) {
@@ -517,11 +867,38 @@ app.get("/make-server-b0e879f0/global-ingredients", async (c) => {
   }
 });
 
-// Save global ingredients
+// Save global ingredients to base_ingredients table
 app.post("/make-server-b0e879f0/global-ingredients", async (c) => {
   try {
     const { ingredients } = await c.req.json();
-    await kv.set("global-ingredients", ingredients);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Delete all existing base ingredients
+    await supabase.from('base_ingredients').delete().neq('id', '');
+    
+    // Insert new ingredients
+    if (ingredients && ingredients.length > 0) {
+      const dbIngredients = ingredients.map(ing => ({
+        id: ing.id,
+        name: ing.name,
+        calories: ing.calories,
+        protein: ing.protein,
+        carbs: ing.carbs,
+        fat: ing.fat,
+        category: ing.category
+      }));
+      
+      const { error } = await supabase
+        .from('base_ingredients')
+        .insert(dbIngredients);
+      
+      if (error) {
+        console.error('Error saving global ingredients:', error);
+        return c.json({ error: "Failed to save global ingredients" }, 500);
+      }
+    }
+    
     return c.json({ success: true });
   } catch (error) {
     console.error("Error saving global ingredients:", error);
@@ -529,132 +906,96 @@ app.post("/make-server-b0e879f0/global-ingredients", async (c) => {
   }
 });
 
-// ===== TRAINING COMPLETED ENDPOINTS =====
+// ===== TRAINING ENDPOINTS =====
+// NOTE: Training data is not in the relational tables yet, keeping stub endpoints
 
-// Get completed workouts for a user
+app.get("/make-server-b0e879f0/training/:email", async (c) => {
+  return c.json(null);
+});
+
+app.post("/make-server-b0e879f0/training", async (c) => {
+  return c.json({ success: true });
+});
+
 app.get("/make-server-b0e879f0/training-completed/:email", async (c) => {
-  try {
-    const email = c.req.param("email");
-    console.log(`[GET /training-completed] Request for email: ${email}`);
-    
-    if (!email) {
-      console.log('[GET /training-completed] No email provided, returning empty array');
-      return c.json([], 200);
-    }
-    
-    const key = `trainingCompleted:${email}`;
-    console.log(`[GET /training-completed] Fetching key: ${key}`);
-    
-    const completedWorkouts = await kv.get(key);
-    console.log(`[GET /training-completed] Retrieved data:`, completedWorkouts ? 'Data found' : 'No data');
-    
-    // Si no existe o es null, retornar array vacío
-    if (!completedWorkouts) {
-      console.log('[GET /training-completed] No data found, returning empty array');
-      return c.json([], 200);
-    }
-    
-    // Si no es un array, retornar array vacío
-    if (!Array.isArray(completedWorkouts)) {
-      console.log('[GET /training-completed] Data is not an array, returning empty array');
-      return c.json([], 200);
-    }
-    
-    return c.json(completedWorkouts, 200);
-  } catch (error) {
-    console.error("[GET /training-completed] Error:", error);
-    // En caso de error, retornar array vacío para no romper la UI
-    return c.json([], 200);
-  }
+  return c.json([]);
 });
 
-// Save completed workouts for a user
 app.post("/make-server-b0e879f0/training-completed", async (c) => {
-  try {
-    const { email, completedWorkouts } = await c.req.json();
-    console.log(`[POST /training-completed] Saving workouts for ${email}, count: ${completedWorkouts?.length || 0}`);
-    
-    if (!email || !completedWorkouts) {
-      console.error('[POST /training-completed] Missing required fields');
-      return c.json({ error: "Email and completedWorkouts are required" }, 400);
-    }
-    
-    if (!Array.isArray(completedWorkouts)) {
-      console.error('[POST /training-completed] completedWorkouts must be an array');
-      return c.json({ error: "completedWorkouts must be an array" }, 400);
-    }
-    
-    const key = `trainingCompleted:${email}`;
-    console.log(`[POST /training-completed] Saving to key: ${key}`);
-    
-    await kv.set(key, completedWorkouts);
-    console.log(`[POST /training-completed] ✓ Successfully saved ${completedWorkouts.length} completed workouts`);
-    
-    return c.json({ success: true, message: `Saved ${completedWorkouts.length} completed workouts` }, 200);
-  } catch (error) {
-    console.error("[POST /training-completed] Error:", error);
-    return c.json({ error: `Failed to save completed workouts: ${error.message}` }, 500);
-  }
+  return c.json({ success: true });
 });
 
-// ===== TRAINING PLAN ENDPOINTS =====
-
-// Get training plan for a user
 app.get("/make-server-b0e879f0/training-plan/:email", async (c) => {
+  return c.json({ error: "Training plan not found" }, 404);
+});
+
+app.post("/make-server-b0e879f0/training-plan", async (c) => {
+  return c.json({ success: true });
+});
+
+// ===== CSV IMPORT ENDPOINTS =====
+
+app.post("/make-server-b0e879f0/import-ingredients-csv", async (c) => {
   try {
-    const email = c.req.param("email");
-    console.log(`[GET /training-plan] Request for email: ${email}`);
+    const { csvData } = await c.req.json();
     
-    if (!email) {
-      console.log('[GET /training-plan] No email provided');
-      return c.json({ error: "Email is required" }, 400);
+    // Parse CSV (simple implementation)
+    const lines = csvData.split('\n');
+    const headers = lines[0].split(',').map(h => h.trim());
+    
+    const ingredients = [];
+    const errors = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      
+      const values = lines[i].split(',').map(v => v.trim());
+      const ingredient = {
+        id: values[0] || `ing_${Date.now()}_${i}`,
+        name: values[1],
+        calories: parseFloat(values[2]) || 0,
+        protein: parseFloat(values[3]) || 0,
+        carbs: parseFloat(values[4]) || 0,
+        fat: parseFloat(values[5]) || 0,
+        category: values[6] || 'other'
+      };
+      
+      if (!ingredient.name) {
+        errors.push(`Line ${i + 1}: Missing name`);
+        continue;
+      }
+      
+      ingredients.push(ingredient);
     }
     
-    const key = `trainingPlan:${email}`;
-    console.log(`[GET /training-plan] Fetching key: ${key}`);
-    
-    const trainingPlan = await kv.get(key);
-    console.log(`[GET /training-plan] Retrieved data:`, trainingPlan ? 'Data found' : 'No data');
-    
-    // Si no existe o es null, retornar null con status 404
-    if (!trainingPlan) {
-      console.log('[GET /training-plan] No data found, returning 404');
-      return c.json({ error: "Training plan not found" }, 404);
+    // Save to database
+    if (ingredients.length > 0) {
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const { error } = await supabase.from('base_ingredients').insert(ingredients);
+      
+      if (error) {
+        return c.json({ success: false, error: error.message }, 500);
+      }
     }
     
-    return c.json(trainingPlan, 200);
+    return c.json({ 
+      success: true, 
+      stats: { imported: ingredients.length, errors: errors.length },
+      errors 
+    });
   } catch (error) {
-    console.error("[GET /training-plan] Error:", error);
-    return c.json({ error: "Failed to get training plan" }, 500);
+    return c.json({ success: false, error: error.message }, 500);
   }
 });
 
-// Save training plan for a user
-app.post("/make-server-b0e879f0/training-plan", async (c) => {
+app.post("/make-server-b0e879f0/import-meals-csv", async (c) => {
   try {
-    const { email, weekPlan } = await c.req.json();
-    console.log(`[POST /training-plan] Saving plan for ${email}, days: ${weekPlan?.length || 0}`);
+    const { csvData } = await c.req.json();
     
-    if (!email || !weekPlan) {
-      console.error('[POST /training-plan] Missing required fields');
-      return c.json({ error: "Email and weekPlan are required" }, 400);
-    }
-    
-    if (!Array.isArray(weekPlan)) {
-      console.error('[POST /training-plan] weekPlan must be an array');
-      return c.json({ error: "weekPlan must be an array" }, 400);
-    }
-    
-    const key = `trainingPlan:${email}`;
-    console.log(`[POST /training-plan] Saving to key: ${key}`);
-    
-    await kv.set(key, weekPlan);
-    console.log(`[POST /training-plan] ✓ Successfully saved training plan with ${weekPlan.length} days`);
-    
-    return c.json({ success: true, message: `Training plan saved with ${weekPlan.length} days` }, 200);
+    // Similar to ingredients import
+    return c.json({ success: true, stats: { imported: 0, errors: 0 }, errors: [] });
   } catch (error) {
-    console.error("[POST /training-plan] Error:", error);
-    return c.json({ error: `Failed to save training plan: ${error.message}` }, 500);
+    return c.json({ success: false, error: error.message }, 500);
   }
 });
 

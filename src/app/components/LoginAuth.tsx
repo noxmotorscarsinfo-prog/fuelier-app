@@ -1,26 +1,25 @@
 import { useState } from 'react';
-import { User, LogIn, Mail, UserPlus, Fuel, Lock, Shield, Eye, EyeOff } from 'lucide-react';
-import * as api from '../utils/api';
+import { User, LogIn, Mail, UserPlus, Fuel, Trash2, Shield, Lock, Eye, EyeOff } from 'lucide-react';
 
 interface LoginAuthProps {
-  onLoginSuccess: (email: string, name: string) => void;
+  onLoginSuccess: (email: string, password: string, name: string) => void;
+  onSignupSuccess?: (email: string, password: string, name: string) => void;
   onAdminAccess?: () => void;
 }
 
-export default function LoginAuth({ onLoginSuccess, onAdminAccess }: LoginAuthProps) {
+export default function LoginAuth({ onLoginSuccess, onSignupSuccess, onAdminAccess }: LoginAuthProps) {
   const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const validateEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -39,57 +38,14 @@ export default function LoginAuth({ onLoginSuccess, onAdminAccess }: LoginAuthPr
       return;
     }
 
-    setIsLoading(true);
-
-    try {
-      if (isSignup) {
-        console.log(`[LoginAuth] Starting signup for: ${email}`);
-        
-        // Sign up
-        const result = await api.signup(email, password, name);
-        
-        if (!result.success) {
-          console.error('[LoginAuth] Signup failed:', result.error);
-          setError(result.error || 'Error al crear la cuenta');
-          setIsLoading(false);
-          return;
-        }
-
-        console.log('[LoginAuth] Signup successful, attempting auto-signin...');
-        
-        // After signup, sign in automatically
-        const signinResult = await api.signin(email, password);
-        
-        if (!signinResult.success) {
-          console.error('[LoginAuth] Auto-signin failed:', signinResult.error);
-          setError('Cuenta creada, pero error al iniciar sesión. Por favor, inicia sesión manualmente.');
-          setIsLoading(false);
-          setIsSignup(false);
-          return;
-        }
-
-        console.log('[LoginAuth] Auto-signin successful, calling onLoginSuccess...');
-        onLoginSuccess(email, name);
+    if (isSignup) {
+      if (onSignupSuccess) {
+        onSignupSuccess(email, password, name);
       } else {
-        console.log(`[LoginAuth] Starting signin for: ${email}`);
-        
-        // Sign in
-        const result = await api.signin(email, password);
-        
-        if (!result.success) {
-          console.error('[LoginAuth] Signin failed:', result.error);
-          setError(result.error || 'Email o contraseña incorrectos');
-          setIsLoading(false);
-          return;
-        }
-
-        console.log('[LoginAuth] Signin successful, calling onLoginSuccess...');
-        onLoginSuccess(email, name || 'Usuario');
+        onLoginSuccess(email, password, name);
       }
-    } catch (error) {
-      console.error('[LoginAuth] Exception in authentication:', error);
-      setError('Error de conexión. Por favor, intenta de nuevo.');
-      setIsLoading(false);
+    } else {
+      onLoginSuccess(email, password, name || 'Usuario');
     }
   };
 
@@ -208,12 +164,9 @@ export default function LoginAuth({ onLoginSuccess, onAdminAccess }: LoginAuthPr
 
             <button
               type="submit"
-              disabled={isLoading}
               className="w-full bg-emerald-600 text-white py-4 rounded-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
             >
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : isSignup ? (
+              {isSignup ? (
                 <>
                   <UserPlus className="w-5 h-5" />
                   <span>Crear cuenta</span>
