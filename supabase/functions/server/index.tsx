@@ -347,23 +347,33 @@ app.post("/make-server-b0e879f0/user", async (c) => {
     
     // ✅ NUEVO: Verificar autenticación
     const authHeader = c.req.header('Authorization');
+    console.log("SAVE USER - Auth header present:", !!authHeader);
+    
     if (!authHeader) {
       console.error("SAVE USER - No authorization header");
       return c.json({ error: "No authorization header" }, 401);
     }
     
     const accessToken = authHeader.replace('Bearer ', '');
+    console.log("SAVE USER - Token extracted, length:", accessToken.length);
     
-    // Verificar que el token sea válido
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { data: authData, error: authCheckError } = await supabase.auth.getUser(accessToken);
+    // ✅ CORREGIDO: Usar ANON_KEY para validar tokens de usuarios
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+    console.log("SAVE USER - Validating token with anon key...");
+    
+    const { data: authData, error: authCheckError } = await supabaseAuth.auth.getUser(accessToken);
     
     if (authCheckError || !authData.user) {
-      console.error("SAVE USER - Invalid token:", authCheckError?.message);
-      return c.json({ error: "Invalid or expired token" }, 401);
+      console.error("SAVE USER - Invalid token. Error:", authCheckError?.message);
+      console.error("SAVE USER - Auth data:", authData);
+      return c.json({ 
+        error: "Invalid or expired token", 
+        details: authCheckError?.message 
+      }, 401);
     }
     
-    console.log("SAVE USER - Authenticated user ID:", authData.user.id);
+    console.log("SAVE USER - ✅ Token valid! Authenticated user ID:", authData.user.id);
+    console.log("SAVE USER - Authenticated user email:", authData.user.email);
     
     // Verificar que el email del usuario autenticado coincida con el que está guardando
     if (authData.user.email !== user.email) {
@@ -372,6 +382,9 @@ app.post("/make-server-b0e879f0/user", async (c) => {
     }
     
     console.log("SAVE USER - Auth verified, proceeding to save");
+    
+    // Usar SERVICE_ROLE_KEY para escribir en la base de datos
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     const dbUser = {
       id: authData.user.id, // ✅ Usar el ID del usuario autenticado
