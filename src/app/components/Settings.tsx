@@ -4,6 +4,7 @@ import { ArrowLeft, User as UserIcon, Target, Mail, LogOut, Save, Scale, Ruler, 
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosFromUser, mapUserGoalToInternalGoal } from '../utils/macroCalculations';
 import PreferencesModal from './PreferencesModal';
 import MacroDistributionTest from './MacroDistributionTest';
+import SupabaseDebugger from './SupabaseDebugger';
 
 interface SettingsProps {
   user: User;
@@ -85,6 +86,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
   // NUEVO: Panel de pruebas
   const [showTestPanel, setShowTestPanel] = useState(false);
   const [clickCount, setClickCount] = useState(0);
+  const [showSupabaseDebugger, setShowSupabaseDebugger] = useState(false);
 
   // Triple click para abrir panel de pruebas
   const handleTitleClick = () => {
@@ -1022,10 +1024,19 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
         {/* Logout */}
         <button
           onClick={onLogout}
-          className="w-full bg-red-50 border border-red-200 text-red-600 py-4 rounded-2xl hover:bg-red-100 transition-all flex items-center justify-center gap-2"
+          className="w-full bg-red-50 border border-red-200 text-red-600 py-4 rounded-2xl hover:bg-red-100 transition-all flex items-center justify-center gap-2 mb-4"
         >
           <LogOut className="w-5 h-5" />
           <span>Cerrar Sesión</span>
+        </button>
+
+        {/* Supabase Debug Button */}
+        <button
+          onClick={() => setShowSupabaseDebugger(true)}
+          className="w-full bg-blue-50 border border-blue-200 text-blue-600 py-3 rounded-2xl hover:bg-blue-100 transition-all flex items-center justify-center gap-2 text-sm"
+        >
+          <FlaskConical className="w-4 h-4" />
+          <span>Diagnóstico de Base de Datos</span>
         </button>
       </div>
 
@@ -1045,6 +1056,13 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
       {showTestPanel && (
         <MacroDistributionTest
           onClose={() => setShowTestPanel(false)}
+        />
+      )}
+
+      {/* Supabase Debugger */}
+      {showSupabaseDebugger && (
+        <SupabaseDebugger
+          onClose={() => setShowSupabaseDebugger(false)}
         />
       )}
     </div>
