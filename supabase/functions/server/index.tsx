@@ -345,27 +345,36 @@ app.post("/make-server-b0e879f0/user", async (c) => {
       return c.json({ error: "Missing required fields" }, 400);
     }
     
+    // ✅ NUEVO: Verificar autenticación
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader) {
+      console.error("SAVE USER - No authorization header");
+      return c.json({ error: "No authorization header" }, 401);
+    }
+    
+    const accessToken = authHeader.replace('Bearer ', '');
+    
+    // Verificar que el token sea válido
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: authData, error: authCheckError } = await supabase.auth.getUser(accessToken);
     
-    const listResult = await supabase.auth.admin.listUsers();
-    const authUsers = listResult.data;
-    const authError = listResult.error;
-    
-    if (authError) {
-      console.error("SAVE USER - Auth error:", authError);
-      return c.json({ error: "Failed to get auth user" }, 500);
+    if (authCheckError || !authData.user) {
+      console.error("SAVE USER - Invalid token:", authCheckError?.message);
+      return c.json({ error: "Invalid or expired token" }, 401);
     }
     
-    const authUser = authUsers.users.find(u => u.email === user.email);
-    if (!authUser) {
-      console.error("SAVE USER - Auth user not found");
-      return c.json({ error: "Auth user not found" }, 404);
+    console.log("SAVE USER - Authenticated user ID:", authData.user.id);
+    
+    // Verificar que el email del usuario autenticado coincida con el que está guardando
+    if (authData.user.email !== user.email) {
+      console.error("SAVE USER - Email mismatch. Token:", authData.user.email, "Body:", user.email);
+      return c.json({ error: "Email mismatch" }, 403);
     }
     
-    console.log("SAVE USER - Found auth user, ID:", authUser.id);
+    console.log("SAVE USER - Auth verified, proceeding to save");
     
     const dbUser = {
-      id: authUser.id,
+      id: authData.user.id, // ✅ Usar el ID del usuario autenticado
       email: user.email,
       name: user.name,
       sex: user.sex,
@@ -413,7 +422,7 @@ app.post("/make-server-b0e879f0/user", async (c) => {
     
     if (error) {
       console.error("SAVE USER - Database error:", error);
-      return c.json({ error: "Failed to save user" }, 500);
+      return c.json({ error: "Failed to save user", details: error.message }, 500);
     }
     
     console.log("SAVE USER - SUCCESS");

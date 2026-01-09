@@ -207,6 +207,10 @@ export const saveUser = async (user: User): Promise<boolean> => {
       goalCalories: user.goals?.calories
     });
     
+    // 🔍 DEBUG: Verificar token ANTES de enviar request
+    const currentToken = getAuthToken();
+    console.log(`[API] 🔑 Current auth token:`, currentToken ? `${currentToken.substring(0, 20)}...` : 'NO TOKEN');
+    
     const response = await fetch(`${API_BASE_URL}/user`, {
       method: 'POST',
       headers: getHeaders(),
