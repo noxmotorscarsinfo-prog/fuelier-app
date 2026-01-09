@@ -517,7 +517,8 @@ export default function App() {
   };
 
   const handleLogin = async (email: string, password: string, name: string) => {
-    console.log(`[handleLogin] Attempting login for: ${email}`);
+    console.log(`[handleLogin] ===== INICIANDO LOGIN =====`);
+    console.log(`[handleLogin] Email: ${email}`);
     
     try {
       // Intentar hacer login con Supabase Auth
@@ -528,20 +529,27 @@ export default function App() {
         return;
       }
       
-      console.log(`[handleLogin] ✅ Login successful, token saved`);
+      console.log(`[handleLogin] ✅ Auth exitosa, token guardado`);
       
       // Cargar datos del usuario desde la base de datos
-      console.log(`[handleLogin] 🔄 Loading user profile from database...`);
+      console.log(`[handleLogin] 🔄 Cargando perfil desde base de datos...`);
       const userData = await api.getUser(email);
       
+      console.log(`[handleLogin] 🔍 Resultado de getUser:`, userData ? '✅ ENCONTRADO' : '❌ NULL');
+      
       if (userData) {
-        console.log(`[handleLogin] ✅ User profile loaded from database: ${email}`);
-        console.log(`[handleLogin] User has goal: ${userData.goal}, macros: ${userData.goals?.calories}kcal`);
+        console.log(`[handleLogin] ✅ Perfil encontrado en base de datos`);
+        console.log(`[handleLogin] 📊 Datos del usuario:`, {
+          email: userData.email,
+          name: userData.name,
+          hasGoals: !!userData.goals,
+          goalCalories: userData.goals?.calories
+        });
         setUser(userData);
         setCurrentScreen('dashboard');
       } else {
-        console.log(`[handleLogin] ⚠️ User authenticated but NO PROFILE found in database`);
-        console.log(`[handleLogin] This means the user created an account but didn't complete onboarding`);
+        console.log(`[handleLogin] ⚠️ Perfil NO encontrado en base de datos`);
+        console.log(`[handleLogin] ℹ️ Esto significa que el usuario se autenticó pero no completó el onboarding`);
         
         // Mostrar mensaje al usuario
         alert('👋 Bienvenido de nuevo!\n\n' +
@@ -553,9 +561,11 @@ export default function App() {
         setCurrentScreen('onboarding-sex');
       }
     } catch (error: any) {
-      console.error('[handleLogin] ❌ Error during login:', error);
+      console.error('[handleLogin] ❌ Error inesperado durante login:', error);
       alert(`❌ Error al iniciar sesión: ${error.message || 'Error desconocido'}`);
     }
+    
+    console.log(`[handleLogin] ===== FIN LOGIN =====`);
   };
 
   const handleAdminLogin = async (email: string, password: string) => {

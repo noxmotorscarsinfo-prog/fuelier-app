@@ -147,7 +147,7 @@ export const signout = async (): Promise<boolean> => {
 
 export const getUser = async (email: string): Promise<User | null> => {
   try {
-    console.log(`[API] Getting user: ${email}`);
+    console.log(`[API] 📥 Getting user: ${email}`);
     
     const response = await fetch(`${API_BASE_URL}/user/${encodeURIComponent(email)}`, {
       headers: getHeaders()
@@ -183,7 +183,18 @@ export const getUser = async (email: string): Promise<User | null> => {
 
 export const saveUser = async (user: User): Promise<boolean> => {
   try {
-    console.log(`[API] Saving user: ${user.email}`);
+    console.log(`[API] 💾 Guardando usuario: ${user.email}`);
+    console.log(`[API] 📊 Datos a guardar:`, {
+      email: user.email,
+      name: user.name,
+      sex: user.sex,
+      age: user.age,
+      weight: user.weight,
+      height: user.height,
+      goal: user.goal,
+      hasGoals: !!user.goals,
+      goalCalories: user.goals?.calories
+    });
     
     const response = await fetch(`${API_BASE_URL}/user`, {
       method: 'POST',
@@ -191,21 +202,25 @@ export const saveUser = async (user: User): Promise<boolean> => {
       body: JSON.stringify(user)
     });
     
+    console.log(`[API] 📡 Response status: ${response.status}`);
+    
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.log('[API] Backend unavailable, user data saved locally only');
-      console.log('[API] Details:', errorData.details || errorData.error);
-      // Return true anyway - app can function without backend persistence
-      return true;
+      console.error('[API] ❌ Error al guardar usuario en backend');
+      console.error('[API] Status:', response.status);
+      console.error('[API] Error:', errorData.error || errorData.details || 'Unknown error');
+      
+      // ⚠️ CRÍTICO: NO retornar true si falló - lanzar error
+      throw new Error(errorData.error || errorData.details || `Error ${response.status}: No se pudo guardar el usuario`);
     }
     
-    console.log(`[API] User saved successfully to backend: ${user.email}`);
+    console.log(`[API] ✅ Usuario guardado exitosamente en backend: ${user.email}`);
     return true;
-  } catch (error) {
-    console.log('[API] Backend error, user data saved locally only');
-    console.log('[API] Error:', error.message);
-    // Return true - app can still function
-    return true;
+  } catch (error: any) {
+    console.error('[API] ❌ Excepción al guardar usuario');
+    console.error('[API] Error:', error.message);
+    // ⚠️ CRÍTICO: Re-lanzar el error para que handlePreferencesComplete lo maneje
+    throw error;
   }
 };
 
