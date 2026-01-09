@@ -38,19 +38,44 @@ app.post("/make-server-b0e879f0/auth/signup", async (c) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
+    // PASO 1: Verificar si el usuario existe en Auth
+    console.log("SIGNUP - Step 1: Checking if user exists in Auth...");
     const listResult = await supabase.auth.admin.listUsers();
-    const existingUsers = listResult.data;
-    const userExists = existingUsers?.users?.some(u => u.email === email);
+    const authUsers = listResult.data?.users || [];
+    const existingAuthUser = authUsers.find(u => u.email === email);
     
-    if (userExists) {
-      console.log("SIGNUP - User already exists:", email);
-      return c.json({ 
-        error: "Email already registered",
-        code: "email_exists"
-      }, 409);
+    if (existingAuthUser) {
+      console.log("SIGNUP - User found in Auth, ID:", existingAuthUser.id);
+      
+      // PASO 2: Verificar si existe en la tabla users
+      console.log("SIGNUP - Step 2: Checking if user exists in users table...");
+      const dbResult = await supabase
+        .from('users')
+        .select('id, email')
+        .eq('id', existingAuthUser.id)
+        .maybeSingle();
+      
+      const dbUser = dbResult.data;
+      
+      if (dbUser) {
+        // Usuario existe en Auth Y en la tabla users → Es un duplicado real
+        console.log("SIGNUP - User exists in both Auth and users table");
+        return c.json({ 
+          error: "Email already registered", 
+          code: "email_exists" 
+        }, 409);
+      } else {
+        // Usuario existe en Auth pero NO en users → Usuario huérfano (signup fallido)
+        console.log("SIGNUP - Orphan user found (in Auth but not in users table)");
+        console.log("SIGNUP - Deleting orphan user from Auth...");
+        
+        await supabase.auth.admin.deleteUser(existingAuthUser.id);
+        console.log("SIGNUP - Orphan user deleted, will create fresh user");
+      }
     }
     
-    console.log("SIGNUP - Creating user in Supabase Auth...");
+    // PASO 3: Crear usuario en Supabase Auth
+    console.log("SIGNUP - Step 3: Creating user in Supabase Auth...");
     const createResult = await supabase.auth.admin.createUser({
       email: email,
       password: password,
@@ -64,12 +89,12 @@ app.post("/make-server-b0e879f0/auth/signup", async (c) => {
     if (authError) {
       console.error("SIGNUP - Auth error:", authError.message);
       const msg = authError.message || "";
-      if (msg.includes('already been registered')) {
-        return c.json({ error: "Email already registered", code: "email_exists" }, 409);
-      }
-      if (msg.includes('password')) {
+      
+      // Detectar contraseña débil
+      if (msg.includes('password') || msg.includes('Password')) {
         return c.json({ error: "Password too weak", code: "weak_password" }, 400);
       }
+      
       return c.json({ error: msg }, 400);
     }
 
@@ -79,8 +104,9 @@ app.post("/make-server-b0e879f0/auth/signup", async (c) => {
     }
 
     console.log("SIGNUP - User created, ID:", authData.user.id);
-    console.log("SIGNUP - Testing login to get token...");
-
+    
+    // PASO 4: Testing login to get token
+    console.log("SIGNUP - Step 4: Testing login to get token...");
     const testSupabase = createClient(supabaseUrl, supabaseAnonKey);
     const loginResult = await testSupabase.auth.signInWithPassword({
       email: email,

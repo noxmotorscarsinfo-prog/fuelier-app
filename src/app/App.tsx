@@ -840,6 +840,8 @@ export default function App() {
       // otros efectos intenten guardar daily-logs, saved-diets, etc.
       try {
         console.log('💾 Saving user profile to database before setting state...');
+        console.log('💾 Auth token status:', api.getAuthToken() ? '✅ Token present' : '❌ No token');
+        
         await api.saveUser(newUser);
         console.log('✅ User profile saved successfully to database');
         
@@ -847,9 +849,22 @@ export default function App() {
         setUser(newUser);
         setTempData(null);
         setCurrentScreen('dashboard');
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ Error saving user profile:', error);
-        alert('❌ Error al guardar perfil. Por favor, intenta de nuevo.');
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Auth token:', api.getAuthToken() ? 'Present' : 'Missing');
+        
+        alert(
+          `❌ ERROR AL GUARDAR PERFIL\n\n` +
+          `${error.message || 'Error desconocido'}\n\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `🔧 POSIBLES CAUSAS:\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+          `1️⃣ Sesión expirada (cierra y abre la app)\n` +
+          `2️⃣ Problema de conexión (verifica tu internet)\n` +
+          `3️⃣ Backend no desplegado (verifica Supabase)\n\n` +
+          `💡 Intenta cerrar la app y volver a iniciar sesión`
+        );
       }
     }
   };
