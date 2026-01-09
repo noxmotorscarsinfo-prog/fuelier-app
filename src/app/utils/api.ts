@@ -36,7 +36,7 @@ const headers = {
 
 // ===== AUTHENTICATION API =====
 
-export const signup = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string; code?: string; user?: any }> => {
+export const signup = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string; code?: string; access_token?: string; user?: any }> => {
   try {
     console.log(`[API] Signing up: ${email}`);
     
@@ -58,14 +58,21 @@ export const signup = async (email: string, password: string, name: string): Pro
     }
     
     console.log(`[API] Signup successful for: ${email}`);
-    return { success: true, user: data.user };
+    
+    // Guardar el token de autenticación
+    if (data.access_token) {
+      console.log(`[API] Setting auth token after signup`);
+      setAuthToken(data.access_token);
+    }
+    
+    return { success: true, access_token: data.access_token, user: data.user };
   } catch (error) {
     console.error('[API] Error in signup:', error);
     return { success: false, error: 'Failed to sign up. Connection error.' };
   }
 };
 
-export const signin = async (email: string, password: string): Promise<{ success: boolean; error?: string; access_token?: string; user?: any }> => {
+export const signin = async (email: string, password: string): Promise<{ success: boolean; error?: string; code?: string; access_token?: string; user?: any }> => {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/signin`, {
       method: 'POST',
@@ -76,7 +83,11 @@ export const signin = async (email: string, password: string): Promise<{ success
     const data = await response.json();
     
     if (!response.ok) {
-      return { success: false, error: data.error || 'Failed to sign in' };
+      return { 
+        success: false, 
+        error: data.error || 'Failed to sign in',
+        code: data.code // Incluir el código de error para diagnóstico específico
+      };
     }
     
     // Set auth token

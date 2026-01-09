@@ -102,11 +102,65 @@ app.post("/make-server-b0e879f0/auth/signup", async (c) => {
       return c.json({ error: "Failed to create user" }, 500);
     }
 
-    console.log(`[POST /auth/signup] Auth user created. User ID: ${authData.user.id}`);
+    console.log(`[POST /auth/signup] ✅ Auth user created successfully!`);
+    console.log(`[POST /auth/signup] User ID: ${authData.user.id}`);
+    console.log(`[POST /auth/signup] User email: ${authData.user.email}`);
+    
+    // === VERIFICATION STEP: Verify user was actually created ===
+    console.log(`[POST /auth/signup] 🔍 VERIFICATION: Checking if user exists in auth.users...`);
+    const { data: verifyUsers } = await supabase.auth.admin.listUsers();
+    const createdUser = verifyUsers?.users?.find(u => u.email === email);
+    
+    if (!createdUser) {
+      console.error('[POST /auth/signup] ❌ CRITICAL: User was NOT found after creation!');
+      console.error('[POST /auth/signup] This should never happen - possible Supabase issue');
+      return c.json({ 
+        error: "User creation verification failed. Please try again.",
+        code: "verification_failed"
+      }, 500);
+    }
+    
+    console.log(`[POST /auth/signup] ✅ User verified in auth.users table`);
+    
+    // === TEST LOGIN IMMEDIATELY ===
+    console.log(`[POST /auth/signup] 🔐 VERIFICATION: Testing login with new credentials...`);
+    const testSupabase = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: testLogin, error: testLoginError } = await testSupabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    
+    if (testLoginError) {
+      console.error('[POST /auth/signup] ❌ CRITICAL: Immediate login test FAILED!');
+      console.error('[POST /auth/signup] Error:', testLoginError.message);
+      console.error('[POST /auth/signup] User was created but cannot login - deleting account');
+      
+      // Delete the user since they can't login anyway
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      
+      return c.json({ 
+        error: "Account was created but login failed. Please try again.",
+        code: "login_test_failed"
+      }, 500);
+    }
+    
+    if (!testLogin.session) {
+      console.error('[POST /auth/signup] ❌ CRITICAL: Login test succeeded but no session created');
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      
+      return c.json({ 
+        error: "Account creation failed. Please try again.",
+        code: "session_creation_failed"
+      }, 500);
+    }
+    
+    console.log(`[POST /auth/signup] ✅ Login test SUCCESSFUL!`);
+    console.log(`[POST /auth/signup] 🎉 SIGNUP COMPLETE AND VERIFIED - User can now login`);
     console.log(`[POST /auth/signup] Note: User profile will be created after onboarding completion`);
     
     return c.json({ 
       success: true, 
+      access_token: testLogin.session.access_token, // Retornar token para que el usuario quede logueado
       user: {
         id: authData.user.id,
         email: authData.user.email,
@@ -124,11 +178,17 @@ app.post("/make-server-b0e879f0/auth/signin", async (c) => {
   try {
     const { email, password } = await c.req.json();
     
+    console.log(`[POST /auth/signin] ===== SIGNIN ATTEMPT =====`);
+    console.log(`[POST /auth/signin] Email: ${email}`);
+    
     if (!email || !password) {
+      console.error(`[POST /auth/signin] ❌ Missing credentials`);
       return c.json({ error: "Email and password are required" }, 400);
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    
+    console.log(`[POST /auth/signin] 🔐 Attempting to sign in with Supabase Auth...`);
     
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -136,13 +196,45 @@ app.post("/make-server-b0e879f0/auth/signin", async (c) => {
     });
 
     if (error) {
-      console.error("Error signing in:", error);
+      console.error(`[POST /auth/signin] ❌ Auth error:`, error.message);
+      console.error(`[POST /auth/signin] Error code:`, error.code);
+      console.error(`[POST /auth/signin] Error status:`, error.status);
+      
+      // === DIAGNÓSTICO AUTOMÁTICO ===
+      if (error.code === 'invalid_credentials') {
+        console.log(`[POST /auth/signin] 🔍 DIAGNÓSTICO: Verificando si el usuario existe...`);
+        const diagSupabase = createClient(supabaseUrl, supabaseServiceKey);
+        const { data: allUsers } = await diagSupabase.auth.admin.listUsers();
+        const userExists = allUsers?.users?.find(u => u.email === email);
+        
+        if (!userExists) {
+          console.error(`[POST /auth/signin] ❌ DIAGNÓSTICO: Usuario NO existe en auth.users`);
+          console.error(`[POST /auth/signin] El usuario debe crear una cuenta primero`);
+          return c.json({ 
+            error: "Esta cuenta no existe. Por favor, crea una cuenta primero.",
+            code: "user_not_found"
+          }, 401);
+        } else {
+          console.error(`[POST /auth/signin] ❌ DIAGNÓSTICO: Usuario existe pero la contraseña es incorrecta`);
+          console.error(`[POST /auth/signin] User ID: ${userExists.id}`);
+          console.error(`[POST /auth/signin] Email confirmed: ${userExists.email_confirmed_at ? 'Sí' : 'No'}`);
+          return c.json({ 
+            error: "Contraseña incorrecta. Verifica tu contraseña.",
+            code: "wrong_password"
+          }, 401);
+        }
+      }
+      
       return c.json({ error: error.message }, 401);
     }
 
     if (!data.session) {
+      console.error(`[POST /auth/signin] ❌ No session created`);
       return c.json({ error: "Failed to create session" }, 500);
     }
+    
+    console.log(`[POST /auth/signin] ✅ Sign in successful: ${email}`);
+    console.log(`[POST /auth/signin] Access token: ${data.session.access_token.substring(0, 20)}...`);
 
     return c.json({ 
       success: true,
@@ -153,8 +245,8 @@ app.post("/make-server-b0e879f0/auth/signin", async (c) => {
       }
     });
   } catch (error) {
-    console.error("Error in signin:", error);
-    return c.json({ error: "Failed to sign in" }, 500);
+    console.error("[POST /auth/signin] ❌ Unexpected error:", error);
+    return c.json({ error: "Failed to sign in", details: error.message }, 500);
   }
 });
 

@@ -525,7 +525,52 @@ export default function App() {
       const result = await api.signin(email, password);
       
       if (!result.success) {
-        alert(`❌ Error al iniciar sesión: ${result.error || 'Credenciales inválidas'}`);
+        console.error(`[handleLogin] ❌ Login falló:`, result.error);
+        console.error(`[handleLogin] Error code:`, result.code);
+        
+        // Mensaje específico según el código de error
+        const errorCode = (result as any).code;
+        
+        if (errorCode === 'user_not_found') {
+          alert(
+            `❌ CUENTA NO ENCONTRADA\n\n` +
+            `El email "${email}" no existe en el sistema.\n\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `🔧 SOLUCIÓN:\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `1️⃣ Haz clic en "Crear cuenta"\n` +
+            `2️⃣ Usa una contraseña de mínimo 6 caracteres\n` +
+            `3️⃣ Completa el proceso de onboarding\n\n` +
+            `💡 Asegúrate de escribir el email correctamente`
+          );
+        } else if (errorCode === 'wrong_password') {
+          alert(
+            `❌ CONTRASEÑA INCORRECTA\n\n` +
+            `La contraseña que ingresaste es incorrecta.\n\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `🔧 SOLUCIÓN:\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `1️⃣ Verifica que estés usando la contraseña correcta\n` +
+            `2️⃣ La contraseña debe tener mínimo 6 caracteres\n` +
+            `3️⃣ Verifica que no tengas Bloq Mayús activado\n\n` +
+            `⚠️ Si olvidaste tu contraseña:\n` +
+            `Por ahora, debes crear una cuenta nueva con un email diferente.`
+          );
+        } else {
+          // Error genérico o desconocido
+          const errorMsg = result.error || 'Error al iniciar sesión';
+          alert(
+            `❌ ERROR AL INICIAR SESIÓN\n\n` +
+            `${errorMsg}\n\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `🔧 SOLUCIÓN:\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `1️⃣ Verifica que el email sea correcto\n` +
+            `2️⃣ Verifica que la contraseña sea correcta\n` +
+            `3️⃣ Si no tienes cuenta, haz clic en "Crear cuenta"\n\n` +
+            `💡 Si el problema persiste, intenta con otro email`
+          );
+        }
         return;
       }
       
