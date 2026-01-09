@@ -53,6 +53,19 @@ app.post("/make-server-b0e879f0/auth/signup", async (c) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
+    // First check if user already exists
+    console.log(`[POST /auth/signup] Checking if user already exists...`);
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
+    const userExists = existingUsers?.users?.some(u => u.email === email);
+    
+    if (userExists) {
+      console.log(`[POST /auth/signup] User already exists: ${email}`);
+      return c.json({ 
+        error: "Este correo ya está registrado. Por favor inicia sesión.",
+        code: "email_exists"
+      }, 409); // 409 Conflict
+    }
+    
     console.log(`[POST /auth/signup] Creating user in Supabase Auth...`);
     
     // Create user in Supabase Auth
@@ -65,6 +78,22 @@ app.post("/make-server-b0e879f0/auth/signup", async (c) => {
 
     if (authError) {
       console.error("[POST /auth/signup] Error creating user in Supabase Auth:", authError);
+      
+      // Handle specific error cases
+      if (authError.message?.includes('already been registered') || authError.code === 'email_exists') {
+        return c.json({ 
+          error: "Este correo ya está registrado. Por favor inicia sesión.",
+          code: "email_exists"
+        }, 409);
+      }
+      
+      if (authError.message?.includes('password')) {
+        return c.json({ 
+          error: "La contraseña debe tener al menos 6 caracteres.",
+          code: "weak_password"
+        }, 400);
+      }
+      
       return c.json({ error: authError.message }, 400);
     }
 
@@ -267,11 +296,76 @@ app.post("/make-server-b0e879f0/user", async (c) => {
   try {
     const user = await c.req.json();
     
+    // ===== VALIDACIONES COMPLETAS =====
+    
+    // 1. Validar campos obligatorios
     if (!user.email) {
-      return c.json({ error: "Email is required" }, 400);
+      return c.json({ error: "Email es requerido" }, 400);
     }
     
-    console.log(`[POST /user] Saving user to users table: ${user.email}`);
+    if (!user.name || user.name.trim() === '') {
+      return c.json({ error: "Nombre es requerido" }, 400);
+    }
+    
+    if (!user.sex || !['male', 'female'].includes(user.sex)) {
+      return c.json({ error: "Sexo debe ser 'male' o 'female'" }, 400);
+    }
+    
+    // 2. Validar rangos numéricos
+    if (user.age !== undefined && user.age !== null) {
+      if (typeof user.age !== 'number' || user.age < 15 || user.age > 100) {
+        return c.json({ error: "Edad debe estar entre 15 y 100 años" }, 400);
+      }
+    }
+    
+    if (user.weight !== undefined && user.weight !== null) {
+      if (typeof user.weight !== 'number' || user.weight < 30 || user.weight > 300) {
+        return c.json({ error: "Peso debe estar entre 30 y 300 kg" }, 400);
+      }
+    }
+    
+    if (user.height !== undefined && user.height !== null) {
+      if (typeof user.height !== 'number' || user.height < 100 || user.height > 250) {
+        return c.json({ error: "Altura debe estar entre 100 y 250 cm" }, 400);
+      }
+    }
+    
+    if (user.bodyFatPercentage !== undefined && user.bodyFatPercentage !== null) {
+      if (typeof user.bodyFatPercentage !== 'number' || user.bodyFatPercentage < 3 || user.bodyFatPercentage > 60) {
+        return c.json({ error: "Porcentaje de grasa debe estar entre 3% y 60%" }, 400);
+      }
+    }
+    
+    // 3. Validar macros si existen
+    if (user.goals) {
+      if (user.goals.calories !== undefined && (user.goals.calories < 800 || user.goals.calories > 6000)) {
+        return c.json({ error: "Calorías deben estar entre 800 y 6000 kcal" }, 400);
+      }
+      
+      if (user.goals.protein !== undefined && (user.goals.protein < 30 || user.goals.protein > 500)) {
+        return c.json({ error: "Proteína debe estar entre 30g y 500g" }, 400);
+      }
+      
+      if (user.goals.carbs !== undefined && (user.goals.carbs < 20 || user.goals.carbs > 800)) {
+        return c.json({ error: "Carbohidratos deben estar entre 20g y 800g" }, 400);
+      }
+      
+      if (user.goals.fat !== undefined && (user.goals.fat < 20 || user.goals.fat > 300)) {
+        return c.json({ error: "Grasas deben estar entre 20g y 300g" }, 400);
+      }
+    }
+    
+    // 4. Validar distribución de comidas si existe
+    if (user.mealDistribution) {
+      const total = Object.values(user.mealDistribution).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
+      if (Math.abs(total - 100) > 0.1) {
+        return c.json({ error: "La distribución de comidas debe sumar 100%" }, 400);
+      }
+    }
+    
+    // ===== FIN VALIDACIONES =====
+    
+    console.log(`[POST /user] ✅ Validaciones pasadas, guardando usuario: ${user.email}`);
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     

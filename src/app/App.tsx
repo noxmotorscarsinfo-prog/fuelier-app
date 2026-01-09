@@ -469,10 +469,49 @@ export default function App() {
 
   const copyDay = (sourceDate: string) => {
     const sourceLog = dailyLogs.find(log => log.date === sourceDate);
-    if (sourceLog) {
+    if (sourceLog && user) {
+      // IMPORTANTE: Reescalar las comidas a los macros ACTUALES del usuario
+      // porque los macros pueden haber cambiado desde que se guardó este día
+      
+      const scaleMealIfExists = (meal: Meal | null, mealType: MealType): Meal | null => {
+        if (!meal) return null;
+        
+        // Calcular target para este tipo de comida con los macros ACTUALES
+        const currentLogData = getCurrentLog();
+        const intelligentTarget = calculateIntelligentTarget(
+          user,
+          currentLogData,
+          mealType
+        );
+        
+        // Escalar la comida al target actual
+        const scaledMeal = scaleToExactTarget(
+          meal,
+          intelligentTarget,
+          intelligentTarget.isLastMeal
+        );
+        
+        return scaledMeal;
+      };
+      
+      // Copiar el día con las comidas reescaladas
       setDailyLogs(prev => {
         const filtered = prev.filter(log => log.date !== currentDate);
-        return [...filtered, { ...sourceLog, date: currentDate }];
+        const copiedLog: DailyLog = {
+          ...sourceLog,
+          date: currentDate,
+          isSaved: false, // El día copiado NO está guardado automáticamente
+          weight: undefined, // No copiar el peso
+          // Reescalar cada comida a los macros actuales
+          breakfast: scaleMealIfExists(sourceLog.breakfast, 'breakfast'),
+          lunch: scaleMealIfExists(sourceLog.lunch, 'lunch'),
+          snack: scaleMealIfExists(sourceLog.snack, 'snack'),
+          dinner: scaleMealIfExists(sourceLog.dinner, 'dinner'),
+          // Copiar extra foods y complementary meals sin reescalar
+          extraFoods: sourceLog.extraFoods || [],
+          complementaryMeals: sourceLog.complementaryMeals || []
+        };
+        return [...filtered, copiedLog];
       });
     }
   };
@@ -489,23 +528,32 @@ export default function App() {
         return;
       }
       
-      console.log(`[handleLogin] Login successful, token saved`);
+      console.log(`[handleLogin] ✅ Login successful, token saved`);
       
       // Cargar datos del usuario desde la base de datos
+      console.log(`[handleLogin] 🔄 Loading user profile from database...`);
       const userData = await api.getUser(email);
       
       if (userData) {
-        console.log(`[handleLogin] User data loaded from database: ${email}`);
+        console.log(`[handleLogin] ✅ User profile loaded from database: ${email}`);
+        console.log(`[handleLogin] User has goal: ${userData.goal}, macros: ${userData.goals?.calories}kcal`);
         setUser(userData);
         setCurrentScreen('dashboard');
       } else {
-        console.log(`[handleLogin] User authenticated but no profile found, starting onboarding`);
-        // Usuario autenticado pero sin perfil completo
+        console.log(`[handleLogin] ⚠️ User authenticated but NO PROFILE found in database`);
+        console.log(`[handleLogin] This means the user created an account but didn't complete onboarding`);
+        
+        // Mostrar mensaje al usuario
+        alert('👋 Bienvenido de nuevo!\n\n' +
+              'Necesitas completar tu perfil para continuar.\n\n' +
+              'Te guiaremos por el proceso de configuración (solo toma 2 minutos).');
+        
+        // Usuario autenticado pero sin perfil completo - iniciar onboarding
         setTempData({ email, name });
         setCurrentScreen('onboarding-sex');
       }
     } catch (error: any) {
-      console.error('[handleLogin] Error during login:', error);
+      console.error('[handleLogin] ❌ Error during login:', error);
       alert(`❌ Error al iniciar sesión: ${error.message || 'Error desconocido'}`);
     }
   };
@@ -605,6 +653,19 @@ export default function App() {
       const result = await api.signup(email, password, name);
       
       if (!result.success) {
+        // Manejar error de email duplicado
+        if (result.code === 'email_exists') {
+          alert('❌ Este correo ya está registrado.\n\n✅ Por favor inicia sesión en lugar de crear una cuenta nueva.');
+          return;
+        }
+        
+        // Manejar error de contraseña débil
+        if (result.code === 'weak_password') {
+          alert('❌ La contraseña debe tener al menos 6 caracteres.');
+          return;
+        }
+        
+        // Error genérico
         alert(`❌ Error al crear cuenta: ${result.error || 'Error desconocido'}`);
         return;
       }
@@ -1355,13 +1416,38 @@ export default function App() {
           savedDiets={savedDiets}
           onClose={() => setShowSavedDiets(false)}
           onApplyDiet={(diet) => {
+            if (!user) return;
+            
+            // IMPORTANTE: Reescalar las comidas de la dieta guardada a los macros ACTUALES del usuario
+            const scaleMealIfExists = (meal: Meal | null, mealType: MealType): Meal | null => {
+              if (!meal) return null;
+              
+              // Calcular target para este tipo de comida con los macros ACTUALES
+              const currentLogData = getCurrentLog();
+              const intelligentTarget = calculateIntelligentTarget(
+                user,
+                currentLogData,
+                mealType
+              );
+              
+              // Escalar la comida al target actual
+              const scaledMeal = scaleToExactTarget(
+                meal,
+                intelligentTarget,
+                intelligentTarget.isLastMeal
+              );
+              
+              return scaledMeal;
+            };
+            
             const currentLogData = getCurrentLog();
             const updatedLog: DailyLog = {
               ...currentLogData,
-              breakfast: diet.breakfast || currentLogData.breakfast,
-              lunch: diet.lunch || currentLogData.lunch,
-              snack: diet.snack || currentLogData.snack,
-              dinner: diet.dinner || currentLogData.dinner
+              // Reescalar cada comida a los macros actuales del usuario
+              breakfast: scaleMealIfExists(diet.breakfast, 'breakfast'),
+              lunch: scaleMealIfExists(diet.lunch, 'lunch'),
+              snack: scaleMealIfExists(diet.snack, 'snack'),
+              dinner: scaleMealIfExists(diet.dinner, 'dinner')
             };
             const filteredLogs = dailyLogs.filter(log => log.date !== currentDate);
             setDailyLogs([...filteredLogs, updatedLog]);

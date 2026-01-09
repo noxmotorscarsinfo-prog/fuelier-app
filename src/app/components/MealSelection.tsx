@@ -375,13 +375,70 @@ export default function MealSelection({
     }).sort((a, b) => b.score - a.score); // Re-ordenar por score combinado
   }, [mealsOfType, user, currentLog, mealType, intelligentTarget, consumedMacros]);
 
-  // Aplicar filtro de ingredientes a las recomendaciones
-  const filteredRecommendedMeals = useMemo(() => {
-    if (selectedIngredients.length === 0) {
+  // ⭐ CRÍTICO: Filtrar por preferencias alimenticias del usuario (alergias, intolerancias, disgustos)
+  const mealsFilteredByPreferences = useMemo(() => {
+    if (!user.preferences) {
+      return recommendedMeals;
+    }
+    
+    const { allergies = [], intolerances = [], dislikes = [] } = user.preferences;
+    
+    // Si no hay restricciones, retornar todas
+    if (allergies.length === 0 && intolerances.length === 0 && dislikes.length === 0) {
       return recommendedMeals;
     }
     
     return recommendedMeals.filter(scored => {
+      const meal = scored.meal;
+      
+      // Si el plato NO tiene ingredientes listados, no se puede filtrar - dejar pasar
+      if (!meal.ingredients || meal.ingredients.length === 0) {
+        return true;
+      }
+      
+      // Convertir ingredientes del plato a minúsculas para comparación
+      const mealIngredientsLower = meal.ingredients.map(ing => ing.toLowerCase());
+      
+      // FILTRO 1: ALERGIAS (máxima prioridad - eliminar SIEMPRE)
+      for (const allergy of allergies) {
+        const allergyLower = allergy.toLowerCase();
+        if (mealIngredientsLower.some(ing => ing.includes(allergyLower))) {
+          console.log(`🚫 Plato "${meal.name}" filtrado por ALERGIA: ${allergy}`);
+          return false; // Contiene alérgeno → ELIMINAR
+        }
+      }
+      
+      // FILTRO 2: INTOLERANCIAS (alta prioridad - eliminar)
+      for (const intolerance of intolerances) {
+        const intoleranceLower = intolerance.toLowerCase();
+        if (mealIngredientsLower.some(ing => ing.includes(intoleranceLower))) {
+          console.log(`⚠️ Plato "${meal.name}" filtrado por INTOLERANCIA: ${intolerance}`);
+          return false; // Contiene ingrediente no tolerado → ELIMINAR
+        }
+      }
+      
+      // FILTRO 3: DISGUSTOS (preferencia - reducir score pero no eliminar)
+      // Por ahora también eliminamos, pero en el futuro podríamos solo reducir el score
+      for (const dislike of dislikes) {
+        const dislikeLower = dislike.toLowerCase();
+        if (mealIngredientsLower.some(ing => ing.includes(dislikeLower))) {
+          console.log(`👎 Plato "${meal.name}" filtrado por DISGUSTO: ${dislike}`);
+          return false; // Contiene ingrediente que no le gusta → ELIMINAR
+        }
+      }
+      
+      // Pasó todos los filtros
+      return true;
+    });
+  }, [recommendedMeals, user.preferences]);
+
+  // Aplicar filtro de ingredientes seleccionados (filtro manual de UI)
+  const filteredRecommendedMeals = useMemo(() => {
+    if (selectedIngredients.length === 0) {
+      return mealsFilteredByPreferences; // ✅ Usar meals ya filtradas por preferencias
+    }
+    
+    return mealsFilteredByPreferences.filter(scored => {
       if (!scored.meal.ingredients || scored.meal.ingredients.length === 0) {
         return false;
       }
@@ -392,7 +449,7 @@ export default function MealSelection({
         );
       });
     });
-  }, [recommendedMeals, selectedIngredients]);
+  }, [mealsFilteredByPreferences, selectedIngredients]);
 
   // Top 3 recomendaciones de la app - SIEMPRE son las mejores opciones
   // Ordenadas por mejor ajuste a objetivos y preferencias del usuario

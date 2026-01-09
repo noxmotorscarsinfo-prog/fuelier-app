@@ -36,7 +36,7 @@ const headers = {
 
 // ===== AUTHENTICATION API =====
 
-export const signup = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string; user?: any }> => {
+export const signup = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string; code?: string; user?: any }> => {
   try {
     console.log(`[API] Signing up: ${email}`);
     
@@ -50,7 +50,11 @@ export const signup = async (email: string, password: string, name: string): Pro
     
     if (!response.ok) {
       console.error('[API] Signup failed:', data);
-      return { success: false, error: data.error || data.details || 'Failed to sign up' };
+      return { 
+        success: false, 
+        error: data.error || data.details || 'Failed to sign up',
+        code: data.code // Incluir el código de error
+      };
     }
     
     console.log(`[API] Signup successful for: ${email}`);
