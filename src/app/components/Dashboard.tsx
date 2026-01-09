@@ -1,5 +1,5 @@
 import { DailyLog, MealType, User, BugReport, MealDistribution } from '../types';
-import { Flame, Beef, Wheat, Droplet, Plus, BarChart3, History, RotateCcw, Settings as SettingsIcon, User as UserIcon, Target, Zap, TrendingUp, Calendar, Award, Coffee, Save, CheckCircle, UtensilsCrossed, ChefHat, Scale, Users, Share2, Heart, BookmarkCheck, HelpCircle, X, Bug, Send, AlertCircle, MessageSquare, Shield, Sparkles, PieChart, Dumbbell } from 'lucide-react';
+import { Flame, Beef, Wheat, Droplet, Plus, BarChart3, History, RotateCcw, Settings as SettingsIcon, User as UserIcon, Target, Zap, TrendingUp, Calendar, Award, Coffee, Save, CheckCircle, UtensilsCrossed, ChefHat, Scale, Users, Share2, Heart, BookmarkCheck, HelpCircle, X, Bug, Send, AlertCircle, MessageSquare, Shield, Sparkles, PieChart, Dumbbell, FileText } from 'lucide-react';
 import { calculateAllGoals } from '../utils/macroCalculations';
 import { getActiveMealTypes } from '../utils/mealDistribution';
 import { useState, useEffect, useRef } from 'react';
@@ -30,6 +30,7 @@ interface DashboardProps {
   onUpdateWeight: (weight: number, date: string) => void; // ACTUALIZADO: Ahora recibe fecha también
   onOpenSavedDiets: () => void;
   onOpenAdmin?: () => void;
+  onOpenTechnicalDocs?: () => void;
   onSubmitBugReport: (report: Omit<BugReport, 'id' | 'userId' | 'userEmail' | 'userName' | 'createdAt' | 'status'>) => void;
   onAddExtraFoodDirect: (food: { name: string; calories: number; protein: number; carbs: number; fat: number }) => void;
   onNavigateToCreateMeal?: () => void; // Nueva prop para navegar a crear plato
@@ -55,6 +56,7 @@ export default function Dashboard({
   onUpdateWeight,
   onOpenSavedDiets,
   onOpenAdmin,
+  onOpenTechnicalDocs,
   onSubmitBugReport,
   onAddExtraFoodDirect,
   onNavigateToCreateMeal,
@@ -603,6 +605,15 @@ export default function Dashboard({
                 >
                   <Shield className="w-5 h-5" />
                   <span className="text-sm">Admin</span>
+                </button>
+              )}
+              {user.isAdmin && onOpenTechnicalDocs && (
+                <button
+                  onClick={onOpenTechnicalDocs}
+                  className="bg-gradient-to-r from-pink-600 to-rose-700 text-white p-3 rounded-xl hover:from-pink-700 hover:to-rose-800 transition-all flex items-center gap-2 shadow-md"
+                >
+                  <FileText className="w-5 h-5" />
+                  <span className="text-sm">Docs</span>
                 </button>
               )}
               <button

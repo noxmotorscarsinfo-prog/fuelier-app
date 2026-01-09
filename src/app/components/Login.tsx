@@ -45,13 +45,6 @@ export default function Login({ onLogin, onSignup, onAdminAccess }: LoginProps) 
     }
   };
 
-  const handleClearData = () => {
-    if (confirm('⚠️ Esto borrará TODOS tus datos (usuario, comidas, historial). ¿Estás seguro?')) {
-      localStorage.clear();
-      window.location.reload();
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 flex items-center justify-center p-6 relative">
       {/* Botón Admin - Esquina inferior izquierda */}
@@ -200,18 +193,7 @@ export default function Login({ onLogin, onSignup, onAdminAccess }: LoginProps) 
 
         {/* Info */}
         <div className="mt-6 text-center text-emerald-50 text-sm">
-          <p>Tus datos se guardan localmente en tu dispositivo</p>
-        </div>
-
-        {/* Clear Data Button */}
-        <div className="mt-6 text-center">
-          <button
-            onClick={handleClearData}
-            className="text-sm text-red-600 hover:text-red-700"
-          >
-            <Trash2 className="w-4 h-4 inline-block mr-1" />
-            Borrar todos los datos
-          </button>
+          <p>✅ Todos tus datos se guardan en la nube con Supabase</p>
         </div>
       </div>
     </div>

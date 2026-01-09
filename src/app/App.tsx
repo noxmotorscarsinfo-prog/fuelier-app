@@ -23,6 +23,7 @@ import CreateIngredient from './components/CreateIngredient';
 import EditCustomMeal from './components/EditCustomMeal';
 import SavedDiets from './components/SavedDiets';
 import AdminPanel from './components/AdminPanel';
+import TechnicalDocumentation from './components/TechnicalDocumentation';
 import DayCompletedModal from './components/DayCompletedModal';
 import AdaptiveNotification from './components/AdaptiveNotification';
 import { analyzeProgress, applyAutomaticAdjustment, detectMetabolicAdaptation, generateWeeklyProgress } from './utils/adaptiveSystem';
@@ -52,7 +53,8 @@ type Screen =
   | 'create-meal'
   | 'create-ingredient'
   | 'edit-custom-meal'
-  | 'admin';
+  | 'admin'
+  | 'technical-docs';
 
 interface TempOnboardingData {
   email: string;
@@ -130,7 +132,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentScreen]);
 
-  // Load user from Supabase (with localStorage as fallback for migration)
+  // Load user from Supabase ONLY (no localStorage)
   useEffect(() => {
     const isAdminRoute = window.location.pathname === '/adminfueliercardano' || 
                         window.location.pathname.includes('/adminfueliercardano') ||
@@ -143,58 +145,8 @@ export default function App() {
       return;
     }
     
-    // Intentar cargar desde localStorage primero (para migración)
-    const savedUser = localStorage.getItem('dietUser');
-    if (savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        // Migrate old users without sex (male por defecto)
-        if (!parsedUser.sex) {
-          parsedUser.sex = 'male';
-        }
-        // Migrate old users without age (usar valor por defecto de 30 años)
-        if (!parsedUser.age) {
-          parsedUser.age = 30;
-        }
-        // Migrate old users without goal (mantener peso por defecto)
-        if (!parsedUser.goal) {
-          parsedUser.goal = 'maintenance';
-        }
-        // MIGRACIÓN: Convertir goals antiguos de 3 opciones a 5 opciones
-        if (parsedUser.goal === 'lose_weight') {
-          parsedUser.goal = 'moderate_loss';
-        } else if (parsedUser.goal === 'maintain') {
-          parsedUser.goal = 'maintenance';
-        } else if (parsedUser.goal === 'gain_muscle') {
-          parsedUser.goal = 'moderate_gain';
-        }
-        // Migrate old users without mealsPerDay (3 comidas por defecto)
-        if (!parsedUser.mealsPerDay) {
-          parsedUser.mealsPerDay = 3;
-        }
-        // MIGRACIÓN CRÍTICA: Recalcular goals si no existen o están mal
-        if (!parsedUser.goals || !parsedUser.goals.calories || isNaN(parsedUser.goals.calories)) {
-          parsedUser.goals = calculateMacrosFromUser({
-            sex: parsedUser.sex,
-            weight: parsedUser.weight,
-            height: parsedUser.height,
-            age: parsedUser.age,
-            goal: parsedUser.goal,
-            trainingFrequency: parsedUser.trainingFrequency
-          });
-        }
-        
-        setUser(parsedUser);
-        setCurrentScreen('dashboard');
-        
-        // Guardar en Supabase (migración automática)
-        api.saveUser(parsedUser).then(() => {
-          console.log('✅ User migrated to Supabase');
-        });
-      } catch (error) {
-        console.error('Error loading user:', error);
-      }
-    }
+    // ✅ SOLO SUPABASE - No usar localStorage
+    console.log('🔄 App mounted - User must login to load from Supabase');
     setIsLoading(false);
   }, []);
 
@@ -205,90 +157,26 @@ export default function App() {
     const loadUserData = async () => {
       console.log('📥 Loading user data from Supabase...');
       
-      // Load daily logs
+      // Load daily logs from Supabase ONLY
       const logs = await api.getDailyLogs(user.email);
-      if (logs.length > 0) {
-        setDailyLogs(logs);
-        console.log(`✅ Loaded ${logs.length} daily logs from Supabase`);
-      } else {
-        // Intentar migrar desde localStorage
-        const savedLogs = localStorage.getItem('dietLogs');
-        if (savedLogs) {
-          try {
-            const parsed = JSON.parse(savedLogs);
-            setDailyLogs(parsed);
-            // Guardar en Supabase (migración)
-            await api.saveDailyLogs(user.email, parsed);
-            console.log(`✅ Migrated ${parsed.length} daily logs to Supabase`);
-          } catch (error) {
-            console.error('Error migrating logs:', error);
-          }
-        }
-      }
+      setDailyLogs(logs);
+      console.log(`✅ Loaded ${logs.length} daily logs from Supabase`);
       
-      // Load saved diets
+      // Load saved diets from Supabase ONLY
       const diets = await api.getSavedDiets(user.email);
-      if (diets.length > 0) {
-        setSavedDiets(diets);
-        console.log(`✅ Loaded ${diets.length} saved diets from Supabase`);
-      } else {
-        // Intentar migrar desde localStorage
-        const savedDiets = localStorage.getItem('savedDiets');
-        if (savedDiets) {
-          try {
-            const parsed = JSON.parse(savedDiets);
-            setSavedDiets(parsed);
-            // Guardar en Supabase (migración)
-            await api.saveSavedDiets(user.email, parsed);
-            console.log(`✅ Migrated ${parsed.length} saved diets to Supabase`);
-          } catch (error) {
-            console.error('Error migrating diets:', error);
-          }
-        }
-      }
+      setSavedDiets(diets);
+      console.log(`✅ Loaded ${diets.length} saved diets from Supabase`);
       
-      // Load favorite meals
+      // Load favorite meals from Supabase ONLY
       const favorites = await api.getFavoriteMeals(user.email);
-      if (favorites.length > 0) {
-        setFavoriteMealIds(favorites);
-        console.log(`✅ Loaded ${favorites.length} favorite meals from Supabase`);
-      } else {
-        // Intentar migrar desde localStorage
-        const savedFavorites = localStorage.getItem(`favoriteMeals_${user.email}`);
-        if (savedFavorites) {
-          try {
-            const parsed = JSON.parse(savedFavorites);
-            setFavoriteMealIds(parsed);
-            // Guardar en Supabase (migración)
-            await api.saveFavoriteMeals(user.email, parsed);
-            console.log(`✅ Migrated ${parsed.length} favorite meals to Supabase`);
-          } catch (error) {
-            console.error('Error migrating favorites:', error);
-          }
-        }
-      }
+      setFavoriteMealIds(favorites);
+      console.log(`✅ Loaded ${favorites.length} favorite meals from Supabase`);
       
       // Load bug reports (only for admins)
       if (user.isAdmin) {
         const reports = await api.getBugReports();
-        if (reports.length > 0) {
-          setBugReports(reports);
-          console.log(`✅ Loaded ${reports.length} bug reports from Supabase`);
-        } else {
-          // Intentar migrar desde localStorage
-          const savedReports = localStorage.getItem('bugReports');
-          if (savedReports) {
-            try {
-              const parsed = JSON.parse(savedReports);
-              setBugReports(parsed);
-              // Guardar en Supabase (migración)
-              await api.saveBugReports(parsed);
-              console.log(`✅ Migrated ${parsed.length} bug reports to Supabase`);
-            } catch (error) {
-              console.error('Error migrating bug reports:', error);
-            }
-          }
-        }
+        setBugReports(reports);
+        console.log(`✅ Loaded ${reports.length} bug reports from Supabase`);
       }
       
       // NUEVO: Load training plan from Supabase
@@ -336,43 +224,51 @@ export default function App() {
     loadUserData();
   }, [user]);
 
-  // Save user to Supabase whenever it changes
+  // Save user to Supabase ONLY whenever it changes
   useEffect(() => {
     if (user) {
-      // Guardar en ambos lugares durante la transición
-      localStorage.setItem('dietUser', JSON.stringify(user));
-      api.saveUser(user).catch(error => {
-        console.error('❌ [CRITICAL] Error saving user to Supabase:', error);
-        // El usuario está en localStorage como backup
-      });
+      console.log(`📝 [Effect] User state changed, saving to Supabase: ${user.email}`);
+      api.saveUser(user)
+        .then(() => console.log(`✅ [Effect] User saved successfully to Supabase: ${user.email}`))
+        .catch(error => {
+          console.error('❌ [CRITICAL] Error saving user to Supabase:', error);
+        });
     }
   }, [user]);
 
-  // Save logs to Supabase whenever they change
+  // Save logs to Supabase ONLY whenever they change
   useEffect(() => {
     if (user && dailyLogs.length >= 0) {
-      api.saveDailyLogs(user.email, dailyLogs).catch(error => {
-        console.error('❌ [CRITICAL] Error saving daily logs to Supabase:', error);
-        // Los logs están en localStorage como backup
-      });
+      console.log(`📝 [Effect] Daily logs changed, saving ${dailyLogs.length} logs for: ${user.email}`);
+      api.saveDailyLogs(user.email, dailyLogs)
+        .then(() => console.log(`✅ [Effect] Daily logs saved successfully: ${dailyLogs.length} logs`))
+        .catch(error => {
+          console.error('❌ [CRITICAL] Error saving daily logs to Supabase:', error);
+        });
     }
   }, [dailyLogs, user]);
 
   // Save saved diets to Supabase whenever they change
   useEffect(() => {
     if (user && savedDiets.length >= 0) {
-      api.saveSavedDiets(user.email, savedDiets).catch(error => {
-        console.error('❌ [CRITICAL] Error saving diets to Supabase:', error);
-      });
+      console.log(`📝 [Effect] Saved diets changed, saving ${savedDiets.length} diets for: ${user.email}`);
+      api.saveSavedDiets(user.email, savedDiets)
+        .then(() => console.log(`✅ [Effect] Saved diets saved successfully: ${savedDiets.length} diets`))
+        .catch(error => {
+          console.error('❌ [CRITICAL] Error saving diets to Supabase:', error);
+        });
     }
   }, [savedDiets, user]);
 
   // Save favorite meal IDs to Supabase when they change
   useEffect(() => {
     if (user && favoriteMealIds.length >= 0) {
-      api.saveFavoriteMeals(user.email, favoriteMealIds).catch(error => {
-        console.error('❌ [CRITICAL] Error saving favorite meals to Supabase:', error);
-      });
+      console.log(`📝 [Effect] Favorite meals changed, saving ${favoriteMealIds.length} favorites for: ${user.email}`);
+      api.saveFavoriteMeals(user.email, favoriteMealIds)
+        .then(() => console.log(`✅ [Effect] Favorite meals saved successfully: ${favoriteMealIds.length} favorites`))
+        .catch(error => {
+          console.error('❌ [CRITICAL] Error saving favorite meals to Supabase:', error);
+        });
     }
   }, [favoriteMealIds, user]);
 
@@ -527,9 +423,8 @@ export default function App() {
             setShowAdaptiveNotification(true);
           }
           
-          // 8. Guardar usuario actualizado
+          // 8. Guardar usuario actualizado (se guarda automáticamente en Supabase por el efecto)
           setUser(updatedUser);
-          localStorage.setItem('dietUser', JSON.stringify(updatedUser));
         } else {
           console.log('ℹ️ [Sistema Adaptativo] No hay suficientes datos para análisis (mínimo 5 días)');
         }
@@ -615,7 +510,7 @@ export default function App() {
     }
   };
 
-  const handleAdminLogin = (email: string, password: string) => {
+  const handleAdminLogin = async (email: string, password: string) => {
     // Credenciales hardcodeadas
     const ADMIN_EMAIL = 'admin@fuelier.com';
     const ADMIN_PASSWORD = 'Fuelier2025!';
@@ -625,53 +520,81 @@ export default function App() {
       return; // La validación ya se hace en AdminLogin, esto es doble check
     }
     
-    // Verificar si ya existe un usuario admin en localStorage
-    const savedUser = localStorage.getItem('dietUser');
-    if (savedUser) {
-      const existingUser = JSON.parse(savedUser);
-      if (existingUser.email === ADMIN_EMAIL) {
-        // Ya existe, hacer login
-        const updatedUser = {
-          ...existingUser,
+    try {
+      // Intentar cargar usuario existente
+      console.log('[handleAdminLogin] Checking if admin user exists...');
+      const userData = await api.getUser(email);
+      
+      if (userData) {
+        console.log('[handleAdminLogin] Admin user exists, loading...');
+        const userWithAdmin = {
+          ...userData,
           isAdmin: true
         };
-        setUser(updatedUser);
-        localStorage.setItem('dietUser', JSON.stringify(updatedUser));
+        setUser(userWithAdmin);
         setCurrentScreen('admin');
         return;
       }
+    } catch (error) {
+      console.log('[handleAdminLogin] Admin user does not exist yet, will create...');
     }
     
-    // No existe usuario admin, crear uno nuevo con datos dummy para acceder al panel
-    const adminUser: User = {
-      email: ADMIN_EMAIL,
-      name: 'Administrador',
-      sex: 'male',
-      age: 30,
-      weight: 75,
-      height: 175,
-      goal: 'maintenance',
-      trainingFrequency: 3,
-      mealsPerDay: 3,
-      goals: {
-        calories: 2000,
-        protein: 150,
-        carbs: 200,
-        fat: 65
-      },
-      preferences: {
-        likes: [],
-        dislikes: [],
-        intolerances: [],
-        allergies: []
-      },
-      isAdmin: true,
-      createdAt: new Date().toISOString()
-    };
-    
-    setUser(adminUser);
-    localStorage.setItem('dietUser', JSON.stringify(adminUser));
-    setCurrentScreen('admin');
+    // Si llegamos aquí, el usuario no existe, crearlo
+    try {
+      console.log('[handleAdminLogin] Creating admin user profile...');
+      
+      // Crear perfil de usuario admin
+      const adminUser: User = {
+        email: ADMIN_EMAIL,
+        name: 'Administrador',
+        sex: 'male',
+        age: 30,
+        birthdate: '1995-01-01',
+        weight: 75,
+        height: 175,
+        goal: 'maintenance',
+        trainingFrequency: 3,
+        trainingIntensity: 'moderate',
+        trainingType: 'strength',
+        lifestyleActivity: 'moderately_active',
+        mealsPerDay: 4,
+        goals: {
+          calories: 2000,
+          protein: 150,
+          carbs: 200,
+          fat: 65
+        },
+        mealDistribution: {
+          breakfast: 25,
+          lunch: 30,
+          snack: 15,
+          dinner: 30
+        },
+        preferences: {
+          likes: [],
+          dislikes: [],
+          intolerances: [],
+          allergies: [],
+          portionPreferences: {}
+        },
+        acceptedMealIds: [],
+        rejectedMealIds: [],
+        favoriteMealIds: [],
+        favoriteIngredientIds: [],
+        isAdmin: true,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Guardar perfil en Supabase (esto también creará el usuario en Auth si no existe)
+      await api.saveUser(adminUser);
+      console.log('[handleAdminLogin] Admin profile created and saved successfully');
+      
+      setUser(adminUser);
+      setCurrentScreen('admin');
+    } catch (error) {
+      console.error('[handleAdminLogin] Error creating admin profile:', error);
+      alert('❌ Error al crear perfil de administrador. Por favor, verifica los logs.');
+    }
   };
 
   const handleSignup = async (email: string, password: string, name: string) => {
@@ -741,7 +664,7 @@ export default function App() {
     setCurrentScreen('onboarding-preferences');
   };
 
-  const handlePreferencesComplete = (preferences: {
+  const handlePreferencesComplete = async (preferences: {
     likes: string[];
     dislikes: string[];
     intolerances: string[];
@@ -785,9 +708,22 @@ export default function App() {
       console.log('✅ newUser created:', newUser);
       console.log('✅ newUser.goals:', newUser.goals);
       
-      setUser(newUser);
-      setTempData(null);
-      setCurrentScreen('dashboard');
+      // CRÍTICO: Guardar usuario PRIMERO antes de establecer el estado
+      // Esto asegura que el perfil exista en la base de datos antes de que
+      // otros efectos intenten guardar daily-logs, saved-diets, etc.
+      try {
+        console.log('💾 Saving user profile to database before setting state...');
+        await api.saveUser(newUser);
+        console.log('✅ User profile saved successfully to database');
+        
+        // Solo después de guardar exitosamente, establecer el estado
+        setUser(newUser);
+        setTempData(null);
+        setCurrentScreen('dashboard');
+      } catch (error) {
+        console.error('❌ Error saving user profile:', error);
+        alert('❌ Error al guardar perfil. Por favor, intenta de nuevo.');
+      }
     }
   };
 
@@ -817,7 +753,6 @@ export default function App() {
     };
     
     setUser(updatedUser);
-    localStorage.setItem('dietUser', JSON.stringify(updatedUser));
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -831,7 +766,6 @@ export default function App() {
     };
     
     setUser(updatedUser);
-    localStorage.setItem('dietUser', JSON.stringify(updatedUser));
   };
 
   // NUEVA FUNCIÓN: Actualizar preferencias alimenticias
@@ -845,7 +779,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('dietUser');
+    // Solo limpiar estado, no hay localStorage
     setUser(null);
     setCurrentScreen('login');
   };
@@ -1087,9 +1021,6 @@ export default function App() {
     updatedUser.goals = newMacros;
     
     setUser(updatedUser);
-    
-    // 5. Guardar en localStorage
-    localStorage.setItem('dietUser', JSON.stringify(updatedUser));
   };
 
   const handleToggleFavorite = (mealId: string) => {
@@ -1197,6 +1128,7 @@ export default function App() {
             onUpdateMealDistribution={handleUpdateMealDistribution}
             onOpenSavedDiets={() => setShowSavedDiets(true)}
             onOpenAdmin={user.isAdmin ? () => setCurrentScreen('admin') : undefined}
+            onOpenTechnicalDocs={user.isAdmin ? () => setCurrentScreen('technical-docs') : undefined}
             onSubmitBugReport={(report) => {
               const newReport: BugReport = {
                 id: Date.now().toString(),
@@ -1239,16 +1171,9 @@ export default function App() {
               const filteredLogs = dailyLogs.filter(log => log.date !== currentDate);
               setDailyLogs([...filteredLogs, updatedLog]);
             }}
-            onUpdateUser={async (updatedUser) => {
+            onUpdateUser={(updatedUser) => {
               setUser(updatedUser);
-              localStorage.setItem('dietUser', JSON.stringify(updatedUser));
-              // NUEVO: Guardar también en Supabase para persistencia real
-              try {
-                await api.saveUser(updatedUser);
-                console.log('✅ User updated in Supabase');
-              } catch (error) {
-                console.error('❌ Error saving user to Supabase:', error);
-              }
+              // El efecto se encargará de guardar en Supabase automáticamente
             }}
           />
         )}
@@ -1313,7 +1238,7 @@ export default function App() {
         )}
         {currentScreen === 'custom-meals' && (
           <MyCustomMeals
-            user={user}
+            userEmail={user.email}
             onBack={handleBack}
             onCreate={() => {
               setSelectedMealType(null); // Limpiar tipo de comida para creación genérica
@@ -1385,6 +1310,12 @@ export default function App() {
         )}
         {currentScreen === 'admin' && user.isAdmin && (
           <AdminPanel
+            user={user}
+            onBack={() => setCurrentScreen('dashboard')}
+          />
+        )}
+        {currentScreen === 'technical-docs' && user.isAdmin && (
+          <TechnicalDocumentation
             user={user}
             onBack={() => setCurrentScreen('dashboard')}
           />

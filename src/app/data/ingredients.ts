@@ -85,69 +85,23 @@ export const baseIngredients: Ingredient[] = [
   { id: 'ing_62', name: 'Miel', calories: 304, protein: 0.3, carbs: 82, fat: 0 },
 ];
 
-// Función para obtener todos los ingredientes (base + personalizados)
-export const getIngredients = (): Ingredient[] => {
-  const customIngredients = localStorage.getItem('customIngredients');
-  if (customIngredients) {
-    return [...baseIngredients, ...JSON.parse(customIngredients)];
-  }
-  return baseIngredients;
-};
+// ========== INGREDIENTES PERSONALIZADOS ==========
+// ⚠️ MIGRADO A SUPABASE - Ya no usar localStorage
+// Los ingredientes personalizados ahora se guardan en Supabase vía API:
+// - api.getCustomIngredients(email)
+// - api.saveCustomIngredients(email, ingredients)
 
-// Función para guardar un ingrediente personalizado
-export const saveCustomIngredient = (ingredient: Ingredient): void => {
-  const customIngredients = localStorage.getItem('customIngredients');
-  const ingredients = customIngredients ? JSON.parse(customIngredients) : [];
-  ingredients.push({ ...ingredient, isCustom: true });
-  localStorage.setItem('customIngredients', JSON.stringify(ingredients));
-};
-
-// Función para eliminar un ingrediente personalizado
-export const deleteCustomIngredient = (id: string): void => {
-  const customIngredients = localStorage.getItem('customIngredients');
-  if (customIngredients) {
-    const ingredients = JSON.parse(customIngredients);
-    const filtered = ingredients.filter((ing: Ingredient) => ing.id !== id);
-    localStorage.setItem('customIngredients', JSON.stringify(filtered));
-  }
+// Función para obtener todos los ingredientes (base + personalizados desde Supabase)
+export const getIngredients = (customIngredients: Ingredient[] = []): Ingredient[] => {
+  return [...baseIngredients, ...customIngredients];
 };
 
 // Función para obtener ingrediente por ID
-export const getIngredientById = (id: string): Ingredient | undefined => {
-  return getIngredients().find(ing => ing.id === id);
+export const getIngredientById = (id: string, customIngredients: Ingredient[] = []): Ingredient | undefined => {
+  return getIngredients(customIngredients).find(ing => ing.id === id);
 };
 
-// NUEVO: Guardar ingredientes base (ADMIN ONLY)
-export const saveBaseIngredients = (ingredients: Ingredient[]): void => {
-  localStorage.setItem('baseIngredients', JSON.stringify(ingredients));
-};
-
-// NUEVO: Obtener ingredientes base del sistema (con override de localStorage)
+// Función para obtener ingredientes base del sistema (sin personalizados)
 export const getBaseIngredients = (): Ingredient[] => {
-  const saved = localStorage.getItem('baseIngredients');
-  if (saved) {
-    return JSON.parse(saved);
-  }
   return baseIngredients;
-};
-
-// NUEVO: Agregar ingrediente a la base del sistema (ADMIN ONLY)
-export const addBaseIngredient = (ingredient: Ingredient): void => {
-  const current = getBaseIngredients();
-  const updated = [...current, ingredient];
-  saveBaseIngredients(updated);
-};
-
-// NUEVO: Actualizar ingrediente de la base del sistema (ADMIN ONLY)
-export const updateBaseIngredient = (id: string, ingredient: Ingredient): void => {
-  const current = getBaseIngredients();
-  const updated = current.map(ing => ing.id === id ? ingredient : ing);
-  saveBaseIngredients(updated);
-};
-
-// NUEVO: Eliminar ingrediente de la base del sistema (ADMIN ONLY)
-export const deleteBaseIngredient = (id: string): void => {
-  const current = getBaseIngredients();
-  const filtered = current.filter(ing => ing.id !== id);
-  saveBaseIngredients(filtered);
 };

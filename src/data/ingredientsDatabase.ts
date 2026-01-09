@@ -583,47 +583,24 @@ export const INGREDIENTS_DATABASE: Ingredient[] = [
 ];
 
 // Función para obtener ingrediente por ID
-export function getIngredientById(id: string): Ingredient | undefined {
+export function getIngredientById(id: string, customIngredients: Ingredient[] = []): Ingredient | undefined {
   // Primero buscar en la base de datos del sistema
   const systemIngredient = INGREDIENTS_DATABASE.find(ing => ing.id === id);
   if (systemIngredient) return systemIngredient;
   
-  // Luego buscar en localStorage (ingredientes personalizados)
-  const customIngredients = getCustomIngredients();
+  // Luego buscar en ingredientes personalizados desde Supabase
   return customIngredients.find(ing => ing.id === id);
 }
 
-// Función para obtener ingredientes personalizados del localStorage
-export function getCustomIngredients(): Ingredient[] {
-  const stored = localStorage.getItem('customIngredients');
-  if (!stored) return [];
-  
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return [];
-  }
-}
+// ========== INGREDIENTES PERSONALIZADOS ==========
+// ⚠️ MIGRADO A SUPABASE - Ya no usar localStorage
+// Los ingredientes personalizados ahora se guardan en Supabase vía API:
+// - api.getCustomIngredients(email)
+// - api.saveCustomIngredients(email, ingredients)
 
-// Función para guardar ingrediente personalizado
-export function saveCustomIngredient(ingredient: Omit<Ingredient, 'id' | 'isCustom'>): Ingredient {
-  const customIngredients = getCustomIngredients();
-  
-  const newIngredient: Ingredient = {
-    ...ingredient,
-    id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    isCustom: true
-  };
-  
-  customIngredients.push(newIngredient);
-  localStorage.setItem('customIngredients', JSON.stringify(customIngredients));
-  
-  return newIngredient;
-}
-
-// Función para obtener todos los ingredientes (sistema + personalizados)
-export function getAllIngredients(): Ingredient[] {
-  return [...INGREDIENTS_DATABASE, ...getCustomIngredients()];
+// Función para obtener todos los ingredientes (sistema + personalizados desde Supabase)
+export function getAllIngredients(customIngredients: Ingredient[] = []): Ingredient[] {
+  return [...INGREDIENTS_DATABASE, ...customIngredients];
 }
 
 // Función para calcular macros de una lista de ingredientes

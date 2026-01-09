@@ -1,9 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ArrowLeft, Plus, X, Save, Info, ChefHat, Sparkles, Search, Check } from 'lucide-react';
 import { Meal, MealType } from '../types';
-import { saveCustomMeal } from '../data/customMeals';
-import { INGREDIENTS_DATABASE, calculateMacrosFromIngredients, Ingredient as DBIngredient, saveCustomIngredient as saveDBIngredient } from '../../data/ingredientsDatabase';
-import { getCustomIngredients, createCustomIngredient, getBaseIngredients } from '../utils/supabase';
+import { INGREDIENTS_DATABASE, calculateMacrosFromIngredients, Ingredient as DBIngredient } from '../../data/ingredientsDatabase';
+import * as api from '../utils/api';
 
 interface CreateMealProps {
   mealType?: MealType;
@@ -223,7 +222,7 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!mealName.trim()) {
       alert('Por favor, ingresa un nombre para el plato');
       return;
@@ -273,13 +272,22 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
     };
 
     try {
-      saveCustomMeal(newMeal);
-      console.log('✅ Plato guardado en localStorage:', newMeal);
-      onSave(newMeal); // ⭐ Pasar el meal creado
-      // ❌ NO llamar a onBack() aquí - el callback onSave se encarga de la navegación
+      // ✅ Cargar custom meals existentes desde Supabase
+      const existingMeals = await api.getCustomMeals(userEmail);
+      
+      // ✅ Guardar en Supabase
+      const success = await api.saveCustomMeals(userEmail, [...existingMeals, newMeal]);
+      
+      if (success) {
+        console.log('✅ Plato guardado en Supabase:', newMeal);
+        onSave(newMeal); // ⭐ Pasar el meal creado
+        // ❌ NO llamar a onBack() aquí - el callback onSave se encarga de la navegación
+      } else {
+        throw new Error('Failed to save meal');
+      }
     } catch (error) {
       console.error('Error al guardar el plato:', error);
-      alert('Hubo un error al guardar el plato. Por favor, intenta de nuevo.');
+      alert('Hubo un error al guardar el plato en Supabase. Por favor, intenta de nuevo.');
     }
   };
 
@@ -295,17 +303,30 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
     }
 
     try {
-      // 1. Guardar en localStorage (compatibilidad con código existente)
-      const savedIngredient = saveDBIngredient({
+      // ✅ 1. Obtener ingredientes existentes
+      const existingIngredients = await api.getCustomIngredients(userEmail);
+      
+      // ✅ 2. Crear el nuevo ingrediente con ID único
+      const ingredientId = `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const newCustomIngredient: DBIngredient = {
+        id: ingredientId,
         name: newIngredientData.name.trim(),
-        category: 'proteina', // Categoría por defecto para ingredientes personalizados
+        category: 'personalizado',
         caloriesPer100g: parseFloat(newIngredientData.calories),
         proteinPer100g: parseFloat(newIngredientData.protein),
         carbsPer100g: parseFloat(newIngredientData.carbs),
-        fatPer100g: parseFloat(newIngredientData.fat)
-      });
+        fatPer100g: parseFloat(newIngredientData.fat),
+        isCustom: true
+      };
 
-      // 2. ⭐ NUEVO: Guardar en Supabase para persistencia y sincronización
+      // ✅ 3. Guardar en Supabase
+      const success = await api.saveCustomIngredients(userEmail, [...existingIngredients, newCustomIngredient]);
+      
+      if (!success) {
+        throw new Error('Failed to save ingredient');
+      }
+
+      // ✅ 4. También guardar en la tabla de Supabase usando la función existente
       await createCustomIngredient(userEmail, {
         name: newIngredientData.name.trim(),
         calories_per_100g: parseFloat(newIngredientData.calories),
@@ -315,25 +336,14 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
         category: 'personalizado'
       });
 
-      // 3. ⭐ NUEVO: Añadir al estado local inmediatamente para que aparezca en sugerencias
-      const newCustomIngredient: DBIngredient = {
-        id: savedIngredient.id,
-        name: newIngredientData.name.trim(),
-        category: 'personalizado',
-        caloriesPer100g: parseFloat(newIngredientData.calories),
-        proteinPer100g: parseFloat(newIngredientData.protein),
-        carbsPer100g: parseFloat(newIngredientData.carbs),
-        fatPer100g: parseFloat(newIngredientData.fat),
-        isCustom: true // ⭐ Marca como ingrediente personalizado
-      };
-
+      // ✅ 5. Añadir al estado local inmediatamente para que aparezca en sugerencias
       setCustomIngredients([...customIngredients, newCustomIngredient]);
-      console.log('✅ Ingrediente personalizado guardado en Supabase y añadido al estado local');
+      console.log('✅ Ingrediente personalizado guardado en Supabase');
 
-      // 4. Auto-seleccionar el ingrediente recién creado si se creó desde el input
+      // ✅ 6. Auto-seleccionar el ingrediente recién creado si se creó desde el input
       if (currentIngredientId) {
         setIngredients(ingredients.map(ing => 
-          ing.id === currentIngredientId ? { ...ing, name: savedIngredient.name, ingredientId: savedIngredient.id, showSuggestions: false } : ing
+          ing.id === currentIngredientId ? { ...ing, name: newCustomIngredient.name, ingredientId: newCustomIngredient.id, showSuggestions: false } : ing
         ));
         setCurrentIngredientId(null);
       }

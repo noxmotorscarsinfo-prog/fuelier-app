@@ -151,53 +151,19 @@ export function getExercisesByCategory(category: string): ExerciseData[] {
 }
 
 // ========== EJERCICIOS PERSONALIZADOS ==========
+// ⚠️ MIGRADO A SUPABASE - Ya no usar localStorage
+// Los ejercicios personalizados ahora se guardan en Supabase vía API:
+// - api.getCustomExercises(email)
+// - api.saveCustomExercises(email, exercises)
 
-const CUSTOM_EXERCISES_KEY = 'fuelier_custom_exercises';
-
-// Obtener ejercicios personalizados del localStorage
-export function getCustomExercises(): ExerciseData[] {
-  try {
-    const stored = localStorage.getItem(CUSTOM_EXERCISES_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error('Error loading custom exercises:', error);
-    return [];
-  }
-}
-
-// Guardar un nuevo ejercicio personalizado
-export function saveCustomExercise(name: string, category: string, equipment?: string): ExerciseData {
-  const customExercises = getCustomExercises();
-  
-  const newExercise: ExerciseData = {
-    id: `custom-${Date.now()}`,
-    name,
-    category,
-    equipment: equipment || 'Personalizado'
-  };
-  
-  // Verificar si ya existe
-  const exists = customExercises.some(ex => 
-    ex.name.toLowerCase() === name.toLowerCase() && ex.category === category
-  );
-  
-  if (!exists) {
-    customExercises.push(newExercise);
-    localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(customExercises));
-    console.log('✅ Ejercicio personalizado guardado:', newExercise);
-  }
-  
-  return newExercise;
-}
-
-// Obtener TODOS los ejercicios (predeterminados + personalizados)
-export function getAllExercises(): ExerciseData[] {
-  return [...exerciseDatabase, ...getCustomExercises()];
+// Obtener TODOS los ejercicios (predeterminados + personalizados desde Supabase)
+export function getAllExercises(customExercises: ExerciseData[] = []): ExerciseData[] {
+  return [...exerciseDatabase, ...customExercises];
 }
 
 // Buscar ejercicios incluyendo personalizados
-export function searchAllExercises(query: string, category?: string): ExerciseData[] {
-  const allExercises = getAllExercises();
+export function searchAllExercises(query: string, category?: string, customExercises: ExerciseData[] = []): ExerciseData[] {
+  const allExercises = getAllExercises(customExercises);
   const lowerQuery = query.toLowerCase();
   
   let filtered = allExercises;

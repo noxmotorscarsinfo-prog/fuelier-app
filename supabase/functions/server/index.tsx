@@ -282,10 +282,27 @@ app.post("/make-server-b0e879f0/user", async (c) => {
       return c.json({ error: "Failed to get auth user", details: authError.message }, 500);
     }
     
-    const authUser = authUsers.users.find(u => u.email === user.email);
+    let authUser = authUsers.users.find(u => u.email === user.email);
     if (!authUser) {
-      console.error(`[POST /user] Auth user not found for email: ${user.email}`);
-      return c.json({ error: "Auth user not found" }, 404);
+      console.log(`[POST /user] Auth user not found for email: ${user.email}, creating...`);
+      
+      // Create auth user with a default password (user should change it later)
+      const { data: newAuthUser, error: createError } = await supabase.auth.admin.createUser({
+        email: user.email,
+        password: 'ChangeMe123!', // Default password - user should change it
+        email_confirm: true,
+        user_metadata: { name: user.name }
+      });
+      
+      if (createError || !newAuthUser.user) {
+        console.error(`[POST /user] Failed to create auth user:`, createError);
+        return c.json({ error: "Failed to create auth user", details: createError?.message }, 500);
+      }
+      
+      authUser = newAuthUser.user;
+      console.log(`[POST /user] Auth user created successfully: ${authUser.id}`);
+    } else {
+      console.log(`[POST /user] Auth user found: ${authUser.id}`);
     }
     
     // Transform app format to database format
@@ -329,7 +346,7 @@ app.post("/make-server-b0e879f0/user", async (c) => {
     // Upsert (insert or update)
     const { data, error } = await supabase
       .from('users')
-      .upsert(dbUser, { onConflict: 'email' })
+      .upsert(dbUser, { onConflict: 'id' })
       .select()
       .single();
     
@@ -338,7 +355,7 @@ app.post("/make-server-b0e879f0/user", async (c) => {
       return c.json({ error: "Failed to save user", details: error.message }, 500);
     }
     
-    console.log(`[POST /user] User saved successfully to users table: ${user.email}`);
+    console.log(`[POST /user] User saved successfully to users table: ${user.email} with ID: ${authUser.id}`);
     
     return c.json({ success: true, user });
   } catch (error) {
@@ -424,8 +441,10 @@ app.post("/make-server-b0e879f0/daily-logs", async (c) => {
       .single();
     
     if (userError || !userData) {
-      console.error(`[POST /daily-logs] User not found: ${email}`);
-      return c.json({ error: "User not found" }, 404);
+      console.warn(`[POST /daily-logs] User not found in users table: ${email}. User profile needs to be saved first. Skipping save (will retry on next change).`);
+      // Return success but don't save anything - this allows the frontend to continue
+      // and the effect will retry when data changes again
+      return c.json({ success: true, skipped: true, reason: "User profile not yet created" });
     }
     
     // Delete all existing logs for this user
@@ -548,8 +567,10 @@ app.post("/make-server-b0e879f0/saved-diets", async (c) => {
       .single();
     
     if (userError || !userData) {
-      console.error(`[POST /saved-diets] User not found: ${email}`);
-      return c.json({ error: "User not found" }, 404);
+      console.warn(`[POST /saved-diets] User not found in users table: ${email}. User profile needs to be saved first. Skipping save (will retry on next change).`);
+      // Return success but don't save anything - this allows the frontend to continue
+      // and the effect will retry when data changes again
+      return c.json({ success: true, skipped: true, reason: "User profile not yet created" });
     }
     
     // Delete all existing diets for this user
@@ -634,6 +655,18 @@ app.post("/make-server-b0e879f0/favorite-meals", async (c) => {
     console.log(`[POST /favorite-meals] Updating favorites in users table for: ${email}`);
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // First check if user exists
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.warn(`[POST /favorite-meals] User not found in users table: ${email}. Skipping save (will retry on next change).`);
+      return c.json({ success: true, skipped: true, reason: "User profile not yet created" });
+    }
     
     const { error } = await supabase
       .from('users')
@@ -907,30 +940,276 @@ app.post("/make-server-b0e879f0/global-ingredients", async (c) => {
 });
 
 // ===== TRAINING ENDPOINTS =====
-// NOTE: Training data is not in the relational tables yet, keeping stub endpoints
 
+// Get training data for user
 app.get("/make-server-b0e879f0/training/:email", async (c) => {
-  return c.json(null);
+  try {
+    const email = c.req.param("email");
+    console.log(`[GET /training] Fetching training data for: ${email}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.log(`[GET /training] User not found: ${email}`);
+      return c.json(null);
+    }
+    
+    // Get training data from training_data table
+    const { data, error } = await supabase
+      .from('training_data')
+      .select('training_config')
+      .eq('user_id', userData.id)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        console.log(`[GET /training] No training data found for ${email}`);
+        return c.json(null);
+      }
+      throw error;
+    }
+    
+    console.log(`[GET /training] Training data found for ${email}`);
+    return c.json(data.training_config);
+  } catch (error) {
+    console.error("[GET /training] Error:", error);
+    return c.json({ error: "Failed to get training data", details: error.message }, 500);
+  }
 });
 
+// Save training data for user
 app.post("/make-server-b0e879f0/training", async (c) => {
-  return c.json({ success: true });
+  try {
+    const { email, trainingData } = await c.req.json();
+    console.log(`[POST /training] Saving training data for: ${email}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.warn(`[POST /training] User not found: ${email}. Skipping save.`);
+      return c.json({ success: true, skipped: true });
+    }
+    
+    // Upsert training data
+    const { error } = await supabase
+      .from('training_data')
+      .upsert({
+        user_id: userData.id,
+        training_config: trainingData
+      }, {
+        onConflict: 'user_id'
+      });
+    
+    if (error) throw error;
+    
+    console.log(`[POST /training] Successfully saved training data for ${email}`);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[POST /training] Error:", error);
+    return c.json({ error: "Failed to save training data", details: error.message }, 500);
+  }
 });
 
+// Get completed workouts for user
 app.get("/make-server-b0e879f0/training-completed/:email", async (c) => {
-  return c.json([]);
+  try {
+    const email = c.req.param("email");
+    console.log(`[GET /training-completed] Fetching completed workouts for: ${email}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.log(`[GET /training-completed] User not found: ${email}`);
+      return c.json([]);
+    }
+    
+    // Get completed workouts from completed_workouts table
+    const { data, error } = await supabase
+      .from('completed_workouts')
+      .select('*')
+      .eq('user_id', userData.id)
+      .order('workout_date', { ascending: false });
+    
+    if (error) {
+      console.error(`[GET /training-completed] Database error:`, error);
+      return c.json([]);
+    }
+    
+    // Transform to app format
+    const workouts = (data || []).map(workout => ({
+      date: workout.workout_date,
+      dayIndex: workout.day_index,
+      exercises: workout.exercises_completed,
+      duration: workout.duration_minutes,
+      notes: workout.notes
+    }));
+    
+    console.log(`[GET /training-completed] Found ${workouts.length} completed workouts for ${email}`);
+    return c.json(workouts);
+  } catch (error) {
+    console.error("[GET /training-completed] Error:", error);
+    return c.json({ error: "Failed to get completed workouts", details: error.message }, 500);
+  }
 });
 
+// Save completed workouts for user
 app.post("/make-server-b0e879f0/training-completed", async (c) => {
-  return c.json({ success: true });
+  try {
+    const { email, completedWorkouts } = await c.req.json();
+    console.log(`[POST /training-completed] Saving ${completedWorkouts?.length || 0} completed workouts for: ${email}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.warn(`[POST /training-completed] User not found: ${email}. Skipping save.`);
+      return c.json({ success: true, skipped: true });
+    }
+    
+    // Delete existing completed workouts for this user
+    await supabase
+      .from('completed_workouts')
+      .delete()
+      .eq('user_id', userData.id);
+    
+    // Insert new completed workouts
+    if (completedWorkouts && completedWorkouts.length > 0) {
+      const dbWorkouts = completedWorkouts.map(workout => ({
+        user_id: userData.id,
+        workout_date: workout.date,
+        day_index: workout.dayIndex,
+        exercises_completed: workout.exercises,
+        duration_minutes: workout.duration,
+        notes: workout.notes
+      }));
+      
+      const { error } = await supabase
+        .from('completed_workouts')
+        .insert(dbWorkouts);
+      
+      if (error) {
+        console.error(`[POST /training-completed] Database error:`, error);
+        return c.json({ error: "Failed to save completed workouts", details: error.message }, 500);
+      }
+    }
+    
+    console.log(`[POST /training-completed] Successfully saved completed workouts for ${email}`);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[POST /training-completed] Error:", error);
+    return c.json({ error: "Failed to save completed workouts", details: error.message }, 500);
+  }
 });
 
+// Get training plan for user
 app.get("/make-server-b0e879f0/training-plan/:email", async (c) => {
-  return c.json({ error: "Training plan not found" }, 404);
+  try {
+    const email = c.req.param("email");
+    console.log(`[GET /training-plan] Fetching training plan for: ${email}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.log(`[GET /training-plan] User not found: ${email}`);
+      return c.json(null);
+    }
+    
+    // Get training plan from training_plans table
+    const { data, error } = await supabase
+      .from('training_plans')
+      .select('week_plan, plan_name')
+      .eq('user_id', userData.id)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        console.log(`[GET /training-plan] No training plan found for ${email}`);
+        return c.json(null);
+      }
+      throw error;
+    }
+    
+    console.log(`[GET /training-plan] Training plan found for ${email}`);
+    return c.json(data.week_plan);
+  } catch (error) {
+    console.error("[GET /training-plan] Error:", error);
+    return c.json({ error: "Failed to get training plan", details: error.message }, 500);
+  }
 });
 
+// Save training plan for user
 app.post("/make-server-b0e879f0/training-plan", async (c) => {
-  return c.json({ success: true });
+  try {
+    const { email, weekPlan } = await c.req.json();
+    console.log(`[POST /training-plan] Saving training plan for: ${email}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user_id from email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.warn(`[POST /training-plan] User not found: ${email}. Skipping save.`);
+      return c.json({ success: true, skipped: true });
+    }
+    
+    // Upsert training plan
+    const { error } = await supabase
+      .from('training_plans')
+      .upsert({
+        user_id: userData.id,
+        week_plan: weekPlan,
+        plan_name: 'Active Plan'
+      }, {
+        onConflict: 'user_id'
+      });
+    
+    if (error) throw error;
+    
+    console.log(`[POST /training-plan] Successfully saved training plan for ${email}`);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[POST /training-plan] Error:", error);
+    return c.json({ error: "Failed to save training plan", details: error.message }, 500);
+  }
 });
 
 // ===== CSV IMPORT ENDPOINTS =====
@@ -996,6 +1275,323 @@ app.post("/make-server-b0e879f0/import-meals-csv", async (c) => {
     return c.json({ success: true, stats: { imported: 0, errors: 0 }, errors: [] });
   } catch (error) {
     return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===== CUSTOM MEALS ENDPOINTS =====
+
+// Get custom meals for user
+app.get("/make-server-b0e879f0/custom-meals/:email", async (c) => {
+  try {
+    const email = c.req.param('email');
+    console.log(`[GET /custom-meals] Fetching custom meals for: ${email}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data: userData, error } = await supabase
+      .from('users')
+      .select('custom_meals')
+      .eq('email', email)
+      .single();
+    
+    if (error || !userData) {
+      console.log(`[GET /custom-meals] User not found: ${email}, returning empty array`);
+      return c.json([]);
+    }
+    
+    const customMeals = userData.custom_meals || [];
+    console.log(`[GET /custom-meals] Found ${customMeals.length} custom meals`);
+    return c.json(customMeals);
+  } catch (error) {
+    console.error("[GET /custom-meals] Error:", error.message);
+    return c.json({ error: "Failed to fetch custom meals" }, 500);
+  }
+});
+
+// Save custom meals for user
+app.post("/make-server-b0e879f0/custom-meals", async (c) => {
+  try {
+    const { email, meals } = await c.req.json();
+    console.log(`[POST /custom-meals] Saving ${meals?.length || 0} custom meals for: ${email}`);
+    
+    if (!email) {
+      return c.json({ error: "Email is required" }, 400);
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Check if user exists
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.warn(`[POST /custom-meals] User not found: ${email}. Skipping save.`);
+      return c.json({ success: true, skipped: true });
+    }
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ custom_meals: meals || [] })
+      .eq('email', email);
+    
+    if (error) {
+      console.error(`[POST /custom-meals] Database error:`, error);
+      return c.json({ error: "Failed to save custom meals" }, 500);
+    }
+    
+    console.log(`[POST /custom-meals] Successfully saved ${meals?.length || 0} custom meals`);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[POST /custom-meals] Error:", error.message);
+    return c.json({ error: "Failed to save custom meals" }, 500);
+  }
+});
+
+// ===== CUSTOM EXERCISES ENDPOINTS =====
+
+// Get custom exercises for user
+app.get("/make-server-b0e879f0/custom-exercises/:email", async (c) => {
+  try {
+    const email = c.req.param('email');
+    console.log(`[GET /custom-exercises] Fetching for: ${email}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data: userData, error } = await supabase
+      .from('users')
+      .select('custom_exercises')
+      .eq('email', email)
+      .single();
+    
+    if (error || !userData) {
+      console.log(`[GET /custom-exercises] User not found: ${email}, returning empty array`);
+      return c.json([]);
+    }
+    
+    const customExercises = userData.custom_exercises || [];
+    console.log(`[GET /custom-exercises] Found ${customExercises.length} custom exercises`);
+    return c.json(customExercises);
+  } catch (error) {
+    console.error("[GET /custom-exercises] Error:", error.message);
+    return c.json({ error: "Failed to fetch custom exercises" }, 500);
+  }
+});
+
+// Save custom exercises for user
+app.post("/make-server-b0e879f0/custom-exercises", async (c) => {
+  try {
+    const { email, exercises } = await c.req.json();
+    console.log(`[POST /custom-exercises] Saving ${exercises?.length || 0} for: ${email}`);
+    
+    if (!email) {
+      return c.json({ error: "Email is required" }, 400);
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.warn(`[POST /custom-exercises] User not found: ${email}. Skipping save.`);
+      return c.json({ success: true, skipped: true });
+    }
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ custom_exercises: exercises || [] })
+      .eq('email', email);
+    
+    if (error) {
+      console.error(`[POST /custom-exercises] Database error:`, error);
+      return c.json({ error: "Failed to save custom exercises" }, 500);
+    }
+    
+    console.log(`[POST /custom-exercises] Successfully saved`);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[POST /custom-exercises] Error:", error.message);
+    return c.json({ error: "Failed to save custom exercises" }, 500);
+  }
+});
+
+// ===== TRAINING PROGRESS ENDPOINTS =====
+
+// Get training progress for specific date
+app.get("/make-server-b0e879f0/training-progress/:email/:date", async (c) => {
+  try {
+    const email = c.req.param('email');
+    const date = c.req.param('date');
+    console.log(`[GET /training-progress] Fetching for: ${email} on ${date}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data, error } = await supabase
+      .from('training_progress')
+      .select('*')
+      .eq('user_email', email)
+      .eq('date', date)
+      .single();
+    
+    if (error || !data) {
+      console.log(`[GET /training-progress] No progress found for ${email} on ${date}`);
+      return c.json(null);
+    }
+    
+    console.log(`[GET /training-progress] Found progress for day ${data.day_index}`);
+    return c.json({
+      dayIndex: data.day_index,
+      exerciseReps: data.exercise_reps,
+      exerciseWeights: data.exercise_weights,
+      timestamp: data.timestamp
+    });
+  } catch (error) {
+    console.error("[GET /training-progress] Error:", error.message);
+    return c.json({ error: "Failed to fetch training progress" }, 500);
+  }
+});
+
+// Save training progress
+app.post("/make-server-b0e879f0/training-progress", async (c) => {
+  try {
+    const { email, date, dayIndex, exerciseReps, exerciseWeights } = await c.req.json();
+    console.log(`[POST /training-progress] Saving for: ${email} on ${date}`);
+    
+    if (!email || !date) {
+      return c.json({ error: "Email and date are required" }, 400);
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Upsert: insert or update if exists
+    const { error } = await supabase
+      .from('training_progress')
+      .upsert({
+        user_email: email,
+        date: date,
+        day_index: dayIndex,
+        exercise_reps: exerciseReps,
+        exercise_weights: exerciseWeights,
+        timestamp: new Date().toISOString()
+      }, {
+        onConflict: 'user_email,date'
+      });
+    
+    if (error) {
+      console.error(`[POST /training-progress] Database error:`, error);
+      return c.json({ error: "Failed to save training progress" }, 500);
+    }
+    
+    console.log(`[POST /training-progress] Successfully saved`);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[POST /training-progress] Error:", error.message);
+    return c.json({ error: "Failed to save training progress" }, 500);
+  }
+});
+
+// Delete training progress (when workout completed)
+app.delete("/make-server-b0e879f0/training-progress/:email/:date", async (c) => {
+  try {
+    const email = c.req.param('email');
+    const date = c.req.param('date');
+    console.log(`[DELETE /training-progress] Deleting for: ${email} on ${date}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { error } = await supabase
+      .from('training_progress')
+      .delete()
+      .eq('user_email', email)
+      .eq('date', date);
+    
+    if (error) {
+      console.error(`[DELETE /training-progress] Database error:`, error);
+      return c.json({ error: "Failed to delete training progress" }, 500);
+    }
+    
+    console.log(`[DELETE /training-progress] Successfully deleted`);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[DELETE /training-progress] Error:", error.message);
+    return c.json({ error: "Failed to delete training progress" }, 500);
+  }
+});
+
+// ===== CUSTOM INGREDIENTS ENDPOINTS =====
+
+// Get custom ingredients for user
+app.get("/make-server-b0e879f0/custom-ingredients/:email", async (c) => {
+  try {
+    const email = c.req.param('email');
+    console.log(`[GET /custom-ingredients] Fetching for: ${email}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data: userData, error } = await supabase
+      .from('users')
+      .select('custom_ingredients')
+      .eq('email', email)
+      .single();
+    
+    if (error || !userData) {
+      console.log(`[GET /custom-ingredients] User not found: ${email}, returning empty array`);
+      return c.json([]);
+    }
+    
+    const customIngredients = userData.custom_ingredients || [];
+    console.log(`[GET /custom-ingredients] Found ${customIngredients.length} custom ingredients`);
+    return c.json(customIngredients);
+  } catch (error) {
+    console.error("[GET /custom-ingredients] Error:", error.message);
+    return c.json({ error: "Failed to fetch custom ingredients" }, 500);
+  }
+});
+
+// Save custom ingredients for user
+app.post("/make-server-b0e879f0/custom-ingredients", async (c) => {
+  try {
+    const { email, ingredients } = await c.req.json();
+    console.log(`[POST /custom-ingredients] Saving ${ingredients?.length || 0} for: ${email}`);
+    
+    if (!email) {
+      return c.json({ error: "Email is required" }, 400);
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.warn(`[POST /custom-ingredients] User not found: ${email}. Skipping save.`);
+      return c.json({ success: true, skipped: true });
+    }
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ custom_ingredients: ingredients || [] })
+      .eq('email', email);
+    
+    if (error) {
+      console.error(`[POST /custom-ingredients] Database error:`, error);
+      return c.json({ error: "Failed to save custom ingredients" }, 500);
+    }
+    
+    console.log(`[POST /custom-ingredients] Successfully saved`);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("[POST /custom-ingredients] Error:", error.message);
+    return c.json({ error: "Failed to save custom ingredients" }, 500);
   }
 });
 

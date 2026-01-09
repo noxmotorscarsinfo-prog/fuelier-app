@@ -4,7 +4,7 @@ import { BREAKFASTS_FROM_DB, LUNCHES_FROM_DB, SNACKS_FROM_DB, DINNERS_FROM_DB } 
 import { ArrowLeft, Plus, Edit, Trash2, Save, X, Coffee, UtensilsCrossed, Apple, Moon, FileText, Package, Search, Check, Sparkles, AlertCircle, Upload, Download } from 'lucide-react';
 import { generateSystemDocumentationPDF } from '../utils/generateSystemDocumentation';
 import * as api from '../utils/api';
-import { INGREDIENTS_DATABASE, getCustomIngredients, saveCustomIngredient, getAllIngredients } from '../../data/ingredientsDatabase';
+import { INGREDIENTS_DATABASE, getAllIngredients } from '../../data/ingredientsDatabase';
 import { MealIngredientReference, Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientsDatabase';
 import { migrateMealsToStructured } from '../utils/mealMigration';
 import CSVImporter from './CSVImporter';

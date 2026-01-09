@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, Plus, Info } from 'lucide-react';
 import { Ingredient } from '../types';
-import { createCustomIngredient } from '../utils/supabase';
+import * as api from '../utils/api';
 
 interface CreateIngredientProps {
   onBack: () => void;
@@ -45,19 +45,29 @@ export default function CreateIngredient({ onBack, onCreated, userId }: CreateIn
     setError('');
 
     try {
-      // Crear ingrediente en Supabase
-      const ingredientData = {
-        id: `custom_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      // ✅ Obtener ingredientes existentes desde Supabase
+      const existingIngredients = await api.getCustomIngredients(userId);
+      
+      // Crear nuevo ingrediente con formato correcto
+      const newIngredient = {
+        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: name.trim(),
-        calories: cals,
-        protein: prot,
-        carbs: carb,
-        fat: fats
+        category: 'otros',
+        calories_per_100g: cals,
+        protein_per_100g: prot,
+        carbs_per_100g: carb,
+        fat_per_100g: fats,
+        isCustom: true
       };
 
-      await createCustomIngredient(userId, ingredientData);
+      // ✅ Guardar en Supabase usando api.ts
+      const success = await api.saveCustomIngredients(userId, [...existingIngredients, newIngredient]);
+      
+      if (!success) {
+        throw new Error('Failed to save ingredient');
+      }
 
-      console.log('✅ Ingrediente creado en Supabase:', ingredientData);
+      console.log('✅ Ingrediente creado en Supabase:', newIngredient);
       
       // Mostrar mensaje de éxito
       setSuccess(true);

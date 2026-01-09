@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Meal, MealIngredient } from '../types';
 import { ArrowLeft, Check, Flame, Beef, Wheat, Droplet, ChefHat, Clock, Lightbulb, ShoppingBasket, ArrowRight, TrendingUp, TrendingDown, Edit, Target, UtensilsCrossed, Trash2, Plus, Zap } from 'lucide-react';
 import { generateDetailedIngredients, generatePreparationSteps, generateCookingTips, generateMealVariations } from '../utils/mealDetails';
@@ -11,7 +11,8 @@ import { User, DailyLog } from '../types';
 import { MealType } from '../types';
 import { Complement } from '../data/complements';
 import { adaptMealToUser, getAdaptationLevel } from '../utils/intelligentMealAdaptation';
-import { getIngredientById, calculateMacrosFromIngredients } from '../../data/ingredientsDatabase';
+import { getIngredientById, calculateMacrosFromIngredients, Ingredient } from '../../data/ingredientsDatabase';
+import * as api from '../utils/api';
 
 interface MealDetailProps {
   meal: Meal;
@@ -27,6 +28,17 @@ interface MealDetailProps {
 }
 
 export default function MealDetail({ meal, onConfirm, onBack, onSelectVariation, user, currentLog, mealType, onEdit, onDelete, isFromDashboard }: MealDetailProps) {
+  // ✅ NUEVO: Cargar ingredientes personalizados desde Supabase
+  const [customIngredients, setCustomIngredients] = useState<Ingredient[]>([]);
+
+  useEffect(() => {
+    const loadCustomIngredients = async () => {
+      const ingredients = await api.getCustomIngredients(user.email);
+      setCustomIngredients(ingredients);
+    };
+    loadCustomIngredients();
+  }, [user.email]);
+
   // Detectar si es una comida combinada
   const isCombinedMeal = Boolean(meal.combinedMeals);
   
@@ -64,7 +76,8 @@ export default function MealDetail({ meal, onConfirm, onBack, onSelectVariation,
     // ⭐ CLAVE: Los ingredientReferences YA vienen ESCALADOS desde intelligentMealScaling
     // NO necesitamos multiplicar por nada, solo calcular los macros
     const ingredients = meal.ingredientReferences.map((ref, index) => {
-      const ingredient = getIngredientById(ref.ingredientId);
+      // ✅ Pasar ingredientes personalizados desde Supabase
+      const ingredient = getIngredientById(ref.ingredientId, customIngredients);
       if (!ingredient) {
         console.warn(`⚠️ Ingrediente no encontrado: ${ref.ingredientId}`);
         return null;
@@ -159,7 +172,7 @@ export default function MealDetail({ meal, onConfirm, onBack, onSelectVariation,
     }
     
     return ingredients;
-  }, [meal.ingredientReferences, meal.calories, meal.protein, meal.carbs, meal.fat, meal.perfectMatch]);
+  }, [meal.ingredientReferences, meal.calories, meal.protein, meal.carbs, meal.fat, meal.perfectMatch, customIngredients]);
   
   // ⭐ Decidir qué ingredientes mostrar: REALES o GENERADOS
   const ingredientsToShow = realIngredients || detailedIngredients;
@@ -1007,6 +1020,7 @@ export default function MealDetail({ meal, onConfirm, onBack, onSelectVariation,
             onSave={handleSaveIngredients}
             onCancel={handleCancelEdit}
             onChange={handleIngredientsChange}
+            customIngredients={customIngredients}
           />
         )}
 

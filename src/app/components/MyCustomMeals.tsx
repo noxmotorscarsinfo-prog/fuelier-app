@@ -1,30 +1,45 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Trash2, Edit, Flame, Beef, Wheat, Droplet, ChefHat } from 'lucide-react';
 import { Meal } from '../types';
-import { getCustomMeals, deleteCustomMeal } from '../data/customMeals';
+import * as api from '../utils/api';
 
 interface MyCustomMealsProps {
   onBack: () => void;
   onCreate: () => void;
   onEdit?: (meal: Meal) => void;
   onSelect?: (meal: Meal) => void;
+  userEmail: string; // ✅ NUEVO: Para cargar platos desde Supabase
 }
 
-export default function MyCustomMeals({ onBack, onCreate, onEdit, onSelect }: MyCustomMealsProps) {
+export default function MyCustomMeals({ onBack, onCreate, onEdit, onSelect, userEmail }: MyCustomMealsProps) {
   const [customMeals, setCustomMeals] = useState<Meal[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadMeals();
-  }, []);
+  }, [userEmail]);
 
-  const loadMeals = () => {
-    setCustomMeals(getCustomMeals());
+  const loadMeals = async () => {
+    setIsLoading(true);
+    console.log('📥 Cargando custom meals desde Supabase...');
+    const meals = await api.getCustomMeals(userEmail);
+    console.log(`✅ Cargados ${meals.length} custom meals`);
+    setCustomMeals(meals);
+    setIsLoading(false);
   };
 
-  const handleDelete = (mealId: string) => {
+  const handleDelete = async (mealId: string) => {
     if (confirm('¿Estás seguro de que quieres eliminar este plato?')) {
-      deleteCustomMeal(mealId);
-      loadMeals();
+      // ✅ Eliminar de Supabase
+      const updatedMeals = customMeals.filter(m => m.id !== mealId);
+      const success = await api.saveCustomMeals(userEmail, updatedMeals);
+      
+      if (success) {
+        console.log('✅ Plato eliminado de Supabase');
+        setCustomMeals(updatedMeals);
+      } else {
+        alert('Error al eliminar el plato. Por favor, intenta de nuevo.');
+      }
     }
   };
 
@@ -45,6 +60,18 @@ export default function MyCustomMeals({ onBack, onCreate, onEdit, onSelect }: My
     acc[meal.type].push(meal);
     return acc;
   }, {} as Record<string, Meal[]>);
+
+  // ✅ Loading state mientras se cargan los platos desde Supabase
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-neutral-600">Cargando tus platos desde Supabase...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-neutral-50 to-white pb-6">

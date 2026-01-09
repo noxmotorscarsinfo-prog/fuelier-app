@@ -156,7 +156,6 @@ export function TrainingDashboardNew({
     const saveProgress = async () => {
       try {
         const todayDate = new Date().toISOString().split('T')[0];
-        const progressKey = `training-progress:${user.email}:${todayDate}`;
         
         const progressData = {
           dayIndex: selectedDayToTrain,
@@ -165,10 +164,10 @@ export function TrainingDashboardNew({
           timestamp: new Date().toISOString()
         };
         
-        // Guardar en localStorage como backup inmediato
-        localStorage.setItem(progressKey, JSON.stringify(progressData));
+        // ✅ Guardar en Supabase (sin localStorage)
+        await api.saveTrainingProgress(user.email, todayDate, progressData);
         
-        console.log('💾 Auto-guardando progreso de entrenamiento...');
+        console.log('💾 Auto-guardando progreso de entrenamiento en Supabase...');
       } catch (error) {
         console.error('Error auto-guardando progreso:', error);
       }
@@ -184,20 +183,21 @@ export function TrainingDashboardNew({
   useEffect(() => {
     if (selectedDayToTrain === null) return;
     
-    const loadProgress = () => {
+    const loadProgress = async () => {
       try {
         const todayDate = new Date().toISOString().split('T')[0];
-        const progressKey = `training-progress:${user.email}:${todayDate}`;
-        const savedProgress = localStorage.getItem(progressKey);
+        
+        // ✅ Cargar desde Supabase (sin localStorage)
+        const savedProgress = await api.getTrainingProgress(user.email, todayDate);
         
         if (savedProgress) {
-          const { dayIndex, exerciseReps: savedReps, exerciseWeights: savedWeights } = JSON.parse(savedProgress);
+          const { dayIndex, exerciseReps: savedReps, exerciseWeights: savedWeights } = savedProgress;
           
           // Solo cargar si es el mismo día
           if (dayIndex === selectedDayToTrain) {
             setExerciseReps(savedReps || {});
             setExerciseWeights(savedWeights || {});
-            console.log('✅ Progreso de entrenamiento restaurado');
+            console.log('✅ Progreso de entrenamiento restaurado desde Supabase');
           }
         }
       } catch (error) {
@@ -405,7 +405,7 @@ export function TrainingDashboardNew({
   };
 
   // Marcar entrenamiento como completado
-  const handleCompleteWorkout = () => {
+  const handleCompleteWorkout = async () => {
     if (selectedDayToTrain === null) return;
 
     if (!allSetsCompleted()) {
@@ -431,10 +431,9 @@ export function TrainingDashboardNew({
     const updatedWorkouts = [...completedWorkouts, newWorkout];
     saveCompletedWorkouts(updatedWorkouts);
     
-    // NUEVO: Limpiar progreso guardado ya que el entrenamiento se completó
-    const progressKey = `training-progress:${user.email}:${today}`;
-    localStorage.removeItem(progressKey);
-    console.log('✅ Progreso guardado eliminado tras completar entrenamiento');
+    // ✅ Limpiar progreso guardado en Supabase ya que el entrenamiento se completó
+    await api.deleteTrainingProgress(user.email, today);
+    console.log('✅ Progreso guardado eliminado de Supabase tras completar entrenamiento');
     
     setShowCompletedModal(true);
     setTimeout(() => {

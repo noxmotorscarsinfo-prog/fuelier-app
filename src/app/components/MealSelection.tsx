@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Meal, MealType, User, DayLog, getMealPool } from '../types';
-import { getCustomMeals } from '../data/customMeals';
 import { ArrowLeft, Search, Check, Sparkles, Heart, ChefHat, Star, Filter, X, Trophy, Info } from 'lucide-react';
 import { recommendMeals, getMacroNeedsMessage, MealScore } from '../utils/mealRecommendation';
 import { getMealTarget } from '../utils/simplePortionCalculator';
@@ -42,9 +41,11 @@ export default function MealSelection({
   const [showIngredientFilter, setShowIngredientFilter] = useState(false);
   // ❌ ELIMINADO: Estados del sistema manual de porciones (selectedMealForPortion, portionMultiplier, etc.)
 
-  // NUEVO: Estado para platos globales
+  // NUEVO: Estado para platos globales y personalizados (TODO desde Supabase)
   const [globalMeals, setGlobalMeals] = useState<Meal[]>([]);
+  const [customMeals, setCustomMeals] = useState<Meal[]>([]);
   const [isLoadingGlobalMeals, setIsLoadingGlobalMeals] = useState(true);
+  const [isLoadingCustomMeals, setIsLoadingCustomMeals] = useState(true);
 
   // Cargar platos globales al montar el componente
   useEffect(() => {
@@ -71,9 +72,27 @@ export default function MealSelection({
     loadGlobalMeals();
   }, [user.isAdmin]);
 
+  // ✅ Cargar platos personalizados desde Supabase
+  useEffect(() => {
+    const loadCustomMeals = async () => {
+      if (!user.email) {
+        setIsLoadingCustomMeals(false);
+        return;
+      }
+      
+      setIsLoadingCustomMeals(true);
+      console.log('📥 Cargando custom meals desde Supabase...');
+      const meals = await api.getCustomMeals(user.email);
+      console.log(`✅ Cargados ${meals.length} custom meals desde Supabase`);
+      setCustomMeals(meals);
+      setIsLoadingCustomMeals(false);
+    };
+    loadCustomMeals();
+  }, [user.email]);
+
   // Función para obtener todas las comidas disponibles
   const getMealsData = (): Meal[] => {
-    const customMeals = getCustomMeals().filter(meal => meal.type === mealType);
+    const filteredCustomMeals = customMeals.filter(meal => meal.type === mealType);
     
     // ⭐ LÓGICA MEJORADA: Usar globalMeals SI existen, sino usar ALL_MEALS_FROM_DB
     // Esto evita duplicados cuando los platos de BD ya están en Supabase
@@ -100,32 +119,30 @@ export default function MealSelection({
     }
     
     // Combinar platos globales/BD + Personalizados
-    let allMeals = [...dbMeals, ...customMeals];
+    let allMeals = [...dbMeals, ...filteredCustomMeals];
     
     // 🔄 MIGRACIÓN: Asegurar que TODOS los platos tengan ingredientReferences
     const beforeMigration = allMeals.length;
     allMeals = migrateMealsToStructured(allMeals);
     
-    // 💾 GUARDAR platos personalizados reparados de vuelta en localStorage
+    // ✅ GUARDAR platos personalizados reparados de vuelta en Supabase
     const repairedCustomMeals = allMeals.filter(meal => 
       meal.isCustom && meal._migrated === true
     );
     
-    if (repairedCustomMeals.length > 0) {
-      console.log(`💾 Guardando ${repairedCustomMeals.length} platos personalizados reparados...`);
-      
-      // Obtener TODOS los platos personalizados (no solo del tipo actual)
-      const allCustomMeals = getCustomMeals();
+    if (repairedCustomMeals.length > 0 && user.email) {
+      console.log(`💾 Guardando ${repairedCustomMeals.length} platos personalizados reparados en Supabase...`);
       
       // Actualizar solo los que se repararon
-      const updatedCustomMeals = allCustomMeals.map(meal => {
+      const updatedCustomMeals = customMeals.map(meal => {
         const repaired = repairedCustomMeals.find(r => r.id === meal.id);
         return repaired || meal;
       });
       
-      // Guardar de vuelta
-      localStorage.setItem('customMeals', JSON.stringify(updatedCustomMeals));
-      console.log('✅ Platos personalizados guardados permanentemente');
+      // Guardar de vuelta en Supabase (async pero no bloqueante)
+      api.saveCustomMeals(user.email, updatedCustomMeals).then(() => {
+        console.log('✅ Platos personalizados guardados en Supabase');
+      });
     }
     
     // ⭐ Eliminar duplicados por ID (por si acaso)
@@ -798,6 +815,18 @@ export default function MealSelection({
       </div>
     );
   };
+
+  // ✅ Mostrar loading mientras se cargan platos desde Supabase
+  if (isLoadingGlobalMeals || isLoadingCustomMeals) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+          <p className="text-neutral-600">Cargando platos desde Supabase...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-20">

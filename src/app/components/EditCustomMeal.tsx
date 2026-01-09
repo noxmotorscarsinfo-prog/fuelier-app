@@ -1,21 +1,23 @@
 import { useState } from 'react';
 import { ArrowLeft, Save } from 'lucide-react';
 import { Meal, MacroGoals } from '../types';
-import { updateCustomMeal } from '../data/customMeals';
+import * as api from '../utils/api';
 
 interface EditCustomMealProps {
   meal: Meal;
   onBack: () => void;
   onSaved: () => void;
   userGoals: MacroGoals;
+  userEmail: string; // ✅ NUEVO: Para guardar en Supabase
 }
 
-export default function EditCustomMeal({ meal, onBack, onSaved, userGoals }: EditCustomMealProps) {
+export default function EditCustomMeal({ meal, onBack, onSaved, userGoals, userEmail }: EditCustomMealProps) {
   const [calories, setCalories] = useState(meal.calories.toString());
   const [protein, setProtein] = useState(meal.protein.toString());
   const [carbs, setCarbs] = useState(meal.carbs.toString());
   const [fat, setFat] = useState(meal.fat.toString());
   const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const cals = parseFloat(calories) || 0;
   const prot = parseFloat(protein) || 0;
@@ -32,7 +34,7 @@ export default function EditCustomMeal({ meal, onBack, onSaved, userGoals }: Edi
 
   const allFit = Object.values(fitsInMacros).every(v => v);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (isNaN(cals) || cals <= 0) {
       setError('Las calorías deben ser un número válido mayor a 0');
       return;
@@ -51,8 +53,25 @@ export default function EditCustomMeal({ meal, onBack, onSaved, userGoals }: Edi
       fat: Math.round(fats)
     };
 
-    updateCustomMeal(meal.id, updatedMeal);
-    onSaved();
+    // ✅ Guardar en Supabase
+    setIsSaving(true);
+    try {
+      const existingMeals = await api.getCustomMeals(userEmail);
+      const updatedMeals = existingMeals.map(m => m.id === meal.id ? updatedMeal : m);
+      const success = await api.saveCustomMeals(userEmail, updatedMeals);
+      
+      if (success) {
+        console.log('✅ Plato actualizado en Supabase');
+        onSaved();
+      } else {
+        setError('Error al guardar en Supabase. Por favor, intenta de nuevo.');
+      }
+    } catch (error) {
+      console.error('Error al guardar:', error);
+      setError('Error al guardar. Por favor, intenta de nuevo.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -233,10 +252,20 @@ export default function EditCustomMeal({ meal, onBack, onSaved, userGoals }: Edi
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 p-4 shadow-2xl z-10">
         <button
           onClick={handleSave}
-          className="w-full bg-blue-600 text-white py-4 rounded-2xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-98"
+          disabled={isSaving}
+          className="w-full bg-blue-600 text-white py-4 rounded-2xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Save className="w-5 h-5" />
-          <span className="font-medium">Guardar Cambios</span>
+          {isSaving ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              <span className="font-medium">Guardando en Supabase...</span>
+            </>
+          ) : (
+            <>
+              <Save className="w-5 h-5" />
+              <span className="font-medium">Guardar Cambios</span>
+            </>
+          )}
         </button>
       </div>
     </div>

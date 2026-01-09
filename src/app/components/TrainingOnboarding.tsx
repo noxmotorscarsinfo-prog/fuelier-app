@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Dumbbell, Plus, Trash2, Check, Search, X } from 'lucide-react';
-import { muscleCategories, searchAllExercises, ExerciseData, saveCustomExercise } from '../data/exerciseDatabase';
+import { muscleCategories, searchAllExercises, ExerciseData } from '../data/exerciseDatabase';
+import * as api from '../utils/api';
 
 interface Exercise {
   id: string;
@@ -18,9 +19,10 @@ interface DayPlan {
 
 interface TrainingOnboardingProps {
   onComplete: (trainingDays: number, weekPlan: DayPlan[]) => void;
+  userEmail: string; // ✅ NUEVO: Para guardar ejercicios en Supabase
 }
 
-export function TrainingOnboarding({ onComplete }: TrainingOnboardingProps) {
+export function TrainingOnboarding({ onComplete, userEmail }: TrainingOnboardingProps) {
   const [step, setStep] = useState(1);
   const [trainingDays, setTrainingDays] = useState(3);
   const [weekPlan, setWeekPlan] = useState<DayPlan[]>([]);
@@ -44,6 +46,18 @@ export function TrainingOnboarding({ onComplete }: TrainingOnboardingProps) {
   const [customExerciseName, setCustomExerciseName] = useState('');
   const [customExerciseCategory, setCustomExerciseCategory] = useState('pecho');
 
+  // ✅ NUEVO: Cargar ejercicios personalizados desde Supabase
+  const [customExercises, setCustomExercises] = useState<ExerciseData[]>([]);
+
+  // Cargar ejercicios personalizados al montar
+  useEffect(() => {
+    const loadCustomExercises = async () => {
+      const exercises = await api.getCustomExercises(userEmail);
+      setCustomExercises(exercises);
+    };
+    loadCustomExercises();
+  }, [userEmail]);
+
   // Generar nombres de días numéricos basado en la cantidad de días
   const getDayNames = (numDays: number) => {
     return Array.from({ length: numDays }, (_, i) => `Día ${i + 1}`);
@@ -52,14 +66,15 @@ export function TrainingOnboarding({ onComplete }: TrainingOnboardingProps) {
   // Efecto para búsqueda de ejercicios con autocompletado
   useEffect(() => {
     if (newExercise.name.length >= 2) {
-      const results = searchAllExercises(newExercise.name, newExercise.category);
+      // ✅ PASAR ejercicios personalizados desde Supabase
+      const results = searchAllExercises(newExercise.name, newExercise.category, customExercises);
       setAutocompleteResults(results);
       setShowAutocomplete(results.length > 0);
     } else {
       setAutocompleteResults([]);
       setShowAutocomplete(false);
     }
-  }, [newExercise.name, newExercise.category]);
+  }, [newExercise.name, newExercise.category, customExercises]);
 
   // Cerrar autocompletado al hacer click fuera
   useEffect(() => {
@@ -142,17 +157,32 @@ export function TrainingOnboarding({ onComplete }: TrainingOnboardingProps) {
   };
 
   // Crear ejercicio personalizado
-  const handleCreateCustomExercise = () => {
+  const handleCreateCustomExercise = async () => {
     if (!customExerciseName.trim()) return;
 
-    // Guardar ejercicio personalizado en localStorage
-    const savedExercise = saveCustomExercise(customExerciseName, customExerciseCategory);
+    // ✅ Guardar ejercicio personalizado en Supabase
+    const existingExercises = await api.getCustomExercises(userEmail);
+    
+    const newExercise = {
+      id: `custom-${Date.now()}`,
+      name: customExerciseName.trim(),
+      category: customExerciseCategory,
+      equipment: 'Personalizado'
+    };
+    
+    await api.saveCustomExercises(userEmail, [...existingExercises, newExercise]);
+    
+    // ✅ Actualizar estado local de ejercicios personalizados
+    setCustomExercises([...existingExercises, newExercise]);
     
     // Preseleccionar el ejercicio recién creado
     setNewExercise({
       ...newExercise,
-      name: savedExercise.name,
-      category: savedExercise.category
+      name: newExercise.name,
+      category: newExercise.category,
+      sets: 3,
+      reps: '8-12',
+      restTime: 90
     });
 
     // Cerrar modal y resetear
