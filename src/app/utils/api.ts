@@ -23,6 +23,9 @@ export const getAuthToken = (): string | null => {
 
 const getHeaders = () => {
   const token = getAuthToken();
+  if (!token) {
+    console.warn("[API] getHeaders: No token found, using Anon Key");
+  }
   return {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token || publicAnonKey}`

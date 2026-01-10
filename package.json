@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "deploy:functions": "supabase functions deploy make-server-b0e879f0 --no-verify-jwt",
     "dev": "vite"
   },
   "dependencies": {
@@ -62,6 +63,7 @@
     "react-slick": "0.31.0",
     "recharts": "2.15.2",
     "sonner": "2.0.3",
+    "supabase": "^2.72.3",
     "tailwind-merge": "3.2.0",
     "tw-animate-css": "1.3.8",
     "vaul": "1.1.2",

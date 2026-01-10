@@ -213,7 +213,7 @@ app.get("/make-server-b0e879f0/auth/session", async (c) => {
       return c.json({ error: "No authorization header" }, 401);
     }
 
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
     
     // ✅ CORREGIDO: Crear cliente con el token en los headers
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -362,8 +362,15 @@ app.post("/make-server-b0e879f0/user", async (c) => {
       return c.json({ error: "No authorization header" }, 401);
     }
     
-    const accessToken = authHeader.replace('Bearer ', '');
+    const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim();
     console.log("SAVE USER - Token extracted, length:", accessToken.length);
+    console.log("SAVE USER - Token prefix:", accessToken.substring(0, 15) + "...");
+    
+    // Check if token matches Anon Key
+    if (accessToken === supabaseAnonKey) {
+      console.error("SAVE USER - Token matches Anon Key! User is not authenticated.");
+      return c.json({ error: "Authentication required", details: "Anon key provided instead of user token" }, 401);
+    }
     
     // ✅ CORREGIDO: Crear cliente con el token del usuario en los headers
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
@@ -380,10 +387,10 @@ app.post("/make-server-b0e879f0/user", async (c) => {
     
     if (authCheckError || !authData.user) {
       console.error("SAVE USER - Invalid token. Error:", authCheckError?.message);
-      console.error("SAVE USER - Auth data:", authData);
+      console.error("SAVE USER - Auth data:", JSON.stringify(authData));
       return c.json({ 
         error: "Invalid or expired token", 
-        details: authCheckError?.message 
+        details: authCheckError?.message || "User data is missing" 
       }, 401);
     }
     
