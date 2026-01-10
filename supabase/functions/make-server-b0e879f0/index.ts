@@ -533,16 +533,208 @@ app.get(`${basePath}/custom-ingredients/:email`, async (c) => {
 app.post(`${basePath}/custom-ingredients`, (c) => c.json({ success: true }));
 
 // Custom Exercises
-app.get(`${basePath}/custom-exercises/:email`, (c) => c.json([]));
-app.post(`${basePath}/custom-exercises`, (c) => c.json({ success: true }));
+app.get(`${basePath}/custom-exercises/:email`, async (c) => {
+  try {
+    const email = c.req.param("email");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json([]);
+    
+    const { data } = await supabase.from('custom_exercises').select('*').eq('user_id', userId);
+    
+    const formatted = data?.map(e => ({
+      id: e.id,
+      name: e.name,
+      muscleGroup: e.muscle_group,
+      equipment: e.equipment,
+      videoUrl: e.video_url,
+      description: e.description,
+      isCustom: true
+    })) || [];
+    
+    return c.json(formatted);
+  } catch (error) { return c.json([], 200); }
+});
 
-// Training Completed & Progress
-app.get(`${basePath}/training-completed/:email`, (c) => c.json([]));
-app.post(`${basePath}/training-completed`, (c) => c.json({ success: true }));
+app.post(`${basePath}/custom-exercises`, async (c) => {
+  try {
+    const { email, exercises } = await c.req.json();
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json({ error: "User not found" }, 404);
 
-app.get(`${basePath}/training-progress/:email/:date`, (c) => c.json(null));
-app.post(`${basePath}/training-progress`, (c) => c.json({ success: true }));
-app.delete(`${basePath}/training-progress/:email/:date`, (c) => c.json({ success: true }));
+    const dbExercises = exercises.map((e: any) => ({
+      id: e.id,
+      user_id: userId,
+      name: e.name,
+      muscle_group: e.muscleGroup,
+      equipment: e.equipment || 'bodyweight',
+      video_url: e.videoUrl || '',
+      description: e.description || '',
+      is_custom: true
+    }));
+
+    await supabase.from('custom_exercises').upsert(dbExercises, { onConflict: 'id' });
+    return c.json({ success: true });
+  } catch (error) { return c.json({ error: "Failed" }, 500); }
+});
+
+// ==========================================
+// TRAINING COMPLETED ROUTES
+// ==========================================
+
+app.get(`${basePath}/training-completed/:email`, async (c) => {
+  try {
+    const email = c.req.param("email");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json([]);
+
+    const { data, error } = await supabase
+      .from('training_completed')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    
+    // Mapear snake_case a camelCase para el frontend
+    const formattedData = data.map(item => ({
+      date: item.date,
+      dayIndex: item.day_index,
+      exerciseReps: item.exercise_reps,
+      exerciseWeights: item.exercise_weights
+    }));
+
+    return c.json(formattedData || []);
+  } catch (error) {
+    console.error("Error fetching completed training:", error);
+    return c.json([], 200);
+  }
+});
+
+app.post(`${basePath}/training-completed`, async (c) => {
+  try {
+    const { email, completedWorkouts } = await c.req.json();
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json({ error: "User not found" }, 404);
+
+    if (!Array.isArray(completedWorkouts)) {
+       return c.json({ error: "Invalid data format" }, 400);
+    }
+
+    const dbWorkouts = completedWorkouts.map((workout: any) => ({
+      user_id: userId,
+      date: workout.date,
+      day_index: workout.dayIndex,
+      exercise_reps: workout.exerciseReps,
+      exercise_weights: workout.exerciseWeights,
+      updated_at: new Date().toISOString()
+    }));
+
+    // Upsert para actualizar si ya existe o insertar si es nuevo
+    const { error } = await supabase
+      .from('training_completed')
+      .upsert(dbWorkouts, { onConflict: 'user_id, date' });
+
+    if (error) {
+      console.error("DB Error saving completed workouts:", error);
+      return c.json({ error: error.message }, 500);
+    }
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Server Error saving completed workouts:", error);
+    return c.json({ error: "Failed to save completed workouts" }, 500);
+  }
+});
+
+// ==========================================
+// TRAINING PROGRESS ROUTES
+// ==========================================
+
+app.get(`${basePath}/training-progress/:email/:date`, async (c) => {
+  try {
+    const email = c.req.param("email");
+    const date = c.req.param("date");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json(null);
+
+    const { data, error } = await supabase
+      .from('training_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', date)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return c.json(null);
+
+    return c.json({
+      dayIndex: data.day_index,
+      exerciseReps: data.exercise_reps,
+      exerciseWeights: data.exercise_weights,
+      timestamp: data.updated_at
+    });
+  } catch (error) {
+    return c.json(null);
+  }
+});
+
+app.post(`${basePath}/training-progress`, async (c) => {
+  try {
+    const body = await c.req.json();
+    const { email, date, dayIndex, exerciseReps, exerciseWeights } = body;
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json({ error: "User not found" }, 404);
+
+    const dbProgress = {
+      user_id: userId,
+      date: date,
+      day_index: dayIndex,
+      exercise_reps: exerciseReps,
+      exercise_weights: exerciseWeights,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('training_progress')
+      .upsert(dbProgress, { onConflict: 'user_id, date' });
+
+    if (error) throw error;
+
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to save progress" }, 500);
+  }
+});
+
+app.delete(`${basePath}/training-progress/:email/:date`, async (c) => {
+  try {
+    const email = c.req.param("email");
+    const date = c.req.param("date");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const userId = await getUserIdByEmail(supabase, email);
+    
+    if (userId) {
+      await supabase
+        .from('training_progress')
+        .delete()
+        .eq('user_id', userId)
+        .eq('date', date);
+    }
+    
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to delete" }, 500);
+  }
+});
 
 // Bug Reports
 app.get(`${basePath}/bug-reports`, (c) => c.json([]));

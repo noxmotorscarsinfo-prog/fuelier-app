@@ -208,7 +208,8 @@ export default function App() {
             setUser(prevUser => prevUser ? {
               ...prevUser,
               trainingOnboarded: true,
-              trainingDays: trainingPlan.length
+              trainingDays: trainingPlan.length,
+              weekPlan: trainingPlan // ✅ Guardar el plan en el usuario
             } : prevUser);
           } else {
             console.error('⚠️ Training plan has invalid structure, ignoring');
