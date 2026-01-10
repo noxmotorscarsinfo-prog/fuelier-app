@@ -349,11 +349,12 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
           <div className="space-y-4">
             {/* Weight */}
             <div>
-              <label className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
+              <label htmlFor="settings-weight" className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
                 <Scale className="w-4 h-4 text-blue-600" />
                 Peso: {weight} kg
               </label>
               <input
+                id="settings-weight"
                 type="range"
                 min="40"
                 max="150"
@@ -369,11 +370,12 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
 
             {/* Height */}
             <div>
-              <label className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
+              <label htmlFor="settings-height" className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
                 <Ruler className="w-4 h-4 text-blue-600" />
                 Altura: {height} cm
               </label>
               <input
+                id="settings-height"
                 type="range"
                 min="140"
                 max="220"
@@ -389,11 +391,12 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
 
             {/* Age */}
             <div>
-              <label className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
+              <label htmlFor="settings-age" className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-blue-600" />
                 Edad: {age} años
               </label>
               <input
+                id="settings-age"
                 type="range"
                 min="18"
                 max="100"
@@ -409,11 +412,12 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
 
             {/* Training Frequency */}
             <div>
-              <label className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
+              <label htmlFor="settings-training-frequency" className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
                 <Dumbbell className="w-4 h-4 text-blue-600" />
                 Actividad: {trainingFrequency} días/semana
               </label>
               <input
+                id="settings-training-frequency"
                 type="range"
                 min="0"
                 max="7"
@@ -446,11 +450,12 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
 
             {/* Goal */}
             <div>
-              <label className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
+              <label htmlFor="settings-goal" className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
                 <Target className="w-4 h-4 text-emerald-600" />
                 Objetivo: {goal === 'rapid_loss' ? 'Perder peso rápidamente' : goal === 'moderate_loss' ? 'Perder peso moderadamente' : goal === 'maintenance' ? 'Mantener peso' : goal === 'moderate_gain' ? 'Ganar músculo moderadamente' : 'Ganar músculo rápidamente'}
               </label>
               <select
+                id="settings-goal"
                 value={goal}
                 onChange={(e) => setGoal(e.target.value as 'rapid_loss' | 'moderate_loss' | 'maintenance' | 'moderate_gain' | 'rapid_gain')}
                 className="w-full h-10 bg-neutral-50 rounded-lg border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -465,11 +470,12 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
 
             {/* NUEVO: Número de comidas */}
             <div>
-              <label className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
+              <label htmlFor="settings-meals-per-day" className="block text-sm text-neutral-600 mb-2 flex items-center gap-2">
                 <UtensilsCrossed className="w-4 h-4 text-emerald-600" />
                 Comidas al día: {mealsPerDay}
               </label>
               <input
+                id="settings-meals-per-day"
                 type="range"
                 min="2"
                 max="5"
@@ -793,7 +799,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
 
               {/* Input de Calorías */}
               <div>
-                <label className="block text-sm text-neutral-700 mb-2 flex items-center justify-between">
+                <label htmlFor="settings-custom-calories" className="block text-sm text-neutral-700 mb-2 flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <Zap className="w-4 h-4 text-emerald-600" />
                     Calorías Diarias
@@ -801,6 +807,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
                   <span className="text-lg font-bold text-emerald-600">{customCalories} kcal</span>
                 </label>
                 <input
+                  id="settings-custom-calories"
                   type="range"
                   min={Math.round(tdee * 0.7)}
                   max={Math.round(tdee * 1.3)}
@@ -818,7 +825,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
 
               {/* Input de Proteína */}
               <div>
-                <label className="block text-sm text-neutral-700 mb-2 flex items-center justify-between">
+                <label htmlFor="settings-custom-protein" className="block text-sm text-neutral-700 mb-2 flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
                     Proteína
@@ -826,6 +833,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
                   <span className="text-lg font-bold text-blue-600">{customProtein}g</span>
                 </label>
                 <input
+                  id="settings-custom-protein"
                   type="range"
                   min="50"
                   max="300"
@@ -843,7 +851,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
 
               {/* Input de Carbohidratos */}
               <div>
-                <label className="block text-sm text-neutral-700 mb-2 flex items-center justify-between">
+                <label htmlFor="settings-custom-carbs" className="block text-sm text-neutral-700 mb-2 flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
                     Carbohidratos
@@ -851,6 +859,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
                   <span className="text-lg font-bold text-amber-600">{customCarbs}g</span>
                 </label>
                 <input
+                  id="settings-custom-carbs"
                   type="range"
                   min="50"
                   max="500"
@@ -868,7 +877,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
 
               {/* Input de Grasas */}
               <div>
-                <label className="block text-sm text-neutral-700 mb-2 flex items-center justify-between">
+                <label htmlFor="settings-custom-fat" className="block text-sm text-neutral-700 mb-2 flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <span className="w-3 h-3 bg-orange-500 rounded-full"></span>
                     Grasas
@@ -876,6 +885,7 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
                   <span className="text-lg font-bold text-orange-600">{customFat}g</span>
                 </label>
                 <input
+                  id="settings-custom-fat"
                   type="range"
                   min="30"
                   max="150"

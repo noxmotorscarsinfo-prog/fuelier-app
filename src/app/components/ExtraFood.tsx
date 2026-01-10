@@ -122,10 +122,11 @@ export default function ExtraFood({ user, currentLog, onClose, onAdd }: ExtraFoo
 
           {/* Nombre */}
           <div>
-            <label className="block mb-2 text-sm font-medium text-neutral-700">
+            <label htmlFor="extra-food-name" className="block mb-2 text-sm font-medium text-neutral-700">
               ¿Qué comiste?
             </label>
             <input
+              id="extra-food-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -136,10 +137,11 @@ export default function ExtraFood({ user, currentLog, onClose, onAdd }: ExtraFoo
 
           {/* Calorías */}
           <div>
-            <label className="block mb-2 text-sm font-medium text-neutral-700">
+            <label htmlFor="extra-food-calories" className="block mb-2 text-sm font-medium text-neutral-700">
               Calorías (kcal)
             </label>
             <input
+              id="extra-food-calories"
               type="number"
               value={calories}
               onChange={(e) => setCalories(e.target.value)}
@@ -161,11 +163,12 @@ export default function ExtraFood({ user, currentLog, onClose, onAdd }: ExtraFoo
             
             <div className="space-y-3">
               <div>
-                <label className="block mb-1 text-xs text-neutral-600 flex items-center gap-2">
+                <label htmlFor="extra-food-protein" className="block mb-1 text-xs text-neutral-600 flex items-center gap-2">
                   <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
                   Proteína (g)
                 </label>
                 <input
+                  id="extra-food-protein"
                   type="number"
                   value={protein}
                   onChange={(e) => setProtein(e.target.value)}
@@ -177,11 +180,12 @@ export default function ExtraFood({ user, currentLog, onClose, onAdd }: ExtraFoo
               </div>
 
               <div>
-                <label className="block mb-1 text-xs text-neutral-600 flex items-center gap-2">
+                <label htmlFor="extra-food-carbs" className="block mb-1 text-xs text-neutral-600 flex items-center gap-2">
                   <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
                   Carbohidratos (g)
                 </label>
                 <input
+                  id="extra-food-carbs"
                   type="number"
                   value={carbs}
                   onChange={(e) => setCarbs(e.target.value)}
@@ -193,11 +197,12 @@ export default function ExtraFood({ user, currentLog, onClose, onAdd }: ExtraFoo
               </div>
 
               <div>
-                <label className="block mb-1 text-xs text-neutral-600 flex items-center gap-2">
+                <label htmlFor="extra-food-fat" className="block mb-1 text-xs text-neutral-600 flex items-center gap-2">
                   <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
                   Grasas (g)
                 </label>
                 <input
+                  id="extra-food-fat"
                   type="number"
                   value={fat}
                   onChange={(e) => setFat(e.target.value)}
