@@ -4,8 +4,6 @@ import {
   calculateTDEE,
   calculateMacros,
   calculateMacrosFromUser,
-  mapUserGoalToInternalGoal,
-  type GoalType,
 } from '../macroCalculations';
 
 describe('Macro Calculations', () => {
@@ -90,8 +88,6 @@ describe('Macro Calculations', () => {
 
   describe('calculateMacros', () => {
     it('should distribute macros correctly for maintenance', () => {
-  describe('calculateMacros', () => {
-    it('should distribute macros correctly for maintenance', () => {
       const macros = calculateMacros(2000, 80, 'male', 'maintenance');
       
       expect(macros.calories).toBe(2000);
@@ -101,7 +97,8 @@ describe('Macro Calculations', () => {
       
       // Total calories from macros should approximately equal target
       const totalCals = (macros.protein * 4) + (macros.carbs * 4) + (macros.fat * 9);
-      expect(totalCals).toBeCloseTo(2000, 200);
+      expect(totalCals).toBeGreaterThan(1800);
+      expect(totalCals).toBeLessThan(2200);
     });
 
     it('should prioritize protein for moderate_bulk goal', () => {
@@ -149,6 +146,8 @@ describe('Macro Calculations', () => {
       // Fat should never be too low (minimum 40g for health)
       expect(macros.fat).toBeGreaterThanOrEqual(40);
     });
+  });
+
   describe('calculateMacrosFromUser', () => {
     const mockUser = {
       sex: 'male' as const,
@@ -205,6 +204,7 @@ describe('Macro Calculations', () => {
       expect(macros.calories).toBeGreaterThan(bmr);
     });
   });
+
   describe('Edge Cases and Validation', () => {
     it('should handle zero training frequency', () => {
       const macros = calculateMacrosFromUser({
