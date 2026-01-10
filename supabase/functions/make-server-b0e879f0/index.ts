@@ -224,7 +224,9 @@ app.get(`${basePath}/user/:email`, async (c) => {
       rejectedMealIds: data.rejected_meal_ids || [],
       favoriteMealIds: data.favorite_meal_ids || [], 
       favoriteIngredientIds: data.favorite_ingredient_ids || [],
-      isAdmin: data.is_admin
+      isAdmin: data.is_admin,
+      trainingOnboarded: data.training_onboarded || false,
+      trainingDays: data.training_days || null
     };
     
     return c.json(user);
@@ -272,6 +274,8 @@ app.post(`${basePath}/user`, async (c) => {
       favorite_meal_ids: user.favoriteMealIds,
       favorite_ingredient_ids: user.favoriteIngredientIds,
       is_admin: user.isAdmin,
+      training_onboarded: user.trainingOnboarded || false,
+      training_days: user.trainingDays || null,
       updated_at: new Date().toISOString()
     };
     
