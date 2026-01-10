@@ -491,7 +491,7 @@ app.get(`${basePath}/training-plan/:email`, async (c) => {
       return c.json(null);
     }
     
-    const { data, error } = await supabase.from('training_plans').select('week_plan').eq('user_id', userId).eq('is_active', true).maybeSingle();
+    const { data, error } = await supabase.from('training_plans').select('week_plan').eq('user_id', userId).maybeSingle();
     
     if (error) {
       console.error(`[GET /training-plan] DB Error: ${error.message}`);
@@ -530,7 +530,6 @@ app.post(`${basePath}/training-plan`, async (c) => {
     const { error } = await supabase.from('training_plans').upsert({
       user_id: userId,
       week_plan: weekPlan,
-      is_active: true,
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' });
 
