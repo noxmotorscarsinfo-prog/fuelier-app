@@ -152,6 +152,7 @@ export interface MealStructure {
 }
 
 export interface User {
+  id?: string; // CRÍTICO: UUID de Supabase Auth (requerido para guardar en DB)
   email: string;
   name: string;
   sex: 'male' | 'female';

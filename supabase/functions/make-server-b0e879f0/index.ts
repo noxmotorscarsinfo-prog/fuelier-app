@@ -189,8 +189,8 @@ app.get(`${basePath}/user/:email`, async (c) => {
     const { data, error } = await supabase.from('users').select('*').eq('email', email).single();
     
     if (error || !data) return c.json({ error: "User not found" }, 404);
-    
     const user = {
+      id: data.id, // CRÍTICO: Incluir el ID del usuario.
       email: data.email,
       name: data.name,
       sex: data.sex,

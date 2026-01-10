@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
-import { getGeneratedMeals } from '../../app/data/mealsGenerator';
-import { baseIngredientsData } from '../../app/data/ingredients';
+import { getMealsData } from '../../app/data/mealsGenerator';
+import { baseIngredients } from '../../app/data/ingredients';
 
 /**
  * Migración completa de localStorage a Supabase
@@ -60,7 +60,7 @@ async function migrateBaseIngredients(): Promise<{ count: number }> {
   } catch (error) {
     console.error('Error al leer baseIngredients de localStorage:', error);
   }
-  let ingredients = storedIngredients ? JSON.parse(storedIngredients) : baseIngredientsData;
+  let ingredients = storedIngredients ? JSON.parse(storedIngredients) : baseIngredients;
 
   // Verificar si ya existen ingredientes en Supabase
   const { data: existing, error: checkError } = await supabase
@@ -105,7 +105,7 @@ async function migrateBaseIngredients(): Promise<{ count: number }> {
  */
 async function migrateBaseMeals(): Promise<{ count: number }> {
   // Obtener los 200 platos generados
-  const generatedMeals = getGeneratedMeals();
+  const generatedMeals = getMealsData();
 
   // Verificar si ya existen platos en Supabase
   const { data: existing, error: checkError } = await supabase

@@ -59,6 +59,7 @@ type Screen =
 interface TempOnboardingData {
   email: string;
   name: string;
+  userId?: string; // NUEVO: ID de Supabase Auth
   sex?: 'male' | 'female';
   age?: number;
   weight?: number;
@@ -738,9 +739,14 @@ export default function App() {
       
       // El token ya se guardó en api.signup, solo iniciar onboarding
       console.log(`[handleSignup] ✅ Auth token set, starting onboarding`);
+      console.log(`[handleSignup] ✅ User ID from signup:`, result.user?.id);
       
-      // Guardar credenciales temporalmente
-      setTempData({ email, name });
+      // Guardar credenciales temporalmente CON el userId de Supabase Auth
+      setTempData({ 
+        email, 
+        name,
+        userId: result.user?.id // CRÍTICO: Guardar el ID de Supabase Auth
+      });
       setCurrentScreen('onboarding-sex');
     } catch (error: any) {
       console.error('[handleSignup] Error during signup:', error);
@@ -816,6 +822,7 @@ export default function App() {
       const isAdmin = adminEmails.includes(tempData.email.toLowerCase());
       
       const newUser: User = {
+        id: tempData.userId, // CRÍTICO: ID de Supabase Auth
         email: tempData.email,
         name: tempData.name,
         sex: tempData.sex,
