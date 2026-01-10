@@ -18,190 +18,117 @@ app.use("/*", cors({
   maxAge: 600,
 }));
 
+// Endpoint de verificación de versión y salud
 app.get("/make-server-b0e879f0/health", (c) => {
-  return c.json({ status: "ok", timestamp: new Date().toISOString() });
+  return c.json({ 
+    status: "ok", 
+    version: "sql-architecture-v1",
+    timestamp: new Date().toISOString(),
+    endpoints: [
+      "POST /user",
+      "POST /daily-logs",
+      "POST /saved-diets",
+      "POST /custom-meals"
+    ]
+  });
 });
+
+// Helper para obtener ID de usuario por email
+async function getUserIdByEmail(supabase: any, email: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', email)
+    .single();
+  
+  if (error || !data) return null;
+  return data.id;
+}
+
+// ==========================================
+// AUTHENTICATION ROUTES
+// ==========================================
 
 app.post("/make-server-b0e879f0/auth/signup", async (c) => {
   try {
     const body = await c.req.json();
-    const email = body.email;
-    const password = body.password;
-    const name = body.name;
-    
-    console.log("SIGNUP - Email:", email);
+    const { email, password, name } = body;
     
     if (!email || !password || !name) {
-      console.error("SIGNUP - Missing fields");
       return c.json({ error: "Missing required fields" }, 400);
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // PASO 1: Verificar si el usuario existe en Auth
-    console.log("SIGNUP - Step 1: Checking if user exists in Auth...");
+    // Verificar duplicados
     const listResult = await supabase.auth.admin.listUsers();
-    const authUsers = listResult.data?.users || [];
-    const existingAuthUser = authUsers.find(u => u.email === email);
+    const existingAuthUser = listResult.data?.users?.find(u => u.email === email);
     
     if (existingAuthUser) {
-      console.log("SIGNUP - User found in Auth, ID:", existingAuthUser.id);
-      
-      // PASO 2: Verificar si existe en la tabla users
-      console.log("SIGNUP - Step 2: Checking if user exists in users table...");
-      const dbResult = await supabase
-        .from('users')
-        .select('id, email')
-        .eq('id', existingAuthUser.id)
-        .maybeSingle();
-      
-      const dbUser = dbResult.data;
-      
-      if (dbUser) {
-        // Usuario existe en Auth Y en la tabla users → Es un duplicado real
-        console.log("SIGNUP - User exists in both Auth and users table");
-        return c.json({ 
-          error: "Email already registered", 
-          code: "email_exists" 
-        }, 409);
+      const dbResult = await supabase.from('users').select('id').eq('id', existingAuthUser.id).maybeSingle();
+      if (dbResult.data) {
+        return c.json({ error: "Email already registered", code: "email_exists" }, 409);
       } else {
-        // Usuario existe en Auth pero NO en users → Usuario huérfano (signup fallido)
-        console.log("SIGNUP - Orphan user found (in Auth but not in users table)");
-        console.log("SIGNUP - Deleting orphan user from Auth...");
-        
         await supabase.auth.admin.deleteUser(existingAuthUser.id);
-        console.log("SIGNUP - Orphan user deleted, will create fresh user");
       }
     }
     
-    // PASO 3: Crear usuario en Supabase Auth
-    console.log("SIGNUP - Step 3: Creating user in Supabase Auth...");
+    // Crear en Auth
     const createResult = await supabase.auth.admin.createUser({
-      email: email,
-      password: password,
+      email,
+      password,
       email_confirm: true,
-      user_metadata: { name: name }
+      user_metadata: { name }
     });
 
-    const authData = createResult.data;
-    const authError = createResult.error;
-
-    if (authError) {
-      console.error("SIGNUP - Auth error:", authError.message);
-      const msg = authError.message || "";
-      
-      // Detectar contraseña débil
-      if (msg.includes('password') || msg.includes('Password')) {
-        return c.json({ error: "Password too weak", code: "weak_password" }, 400);
-      }
-      
+    if (createResult.error) {
+      const msg = createResult.error.message || "";
+      if (msg.includes('password')) return c.json({ error: "Password too weak", code: "weak_password" }, 400);
       return c.json({ error: msg }, 400);
     }
 
-    if (!authData.user) {
-      console.error("SIGNUP - No user returned");
-      return c.json({ error: "Failed to create user" }, 500);
-    }
+    if (!createResult.data.user) return c.json({ error: "Failed to create user" }, 500);
 
-    console.log("SIGNUP - User created, ID:", authData.user.id);
-    
-    // PASO 4: Testing login to get token
-    console.log("SIGNUP - Step 4: Testing login to get token...");
+    // Login test
     const testSupabase = createClient(supabaseUrl, supabaseAnonKey);
-    const loginResult = await testSupabase.auth.signInWithPassword({
-      email: email,
-      password: password
-    });
+    const loginResult = await testSupabase.auth.signInWithPassword({ email, password });
     
-    const loginData = loginResult.data;
-    const loginError = loginResult.error;
-    
-    if (loginError || !loginData.session) {
-      console.error('SIGNUP - Login test failed:', loginError?.message);
-      console.error('SIGNUP - Deleting user...');
-      await supabase.auth.admin.deleteUser(authData.user.id);
+    if (!loginResult.data.session) {
+      await supabase.auth.admin.deleteUser(createResult.data.user.id);
       return c.json({ error: "Account creation failed", code: "login_test_failed" }, 500);
     }
     
-    console.log("SIGNUP - SUCCESS! Returning token");
-    
     return c.json({ 
       success: true, 
-      access_token: loginData.session.access_token,
+      access_token: loginResult.data.session.access_token,
       user: {
-        id: authData.user.id,
-        email: authData.user.email,
+        id: createResult.data.user.id,
+        email: createResult.data.user.email,
         name: name
       }
     });
   } catch (error) {
-    console.error("SIGNUP - Exception:", error);
     return c.json({ error: "Failed to sign up" }, 500);
   }
 });
 
 app.post("/make-server-b0e879f0/auth/signin", async (c) => {
   try {
-    const body = await c.req.json();
-    const email = body.email;
-    const password = body.password;
-    
-    console.log("SIGNIN - Email:", email);
-    
-    if (!email || !password) {
-      console.error("SIGNIN - Missing fields");
-      return c.json({ error: "Email and password required" }, 400);
-    }
+    const { email, password } = await c.req.json();
+    if (!email || !password) return c.json({ error: "Email and password required" }, 400);
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    
-    console.log("SIGNIN - Attempting signin...");
-    const result = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    const data = result.data;
-    const error = result.error;
-
-    if (error) {
-      console.error("SIGNIN - Error:", error.message, "Code:", error.code);
-      
-      if (error.code === 'invalid_credentials') {
-        const diagSupabase = createClient(supabaseUrl, supabaseServiceKey);
-        const listResult = await diagSupabase.auth.admin.listUsers();
-        const allUsers = listResult.data;
-        const userExists = allUsers?.users?.find(u => u.email === email);
-        
-        if (!userExists) {
-          console.log("SIGNIN - User not found in database");
-          return c.json({ error: "User not found", code: "user_not_found" }, 401);
-        } else {
-          console.log("SIGNIN - User exists but wrong password");
-          return c.json({ error: "Wrong password", code: "wrong_password" }, 401);
-        }
-      }
-      
-      return c.json({ error: error.message }, 401);
-    }
-
-    if (!data.session) {
-      console.error("SIGNIN - No session created");
-      return c.json({ error: "Failed to create session" }, 500);
-    }
-    
-    console.log("SIGNIN - SUCCESS! User ID:", data.user.id);
+    if (error) return c.json({ error: error.message }, 401);
+    if (!data.session) return c.json({ error: "Failed to create session" }, 500);
 
     return c.json({ 
-      success: true,
+      success: true, 
       access_token: data.session.access_token,
-      user: {
-        id: data.user.id,
-        email: data.user.email
-      }
+      user: { id: data.user.id, email: data.user.email }
     });
   } catch (error) {
-    console.error("SIGNIN - Exception:", error);
     return c.json({ error: "Failed to sign in" }, 500);
   }
 });
@@ -209,38 +136,19 @@ app.post("/make-server-b0e879f0/auth/signin", async (c) => {
 app.get("/make-server-b0e879f0/auth/session", async (c) => {
   try {
     const authHeader = c.req.header('Authorization');
-    if (!authHeader) {
-      return c.json({ error: "No authorization header" }, 401);
-    }
+    if (!authHeader) return c.json({ error: "No authorization header" }, 401);
 
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    
-    // ✅ CORREGIDO: Crear cliente con el token en los headers
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
+      global: { headers: { Authorization: `Bearer ${token}` } }
     });
     
-    const result = await supabase.auth.getUser();
-    const data = result.data;
-    const error = result.error;
+    const { data, error } = await supabase.auth.getUser();
 
-    if (error || !data.user) {
-      return c.json({ error: "Invalid token" }, 401);
-    }
+    if (error || !data.user) return c.json({ error: "Invalid token" }, 401);
 
-    return c.json({ 
-      success: true,
-      user: {
-        id: data.user.id,
-        email: data.user.email
-      }
-    });
+    return c.json({ success: true, user: { id: data.user.id, email: data.user.email } });
   } catch (error) {
-    console.error("SESSION - Exception:", error);
     return c.json({ error: "Failed to get session" }, 500);
   }
 });
@@ -248,56 +156,32 @@ app.get("/make-server-b0e879f0/auth/session", async (c) => {
 app.post("/make-server-b0e879f0/auth/signout", async (c) => {
   try {
     const authHeader = c.req.header('Authorization');
-    if (!authHeader) {
-      return c.json({ error: "No authorization header" }, 401);
-    }
+    if (!authHeader) return c.json({ error: "No authorization header" }, 401);
 
     const token = authHeader.replace('Bearer ', '');
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    
-    const result = await supabase.auth.admin.signOut(token);
-    const error = result.error;
-
-    if (error) {
-      console.error("SIGNOUT - Error:", error);
-    }
+    await supabase.auth.admin.signOut(token);
 
     return c.json({ success: true });
   } catch (error) {
-    console.error("SIGNOUT - Exception:", error);
     return c.json({ error: "Failed to sign out" }, 500);
   }
 });
 
+// ==========================================
+// USER ROUTES (Table: users)
+// ==========================================
+
 app.get("/make-server-b0e879f0/user/:email", async (c) => {
   try {
     const email = c.req.param("email");
-    console.log("GET USER - Email:", email);
-    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const result = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
+    const { data, error } = await supabase.from('users').select('*').eq('email', email).single();
     
-    const data = result.data;
-    const error = result.error;
+    if (error || !data) return c.json({ error: "User not found" }, 404);
     
-    if (error) {
-      if (error.code === 'PGRST116') {
-        console.log("GET USER - Not found");
-        return c.json({ error: "User not found" }, 404);
-      }
-      console.error("GET USER - Error:", error);
-      return c.json({ error: "Failed to get user" }, 500);
-    }
-    
-    if (!data) {
-      return c.json({ error: "User not found" }, 404);
-    }
-    
+    // Map DB snake_case -> Frontend camelCase
     const user = {
       email: data.email,
       name: data.name,
@@ -306,8 +190,8 @@ app.get("/make-server-b0e879f0/user/:email", async (c) => {
       birthdate: data.birthdate,
       weight: parseFloat(data.weight),
       height: parseFloat(data.height),
-      bodyFatPercentage: data.body_fat_percentage ? parseFloat(data.body_fat_percentage) : undefined,
-      leanBodyMass: data.lean_body_mass ? parseFloat(data.lean_body_mass) : undefined,
+      bodyFatPercentage: data.body_fat_percentage,
+      leanBodyMass: data.lean_body_mass,
       trainingFrequency: data.training_frequency,
       trainingIntensity: data.training_intensity,
       trainingType: data.training_type,
@@ -319,26 +203,24 @@ app.get("/make-server-b0e879f0/user/:email", async (c) => {
       mealsPerDay: data.meals_per_day,
       goals: {
         calories: data.target_calories,
-        protein: parseFloat(data.target_protein),
-        carbs: parseFloat(data.target_carbs),
-        fat: parseFloat(data.target_fat)
+        protein: data.target_protein,
+        carbs: data.target_carbs,
+        fat: data.target_fat
       },
       selectedMacroOption: data.selected_macro_option,
       mealDistribution: data.meal_distribution,
       previousDietHistory: data.previous_diet_history,
       metabolicAdaptation: data.metabolic_adaptation,
-      preferences: data.preferences || { likes: [], dislikes: [], allergies: [], intolerances: [], portionPreferences: {} },
+      preferences: data.preferences,
       acceptedMealIds: data.accepted_meal_ids || [],
       rejectedMealIds: data.rejected_meal_ids || [],
-      favoriteMealIds: data.favorite_meal_ids || [],
+      favoriteMealIds: data.favorite_meal_ids || [], // Ahora esto podría venir de una tabla relacional si quisieras
       favoriteIngredientIds: data.favorite_ingredient_ids || [],
-      isAdmin: data.is_admin || false
+      isAdmin: data.is_admin
     };
     
-    console.log("GET USER - SUCCESS");
     return c.json(user);
   } catch (error) {
-    console.error("GET USER - Exception:", error);
     return c.json({ error: "Failed to get user" }, 500);
   }
 });
@@ -346,70 +228,11 @@ app.get("/make-server-b0e879f0/user/:email", async (c) => {
 app.post("/make-server-b0e879f0/user", async (c) => {
   try {
     const user = await c.req.json();
-    console.log("SAVE USER - Email:", user.email);
-    
-    if (!user.email || !user.name || !user.sex) {
-      console.error("SAVE USER - Missing fields");
-      return c.json({ error: "Missing required fields" }, 400);
-    }
-    
-    // ✅ Verificar autenticación
-    const authHeader = c.req.header('Authorization');
-    console.log("SAVE USER - Auth header present:", !!authHeader);
-    
-    if (!authHeader) {
-      console.error("SAVE USER - No authorization header");
-      return c.json({ error: "No authorization header" }, 401);
-    }
-    
-    const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim();
-    console.log("SAVE USER - Token extracted, length:", accessToken.length);
-    console.log("SAVE USER - Token prefix:", accessToken.substring(0, 15) + "...");
-    
-    // Check if token matches Anon Key
-    if (accessToken === supabaseAnonKey) {
-      console.error("SAVE USER - Token matches Anon Key! User is not authenticated.");
-      return c.json({ error: "Authentication required", details: "Anon key provided instead of user token" }, 401);
-    }
-    
-    // ✅ CORREGIDO: Crear cliente con el token del usuario en los headers
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      }
-    });
-    console.log("SAVE USER - Validating token...");
-    
-    // Ahora getUser() usará el token del header
-    const { data: authData, error: authCheckError } = await supabaseAuth.auth.getUser();
-    
-    if (authCheckError || !authData.user) {
-      console.error("SAVE USER - Invalid token. Error:", authCheckError?.message);
-      console.error("SAVE USER - Auth data:", JSON.stringify(authData));
-      return c.json({ 
-        error: "Invalid or expired token", 
-        details: authCheckError?.message || "User data is missing" 
-      }, 401);
-    }
-    
-    console.log("SAVE USER - ✅ Token valid! Authenticated user ID:", authData.user.id);
-    console.log("SAVE USER - Authenticated user email:", authData.user.email);
-    
-    // Verificar que el email del usuario autenticado coincida con el que está guardando
-    if (authData.user.email !== user.email) {
-      console.error("SAVE USER - Email mismatch. Token:", authData.user.email, "Body:", user.email);
-      return c.json({ error: "Email mismatch" }, 403);
-    }
-    
-    console.log("SAVE USER - Auth verified, proceeding to save");
-    
-    // Usar SERVICE_ROLE_KEY para escribir en la base de datos
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
+    // Map Frontend camelCase -> DB snake_case
     const dbUser = {
-      id: authData.user.id, // ✅ Usar el ID del usuario autenticado
+      id: user.id || (await getUserIdByEmail(supabase, user.email)), // Asegurar ID
       email: user.email,
       name: user.name,
       sex: user.sex,
@@ -419,7 +242,7 @@ app.post("/make-server-b0e879f0/user", async (c) => {
       height: user.height,
       body_fat_percentage: user.bodyFatPercentage,
       lean_body_mass: user.leanBodyMass,
-      training_frequency: user.trainingFrequency || 0,
+      training_frequency: user.trainingFrequency,
       training_intensity: user.trainingIntensity,
       training_type: user.trainingType,
       training_time_preference: user.trainingTimePreference,
@@ -427,45 +250,306 @@ app.post("/make-server-b0e879f0/user", async (c) => {
       occupation: user.occupation,
       daily_steps: user.dailySteps,
       goal: user.goal,
-      meals_per_day: user.mealsPerDay || 4,
-      target_calories: user.goals?.calories || 2000,
-      target_protein: user.goals?.protein || 150,
-      target_carbs: user.goals?.carbs || 200,
-      target_fat: user.goals?.fat || 60,
+      meals_per_day: user.mealsPerDay,
+      target_calories: user.goals?.calories,
+      target_protein: user.goals?.protein,
+      target_carbs: user.goals?.carbs,
+      target_fat: user.goals?.fat,
       selected_macro_option: user.selectedMacroOption,
-      meal_distribution: user.mealDistribution || { breakfast: 25, lunch: 30, snack: 15, dinner: 30 },
+      meal_distribution: user.mealDistribution,
       previous_diet_history: user.previousDietHistory,
       metabolic_adaptation: user.metabolicAdaptation,
-      preferences: user.preferences || { likes: [], dislikes: [], allergies: [], intolerances: [], portionPreferences: {} },
-      accepted_meal_ids: user.acceptedMealIds || [],
-      rejected_meal_ids: user.rejectedMealIds || [],
-      favorite_meal_ids: user.favoriteMealIds || [],
-      favorite_ingredient_ids: user.favoriteIngredientIds || [],
-      is_admin: user.isAdmin || false,
+      preferences: user.preferences,
+      accepted_meal_ids: user.acceptedMealIds,
+      rejected_meal_ids: user.rejectedMealIds,
+      favorite_meal_ids: user.favoriteMealIds,
+      favorite_ingredient_ids: user.favoriteIngredientIds,
+      is_admin: user.isAdmin,
       updated_at: new Date().toISOString()
     };
     
-    console.log("SAVE USER - Upserting to database...");
-    const saveResult = await supabase
-      .from('users')
-      .upsert(dbUser, { onConflict: 'id' })
-      .select()
-      .single();
-    
-    const data = saveResult.data;
-    const error = saveResult.error;
+    const { error } = await supabase.from('users').upsert(dbUser, { onConflict: 'email' });
     
     if (error) {
-      console.error("SAVE USER - Database error:", error);
-      return c.json({ error: "Failed to save user", details: error.message }, 500);
+      console.error("DB Error saving user:", error);
+      return c.json({ error: error.message }, 500);
     }
     
-    console.log("SAVE USER - SUCCESS");
-    
-    return c.json({ success: true, user: user });
+    return c.json({ success: true, user });
   } catch (error) {
-    console.error("SAVE USER - Exception:", error);
     return c.json({ error: "Failed to save user" }, 500);
+  }
+});
+
+// ==========================================
+// DAILY LOGS ROUTES (Table: daily_logs)
+// ==========================================
+
+app.get("/make-server-b0e879f0/daily-logs/:email", async (c) => {
+  try {
+    const email = c.req.param("email");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json([]);
+
+    const { data, error } = await supabase
+      .from('daily_logs')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    // Transform DB snake_case -> Frontend types
+    // Asumimos que la tabla guarda las comidas completas en columnas JSONB: breakfast, lunch, etc.
+    return c.json(data || []);
+  } catch (error) {
+    console.error("Error fetching logs:", error);
+    return c.json([], 200); 
+  }
+});
+
+app.post("/make-server-b0e879f0/daily-logs", async (c) => {
+  try {
+    const { email, logs } = await c.req.json();
+    console.log(`[SERVER] Recibida petición POST /daily-logs para ${email} con ${logs?.length} logs`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) {
+      console.error(`[SERVER] User not found for email: ${email}`);
+      return c.json({ error: "User not found" }, 404);
+    }
+
+    // Prepare batch upsert
+    // Mapeamos el array de logs del frontend a filas de la base de datos
+    const dbLogs = logs.map((log: any) => ({
+      user_id: userId,
+      date: log.date,
+      breakfast: log.breakfast, // JSONB
+      lunch: log.lunch,         // JSONB
+      snack: log.snack,         // JSONB
+      dinner: log.dinner,       // JSONB
+      extra_foods: log.extraFoods, // JSONB
+      complementary_meals: log.complementaryMeals, // JSONB
+      is_saved: log.isSaved,
+      weight: log.weight,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+      .from('daily_logs')
+      .upsert(dbLogs, { onConflict: 'user_id, date' }); // Requiere índice único en (user_id, date)
+
+    if (error) {
+      console.error("DB Error saving logs:", error);
+      return c.json({ error: error.message }, 500);
+    }
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("SERVER ERROR in daily-logs:", error);
+    return c.json({ error: "Failed to save logs" }, 500);
+  }
+});
+
+// ==========================================
+// SAVED DIETS ROUTES (Table: saved_diets)
+// ==========================================
+
+app.get("/make-server-b0e879f0/saved-diets/:email", async (c) => {
+  try {
+    const email = c.req.param("email");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json([]);
+
+    const { data, error } = await supabase
+      .from('saved_diets')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return c.json(data || []);
+  } catch (error) {
+    return c.json([], 200);
+  }
+});
+
+app.post("/make-server-b0e879f0/saved-diets", async (c) => {
+  try {
+    const { email, diets } = await c.req.json();
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json({ error: "User not found" }, 404);
+
+    const dbDiets = diets.map((diet: any) => ({
+      id: diet.id, // Si el frontend envía ID
+      user_id: userId,
+      name: diet.name,
+      meals: diet.meals, // JSONB con todas las comidas de la dieta
+      macros: diet.macros, // JSONB con info nutricional
+      created_at: diet.createdAt || new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+      .from('saved_diets')
+      .upsert(dbDiets, { onConflict: 'id' });
+
+    if (error) throw error;
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to save diets" }, 500);
+  }
+});
+
+// ==========================================
+// CUSTOM MEALS ROUTES (Table: custom_meals)
+// ==========================================
+
+app.get("/make-server-b0e879f0/custom-meals/:email", async (c) => {
+  try {
+    const email = c.req.param("email");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json([]);
+
+    const { data, error } = await supabase
+      .from('custom_meals')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return c.json(data || []);
+  } catch (error) {
+    return c.json([], 200);
+  }
+});
+
+app.post("/make-server-b0e879f0/custom-meals", async (c) => {
+  try {
+    const { email, meals } = await c.req.json();
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json({ error: "User not found" }, 404);
+
+    const dbMeals = meals.map((meal: any) => ({
+      id: meal.id,
+      user_id: userId,
+      name: meal.name,
+      type: meal.type, // 'breakfast', 'lunch', etc.
+      ingredients: meal.ingredients, // JSONB array
+      macros: { // JSONB o columnas separadas, usando JSONB por flexibilidad ahora
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat
+      },
+      image: meal.image,
+      is_custom: true,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+      .from('custom_meals')
+      .upsert(dbMeals, { onConflict: 'id' });
+
+    if (error) throw error;
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to save custom meals" }, 500);
+  }
+});
+
+// ==========================================
+// TRAINING PLAN ROUTES (Table: training_plans)
+// ==========================================
+
+app.get("/make-server-b0e879f0/training-plan/:email", async (c) => {
+  try {
+    const email = c.req.param("email");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json(null);
+
+    // Asumimos un plan activo por usuario
+    const { data, error } = await supabase
+      .from('training_plans')
+      .select('week_plan')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error) throw error;
+    return c.json(data?.week_plan || null);
+  } catch (error) {
+    return c.json(null, 200);
+  }
+});
+
+app.post("/make-server-b0e879f0/training-plan", async (c) => {
+  try {
+    const { email, weekPlan } = await c.req.json();
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json({ error: "User not found" }, 404);
+
+    const { error } = await supabase
+      .from('training_plans')
+      .upsert({
+        user_id: userId,
+        week_plan: weekPlan, // JSONB structure
+        is_active: true,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' }); // O manejo más complejo si quieres historial
+
+    if (error) throw error;
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to save training plan" }, 500);
+  }
+});
+
+// ==========================================
+// FAVORITE MEALS (Uses users table array)
+// ==========================================
+// Nota: Mantenemos esto en la tabla users como array por simplicidad según schema anterior,
+// pero podría moverse a tabla relacional 'user_favorite_meals' (user_id, meal_id).
+// Por ahora, el endpoint sigue usando el array en users para no romper contrato.
+
+app.get("/make-server-b0e879f0/favorite-meals/:email", async (c) => {
+  try {
+    const email = c.req.param("email");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data } = await supabase.from('users').select('favorite_meal_ids').eq('email', email).single();
+    return c.json(data?.favorite_meal_ids || []);
+  } catch (error) {
+    return c.json([], 200);
+  }
+});
+
+app.post("/make-server-b0e879f0/favorite-meals", async (c) => {
+  try {
+    const { email, favorites } = await c.req.json();
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ favorite_meal_ids: favorites })
+      .eq('email', email);
+
+    if (error) throw error;
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to save favorites" }, 500);
   }
 });
 
