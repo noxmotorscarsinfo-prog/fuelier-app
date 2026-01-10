@@ -237,31 +237,7 @@ app.get(`${basePath}/user/:email`, async (c) => {
 
 app.post(`${basePath}/user`, async (c) => {
   try {
-    console.log('[POST /user] Received request');
-    
-    // Validar JWT del usuario
-    const authHeader = c.req.header('Authorization');
-    if (!authHeader) {
-      console.error('[POST /user] No authorization header');
-      return c.json({ error: "No authorization header" }, 401);
-    }
-    
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    const authSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } }
-    });
-    
-    const { data: authData, error: authError } = await authSupabase.auth.getUser();
-    if (authError || !authData.user) {
-      console.error('[POST /user] Invalid token:', authError?.message);
-      return c.json({ error: "Invalid JWT", details: authError?.message }, 401);
-    }
-    
-    console.log('[POST /user] User authenticated:', authData.user.email);
-    
     const user = await c.req.json();
-    console.log('[POST /user] Saving user:', user.email);
-    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     const dbUser = {
@@ -306,18 +282,13 @@ app.post(`${basePath}/user`, async (c) => {
     const { error } = await supabase.from('users').upsert(dbUser, { onConflict: 'email' });
     
     if (error) {
-      console.error("[POST /user] DB Error saving user:", error);
-      console.error("[POST /user] Error code:", error.code);
-      console.error("[POST /user] Error message:", error.message);
-      console.error("[POST /user] Error details:", error.details);
-      return c.json({ error: error.message, code: error.code, details: error.details }, 500);
+      console.error("DB Error saving user:", error);
+      return c.json({ error: error.message }, 500);
     }
     
-    console.log('[POST /user] User saved successfully:', user.email);
     return c.json({ success: true, user });
   } catch (error) {
-    console.error("[POST /user] Exception:", error);
-    return c.json({ error: "Failed to save user", details: error.message }, 500);
+    return c.json({ error: "Failed to save user" }, 500);
   }
 });
 
