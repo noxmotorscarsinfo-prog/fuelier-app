@@ -214,9 +214,17 @@ app.get("/make-server-b0e879f0/auth/session", async (c) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
     
-    const result = await supabase.auth.getUser(token);
+    // ✅ CORREGIDO: Crear cliente con el token en los headers
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    });
+    
+    const result = await supabase.auth.getUser();
     const data = result.data;
     const error = result.error;
 
@@ -345,7 +353,7 @@ app.post("/make-server-b0e879f0/user", async (c) => {
       return c.json({ error: "Missing required fields" }, 400);
     }
     
-    // ✅ NUEVO: Verificar autenticación
+    // ✅ Verificar autenticación
     const authHeader = c.req.header('Authorization');
     console.log("SAVE USER - Auth header present:", !!authHeader);
     
@@ -357,11 +365,18 @@ app.post("/make-server-b0e879f0/user", async (c) => {
     const accessToken = authHeader.replace('Bearer ', '');
     console.log("SAVE USER - Token extracted, length:", accessToken.length);
     
-    // ✅ CORREGIDO: Usar ANON_KEY para validar tokens de usuarios
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
-    console.log("SAVE USER - Validating token with anon key...");
+    // ✅ CORREGIDO: Crear cliente con el token del usuario en los headers
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      }
+    });
+    console.log("SAVE USER - Validating token...");
     
-    const { data: authData, error: authCheckError } = await supabaseAuth.auth.getUser(accessToken);
+    // Ahora getUser() usará el token del header
+    const { data: authData, error: authCheckError } = await supabaseAuth.auth.getUser();
     
     if (authCheckError || !authData.user) {
       console.error("SAVE USER - Invalid token. Error:", authCheckError?.message);
