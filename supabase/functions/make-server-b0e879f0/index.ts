@@ -481,26 +481,66 @@ app.get(`${basePath}/training-plan/:email`, async (c) => {
     const email = c.req.param("email");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const userId = await getUserIdByEmail(supabase, email);
-    if (!userId) return c.json(null);
-    const { data } = await supabase.from('training_plans').select('week_plan').eq('user_id', userId).eq('is_active', true).maybeSingle();
-    return c.json(data?.week_plan || null);
-  } catch (error) { return c.json(null, 200); }
+    
+    if (!userId) {
+      console.log(`[GET /training-plan] User not found for ${email}`);
+      return c.json(null);
+    }
+    
+    const { data, error } = await supabase.from('training_plans').select('week_plan').eq('user_id', userId).eq('is_active', true).maybeSingle();
+    
+    if (error) {
+      console.error(`[GET /training-plan] DB Error: ${error.message}`);
+    }
+
+    if (!data) {
+      console.log(`[GET /training-plan] No plan found for user ${userId}`);
+      return c.json(null);
+    }
+
+    console.log(`[GET /training-plan] Returning plan with ${data.week_plan?.length || 0} days`);
+    return c.json(data.week_plan || null);
+  } catch (error) { 
+    console.error(`[GET /training-plan] Exception: ${error}`);
+    return c.json(null, 200); 
+  }
 });
 
 app.post(`${basePath}/training-plan`, async (c) => {
   try {
     const { email, weekPlan } = await c.req.json();
+    console.log(`[POST /training-plan] Recibido para ${email}. Plan size: ${weekPlan?.length}`);
+    
+    if (!weekPlan || !Array.isArray(weekPlan) || weekPlan.length === 0) {
+      console.warn(`[POST /training-plan] ⚠️ Recibido plan vacío o inválido`);
+      // Aún así permitimos guardar array vacío si es la intención, pero logueamos
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const userId = await getUserIdByEmail(supabase, email);
-    if (!userId) return c.json({ error: "User not found" }, 404);
-    await supabase.from('training_plans').upsert({
+    if (!userId) {
+      console.error(`[POST /training-plan] ❌ Usuario no encontrado para email: ${email}`);
+      return c.json({ error: "User not found" }, 404);
+    }
+
+    const { error } = await supabase.from('training_plans').upsert({
       user_id: userId,
       week_plan: weekPlan,
       is_active: true,
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' });
+
+    if (error) {
+      console.error(`[POST /training-plan] ❌ Error DB: ${error.message}`);
+      throw error;
+    }
+
+    console.log(`[POST /training-plan] ✅ Guardado exitoso`);
     return c.json({ success: true });
-  } catch (error) { return c.json({ error: "Failed" }, 500); }
+  } catch (error) { 
+    console.error(`[POST /training-plan] 💥 Excepción: ${error}`);
+    return c.json({ error: "Failed" }, 500); 
+  }
 });
 
 // ==========================================
@@ -740,4 +780,10 @@ app.delete(`${basePath}/training-progress/:email/:date`, async (c) => {
 app.get(`${basePath}/bug-reports`, (c) => c.json([]));
 app.post(`${basePath}/bug-reports`, (c) => c.json({ success: true }));
 
-Deno.serve(app.fetch);
+
+// Start the server only if executed directly
+if (import.meta.main) {
+  Deno.serve(app.fetch);
+}
+
+export default app;;

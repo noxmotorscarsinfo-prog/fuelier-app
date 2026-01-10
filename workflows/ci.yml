@@ -1,0 +1,24 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Run Backend Tests
+        # Ejecutamos los tests permitiendo acceso a variables de entorno y red (para imports)
+        run: deno test --allow-env --allow-net --allow-read supabase/functions/make-server-b0e879f0/tests.ts

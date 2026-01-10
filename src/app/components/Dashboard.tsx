@@ -485,7 +485,8 @@ export default function Dashboard({
       const updatedUser: User = {
         ...user,
         trainingOnboarded: true,
-        trainingDays: days
+        trainingDays: days,
+        weekPlan: plan // IMPORTANTE: Guardar el plan en el usuario también
       };
       onUpdateUser(updatedUser);
     }
@@ -500,6 +501,20 @@ export default function Dashboard({
     
     console.log('✅ Training onboarding completed:', { days, plan });
   };
+
+  // NUEVO: Sincronizar estado de onboarding con el usuario cargado
+  useEffect(() => {
+    if (user.trainingOnboarded && showTrainingOnboarding) {
+      console.log('🔄 Syncing onboarding state: User is already onboarded');
+      setShowTrainingOnboarding(false);
+      
+      // Si el usuario tiene plan cargado, sincronizarlo localmente
+      if (user.weekPlan && user.weekPlan.length > 0) {
+        setWeekPlan(user.weekPlan);
+        setTrainingDays(user.weekPlan.length);
+      }
+    }
+  }, [user.trainingOnboarded, user.weekPlan]);
 
   return (
     <div className="min-h-screen bg-neutral-50">

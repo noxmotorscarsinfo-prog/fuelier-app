@@ -669,6 +669,11 @@ export const getTrainingPlan = async (email: string): Promise<any[] | null> => {
 
 export const saveTrainingPlan = async (email: string, weekPlan: any[]): Promise<boolean> => {
   try {
+    if (!weekPlan || weekPlan.length === 0) {
+      console.warn('[API] ⚠️ Attempting to save empty training plan. Aborting to prevent data loss.');
+      return false;
+    }
+
     console.log(`[API] Saving training plan for ${email}, days: ${weekPlan.length}`);
     
     const response = await fetch(`${API_BASE_URL}/training-plan`, {
