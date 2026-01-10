@@ -21,7 +21,14 @@ interface EditFullTrainingPlanProps {
 }
 
 export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditFullTrainingPlanProps) {
-  const [localPlan, setLocalPlan] = useState<DayPlan[]>(JSON.parse(JSON.stringify(weekPlan)));
+  const [localPlan, setLocalPlan] = useState<DayPlan[]>(() => {
+    try {
+      return JSON.parse(JSON.stringify(weekPlan));
+    } catch (error) {
+      console.error('Error al clonar weekPlan:', error);
+      return weekPlan; // Fallback al original
+    }
+  });
   // Abrir el primer día por defecto
   const [expandedDays, setExpandedDays] = useState<{ [key: number]: boolean }>({ 0: true });
   const [isSaving, setIsSaving] = useState(false);

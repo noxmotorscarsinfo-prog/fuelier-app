@@ -1096,6 +1096,13 @@ export default function App() {
   const handleUpdateWeight = (weight: number, date: string) => {
     if (!user) return;
     
+    // Validar peso razonable (20kg - 300kg)
+    if (weight < 20 || weight > 300 || isNaN(weight)) {
+      console.error('❌ Peso inválido:', weight);
+      alert('Por favor ingresa un peso válido entre 20 y 300 kg');
+      return;
+    }
+    
     // 1. Actualizar el peso en el log de la fecha específica
     const logForDate = dailyLogs.find(log => log.date === date) || {
       date,

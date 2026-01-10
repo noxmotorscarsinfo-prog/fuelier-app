@@ -9,7 +9,11 @@ let accessToken: string | null = null;
 export const setAuthToken = (token: string | null) => {
   accessToken = token;
   if (token) {
-    localStorage.setItem('fuelier_auth_token', token);
+    try {
+      localStorage.setItem('fuelier_auth_token', token);
+    } catch (error) {
+      console.error('Error al guardar token en localStorage:', error);
+    }
   } else {
     localStorage.removeItem('fuelier_auth_token');
   }
@@ -17,7 +21,12 @@ export const setAuthToken = (token: string | null) => {
 
 export const getAuthToken = (): string | null => {
   if (accessToken) return accessToken;
-  accessToken = localStorage.getItem('fuelier_auth_token');
+  try {
+    accessToken = localStorage.getItem('fuelier_auth_token');
+  } catch (error) {
+    console.error('Error al leer token de localStorage:', error);
+    accessToken = null;
+  }
   return accessToken;
 };
 

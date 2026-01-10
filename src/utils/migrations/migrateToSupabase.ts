@@ -54,7 +54,12 @@ export async function migrateToSupabase(): Promise<{
  */
 async function migrateBaseIngredients(): Promise<{ count: number }> {
   // Obtener ingredientes de localStorage
-  const storedIngredients = localStorage.getItem('baseIngredients');
+  let storedIngredients: string | null = null;
+  try {
+    storedIngredients = localStorage.getItem('baseIngredients');
+  } catch (error) {
+    console.error('Error al leer baseIngredients de localStorage:', error);
+  }
   let ingredients = storedIngredients ? JSON.parse(storedIngredients) : baseIngredientsData;
 
   // Verificar si ya existen ingredientes en Supabase
@@ -162,7 +167,12 @@ async function migrateBaseMeals(): Promise<{ count: number }> {
  */
 async function migrateBugReports(): Promise<{ count: number }> {
   // Obtener bug reports de localStorage
-  const storedReports = localStorage.getItem('bugReports');
+  let storedReports: string | null = null;
+  try {
+    storedReports = localStorage.getItem('bugReports');
+  } catch (error) {
+    console.error('Error al leer bugReports de localStorage:', error);
+  }
   if (!storedReports) {
     console.log('⚠️ No hay bug reports en localStorage');
     return { count: 0 };
