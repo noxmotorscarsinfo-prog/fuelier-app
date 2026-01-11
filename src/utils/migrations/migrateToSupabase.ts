@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
-import { getMealsData } from '../../app/data/mealsGenerator';
-import { baseIngredients } from '../../app/data/ingredients';
+import { getGeneratedMeals } from '../../app/data/mealsGenerator';
+import { baseIngredientsData } from '../../app/data/ingredients';
 
 /**
  * Migración completa de localStorage a Supabase
@@ -54,13 +54,8 @@ export async function migrateToSupabase(): Promise<{
  */
 async function migrateBaseIngredients(): Promise<{ count: number }> {
   // Obtener ingredientes de localStorage
-  let storedIngredients: string | null = null;
-  try {
-    storedIngredients = localStorage.getItem('baseIngredients');
-  } catch (error) {
-    console.error('Error al leer baseIngredients de localStorage:', error);
-  }
-  let ingredients = storedIngredients ? JSON.parse(storedIngredients) : baseIngredients;
+  const storedIngredients = localStorage.getItem('baseIngredients');
+  let ingredients = storedIngredients ? JSON.parse(storedIngredients) : baseIngredientsData;
 
   // Verificar si ya existen ingredientes en Supabase
   const { data: existing, error: checkError } = await supabase
@@ -105,7 +100,7 @@ async function migrateBaseIngredients(): Promise<{ count: number }> {
  */
 async function migrateBaseMeals(): Promise<{ count: number }> {
   // Obtener los 200 platos generados
-  const generatedMeals = getMealsData();
+  const generatedMeals = getGeneratedMeals();
 
   // Verificar si ya existen platos en Supabase
   const { data: existing, error: checkError } = await supabase
@@ -167,12 +162,7 @@ async function migrateBaseMeals(): Promise<{ count: number }> {
  */
 async function migrateBugReports(): Promise<{ count: number }> {
   // Obtener bug reports de localStorage
-  let storedReports: string | null = null;
-  try {
-    storedReports = localStorage.getItem('bugReports');
-  } catch (error) {
-    console.error('Error al leer bugReports de localStorage:', error);
-  }
+  const storedReports = localStorage.getItem('bugReports');
   if (!storedReports) {
     console.log('⚠️ No hay bug reports en localStorage');
     return { count: 0 };

@@ -59,7 +59,6 @@ type Screen =
 interface TempOnboardingData {
   email: string;
   name: string;
-  userId?: string; // NUEVO: ID de Supabase Auth
   sex?: 'male' | 'female';
   age?: number;
   weight?: number;
@@ -205,13 +204,23 @@ export default function App() {
           
           if (isValidPlan) {
             console.log(`✅ Loaded training plan with ${trainingPlan.length} days from Supabase`);
-            // Actualizar el objeto user con los datos del plan
-            setUser(prevUser => prevUser ? {
-              ...prevUser,
-              trainingOnboarded: true,
-              trainingDays: trainingPlan.length,
-              weekPlan: trainingPlan // ✅ Guardar el plan en el usuario
-            } : prevUser);
+            // Actualizar el objeto user con los datos del plan SOLO SI NO LOS TIENE YA
+            setUser(prevUser => {
+              if (!prevUser) return prevUser;
+              // Evitar loop: solo actualizar si el weekPlan cambió realmente
+              const currentPlan = JSON.stringify(prevUser.weekPlan || []);
+              const newPlan = JSON.stringify(trainingPlan);
+              if (currentPlan === newPlan) {
+                console.log('ℹ️ Training plan already up to date, skipping update');
+                return prevUser;
+              }
+              return {
+                ...prevUser,
+                trainingOnboarded: true,
+                trainingDays: trainingPlan.length,
+                weekPlan: trainingPlan // ✅ Guardar el plan en el usuario
+              };
+            });
           } else {
             console.error('⚠️ Training plan has invalid structure, ignoring');
           }
@@ -739,14 +748,9 @@ export default function App() {
       
       // El token ya se guardó en api.signup, solo iniciar onboarding
       console.log(`[handleSignup] ✅ Auth token set, starting onboarding`);
-      console.log(`[handleSignup] ✅ User ID from signup:`, result.user?.id);
       
-      // Guardar credenciales temporalmente CON el userId de Supabase Auth
-      setTempData({ 
-        email, 
-        name,
-        userId: result.user?.id // CRÍTICO: Guardar el ID de Supabase Auth
-      });
+      // Guardar credenciales temporalmente
+      setTempData({ email, name });
       setCurrentScreen('onboarding-sex');
     } catch (error: any) {
       console.error('[handleSignup] Error during signup:', error);
@@ -822,7 +826,6 @@ export default function App() {
       const isAdmin = adminEmails.includes(tempData.email.toLowerCase());
       
       const newUser: User = {
-        id: tempData.userId, // CRÍTICO: ID de Supabase Auth
         email: tempData.email,
         name: tempData.name,
         sex: tempData.sex,
@@ -1102,13 +1105,6 @@ export default function App() {
 
   const handleUpdateWeight = (weight: number, date: string) => {
     if (!user) return;
-    
-    // Validar peso razonable (20kg - 300kg)
-    if (weight < 20 || weight > 300 || isNaN(weight)) {
-      console.error('❌ Peso inválido:', weight);
-      alert('Por favor ingresa un peso válido entre 20 y 300 kg');
-      return;
-    }
     
     // 1. Actualizar el peso en el log de la fecha específica
     const logForDate = dailyLogs.find(log => log.date === date) || {

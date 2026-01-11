@@ -95,36 +95,13 @@ export default function Dashboard({
   const activeMealTypes = getActiveMealTypes(user.mealsPerDay || 3, user.mealStructure);
   const totalActiveMeals = activeMealTypes.length;
 
-  // NUEVO: Sincronizar estado local con los cambios del usuario
-  useEffect(() => {
-    console.log('[Dashboard] 🔄 Sincronizando estado de entrenamiento con usuario:', {
-      userTrainingOnboarded: user.trainingOnboarded,
-      localTrainingOnboarded: trainingOnboarded,
-      userWeekPlan: user.weekPlan?.length
-    });
-    
-    if (user.trainingOnboarded !== trainingOnboarded) {
-      setTrainingOnboarded(user.trainingOnboarded || false);
-    }
-    
-    if (user.trainingDays && user.trainingDays !== trainingDays) {
-      setTrainingDays(user.trainingDays);
-    }
-  }, [user.trainingOnboarded, user.trainingDays]);
-
   // NUEVO: Cargar plan de entrenamiento desde Supabase cuando el componente monta
   useEffect(() => {
     const loadTrainingPlan = async () => {
-      if (!trainingOnboarded || !user.email) {
-        console.log('[Dashboard] ⏭️ Saltando carga de plan:', { trainingOnboarded, email: user.email });
-        return;
-      }
+      if (!trainingOnboarded || !user.email) return;
       
       // Evitar recargas innecesarias si ya tenemos el plan
-      if (weekPlan.length > 0) {
-        console.log('[Dashboard] ⏭️ Plan ya cargado localmente, saltando recarga');
-        return;
-      }
+      if (weekPlan.length > 0) return;
       
       setIsLoadingTrainingPlan(true);
       try {

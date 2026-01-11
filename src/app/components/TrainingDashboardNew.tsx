@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Dumbbell, 
   Flame,
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import * as api from '../utils/api';
 import EditFullTrainingPlan from './EditFullTrainingPlan';
+import { muscleCategories } from '../data/exerciseDatabase';
 
 interface Exercise {
   id: string;
@@ -85,12 +86,16 @@ export function TrainingDashboardNew({
 
   // Sincronizar con weekPlan cuando cambia (prop)
   useEffect(() => {
-    // Solo actualizar si el prop tiene datos válidos
+    // Solo actualizar si el prop tiene datos válidos Y es diferente del actual
     if (weekPlan && weekPlan.length > 0) {
-      console.log('[TrainingDashboard] ✅ Recibido weekPlan del Dashboard:', weekPlan.length, 'días');
-      setLocalWeekPlan(weekPlan);
+      // Comparar si realmente cambió (evitar loops infinitos)
+      const isDifferent = JSON.stringify(localWeekPlan) !== JSON.stringify(weekPlan);
+      if (isDifferent) {
+        console.log('[TrainingDashboard] ✅ Recibido weekPlan del Dashboard:', weekPlan.length, 'días');
+        setLocalWeekPlan(weekPlan);
+      }
     }
-  }, [weekPlan]);
+  }, [weekPlan, localWeekPlan]);
 
   // OPTIMIZADO: Solo cargar desde Supabase si el prop weekPlan está vacío
   useEffect(() => {
@@ -144,6 +149,21 @@ export function TrainingDashboardNew({
     const year = monday.getFullYear();
     const month = String(monday.getMonth() + 1).padStart(2, '0');
     const day = String(monday.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Calcular final de la semana actual (Domingo)
+  const getWeekEnd = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diff = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() + diff);
+    sunday.setHours(23, 59, 59, 999);
+    // Usar formato local en lugar de UTC
+    const year = sunday.getFullYear();
+    const month = String(sunday.getMonth() + 1).padStart(2, '0');
+    const day = String(sunday.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
@@ -215,7 +235,11 @@ export function TrainingDashboardNew({
       try {
         const workouts = await api.getCompletedWorkouts(user.email);
         const weekStart = getWeekStart();
-        const thisWeekWorkouts = workouts.filter((w: CompletedWorkout) => w.date >= weekStart);
+        const weekEnd = getWeekEnd();
+        const thisWeekWorkouts = workouts.filter((w: CompletedWorkout) => 
+          w.date >= weekStart && w.date <= weekEnd
+        );
+        console.log('[TrainingDashboard] 📅 Semana:', weekStart, '-', weekEnd, '| Completados esta semana:', thisWeekWorkouts.length);
         setCompletedWorkouts(thisWeekWorkouts);
       } catch (error) {
         console.error('Error loading completed workouts:', error);
@@ -264,23 +288,66 @@ export function TrainingDashboardNew({
 
   const currentStreak = calculateStreak();
 
+  // Función para obtener los grupos musculares de un día
+  const getMuscleGroups = (exercises: Exercise[]): string => {
+    if (exercises.length === 0) return '';
+    
+    // Contar ejercicios por categoría
+    const categoryCount: { [key: string]: number } = {};
+    exercises.forEach(ex => {
+      const cat = ex.category || 'otros';
+      categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+    });
+    
+    // Ordenar por cantidad de ejercicios (más repetidos primero)
+    const sortedCategories = Object.entries(categoryCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat]) => cat);
+    
+    // Obtener nombres legibles de las categorías
+    const categoryNames = sortedCategories
+      .slice(0, 3) // Máximo 3 grupos musculares
+      .map(catId => {
+        const found = muscleCategories.find(mc => mc.id === catId);
+        return found ? found.name : catId;
+      });
+    
+    return categoryNames.join(' + ');
+  };
+
   // Obtener el siguiente día del plan que toca entrenar
-  const getNextDayPlanIndex = () => {
+  // Usar useMemo para recalcular cuando cambien completedWorkouts o localWeekPlan
+  const nextDayPlanIndex = useMemo(() => {
     // Obtener qué días del plan ya se completaron esta semana
     const completedDayPlanIndices = completedWorkouts.map(w => w.dayPlanIndex);
+    
+    console.log('[TrainingDashboard] 🔍 Calculando siguiente día...');
+    console.log('[TrainingDashboard] 📊 completedWorkouts:', completedWorkouts);
+    console.log('[TrainingDashboard] 📋 completedDayPlanIndices:', JSON.stringify(completedDayPlanIndices));
+    console.log('[TrainingDashboard] 📅 localWeekPlan length:', localWeekPlan.length);
     
     // Buscar el primer día del plan que no se ha completado
     for (let i = 0; i < localWeekPlan.length; i++) {
       if (!completedDayPlanIndices.includes(i)) {
+        console.log(`[TrainingDashboard] ✅ Siguiente día encontrado: ${i} (Día ${i + 1})`);
         return i;
       }
     }
     
     // Si todos están completados, volver al primero
+    console.log('[TrainingDashboard] 🔄 Todos completados, volviendo al Día 1');
     return 0;
-  };
+  }, [completedWorkouts, localWeekPlan]);
 
-  const nextDayPlanIndex = getNextDayPlanIndex();
+  // Log para debugging - solo cuando cambia el siguiente día a entrenar
+  useEffect(() => {
+    if (completedWorkouts.length > 0) {
+      const completedDays = completedWorkouts.map(w => `Día ${w.dayPlanIndex + 1}`).join(', ');
+      console.log(`[TrainingDashboard] ✅ Días completados: ${completedDays} | ➡️ Siguiente: Día ${nextDayPlanIndex + 1}`);
+    } else {
+      console.log(`[TrainingDashboard] ➡️ Ningún día completado | Siguiente: Día ${nextDayPlanIndex + 1}`);
+    }
+  }, [nextDayPlanIndex, completedWorkouts]);
 
   // Obtener día de la semana actual (0 = Domingo, 1 = Lunes, etc.)
   const getCurrentDayOfWeek = () => {
@@ -856,7 +923,7 @@ export function TrainingDashboardNew({
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className="text-sm sm:text-base font-bold text-neutral-800 truncate">
-                            {day.dayName}
+                            {day.dayName}{getMuscleGroups(day.exercises) && `: ${getMuscleGroups(day.exercises)}`}
                           </h3>
                           <p className="text-xs text-neutral-500">
                             {day.exercises.length} ejercicio{day.exercises.length !== 1 ? 's' : ''}
@@ -1104,7 +1171,7 @@ export function TrainingDashboardNew({
                         </div>
                         <div className="min-w-0 flex-1">
                           <h3 className="text-base sm:text-lg font-bold text-neutral-800 mb-0.5 sm:mb-1 truncate">
-                            {day.dayName}
+                            {day.dayName}{getMuscleGroups(day.exercises) && `: ${getMuscleGroups(day.exercises)}`}
                           </h3>
                           <p className="text-xs sm:text-sm text-neutral-500">
                             {day.exercises.length} ejercicios
@@ -1138,9 +1205,9 @@ export function TrainingDashboardNew({
               ¡Entrenamiento Completado! 💪
             </h2>
             <p className="text-neutral-600 text-base sm:text-lg mb-2">
-              Has completado <span className="font-bold text-emerald-600">{workoutsThisWeek + 1} de {trainingDays}</span> entrenamientos esta semana
+              Has completado <span className="font-bold text-emerald-600">{workoutsThisWeek} de {trainingDays}</span> entrenamientos esta semana
             </p>
-            {workoutsThisWeek + 1 === trainingDays && (
+            {workoutsThisWeek === trainingDays && (
               <p className="text-emerald-600 font-bold text-lg sm:text-xl mt-4">
                 🎉 ¡Semana completa!
               </p>

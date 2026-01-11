@@ -138,11 +138,10 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               <div className="space-y-6">
                 {/* Name */}
                 <div>
-                  <label htmlFor="onboarding-name" className="block text-sm font-semibold text-neutral-700 mb-2">
+                  <label className="block text-sm font-semibold text-neutral-700 mb-2">
                     ¿Cómo te llamas?
                   </label>
                   <input
-                    id="onboarding-name"
                     type="text"
                     value={userData.name || ''}
                     onChange={(e) => updateUserData('name', e.target.value)}
@@ -182,12 +181,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
                 {/* Age */}
                 <div>
-                  <label htmlFor="onboarding-age" className="block text-sm font-semibold text-neutral-700 mb-2">
+                  <label className="block text-sm font-semibold text-neutral-700 mb-2">
                     Edad
                   </label>
                   <div className="flex items-center gap-4">
                     <input
-                      id="onboarding-age"
                       type="range"
                       min="15"
                       max="80"
@@ -238,12 +236,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               <div className="space-y-6">
                 {/* Weight */}
                 <div>
-                  <label htmlFor="onboarding-weight" className="block text-sm font-semibold text-neutral-700 mb-2">
+                  <label className="block text-sm font-semibold text-neutral-700 mb-2">
                     Peso actual (kg)
                   </label>
                   <div className="flex items-center gap-4">
                     <input
-                      id="onboarding-weight"
                       type="range"
                       min="40"
                       max="150"
@@ -260,12 +257,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
                 {/* Height */}
                 <div>
-                  <label htmlFor="onboarding-height" className="block text-sm font-semibold text-neutral-700 mb-2">
+                  <label className="block text-sm font-semibold text-neutral-700 mb-2">
                     Altura (cm)
                   </label>
                   <div className="flex items-center gap-4">
                     <input
-                      id="onboarding-height"
                       type="range"
                       min="140"
                       max="220"
@@ -284,9 +280,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   <div className="flex items-start gap-2 mb-3">
                     <Sparkles className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <label htmlFor="onboarding-body-fat" className="text-sm font-semibold text-amber-800">
+                      <p className="text-sm font-semibold text-amber-800">
                         % de Grasa Corporal (Opcional)
-                      </label>
+                      </p>
                       <p className="text-xs text-amber-700">
                         Mejora la precisión de los cálculos. Si no lo sabes, déjalo vacío.
                       </p>
@@ -294,7 +290,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                   </div>
                   <div className="flex items-center gap-4">
                     <input
-                      id="onboarding-body-fat"
                       type="range"
                       min="5"
                       max="50"

@@ -101,19 +101,6 @@ export function scaleToExactTarget(
     console.error(`❌ ERROR CRÍTICO: "${meal.name}" NO tiene ingredientReferences.`);
     console.error(`   Este plato NO debería llegar aquí sin ingredientes. La migración automática falló.`);
     console.error(`   Por favor, edita este plato en el Admin Panel y añade ingredientes de la base de datos.`);
-    console.error(`   Usando escalado proporcional simple como fallback.`);
-    
-    // FALLBACK: Escalado proporcional simple sin ingredientes
-    const scaleFactor = baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1;
-    return {
-      ...meal,
-      calories: Math.round(baseMacros.calories * scaleFactor),
-      protein: Math.round(baseMacros.protein * scaleFactor),
-      carbs: Math.round(baseMacros.carbs * scaleFactor),
-      fat: Math.round(baseMacros.fat * scaleFactor),
-      _scaled: true,
-      _targetUsed: targetMacros
-    };
   } else if ((meal as any)._migrated) {
     console.log(`ℹ️ INFO: "${meal.name}" fue migrado automáticamente con ingredientes inferidos.`);
     console.log(`   Para mejor precisión, considera editarlo en el Admin Panel y añadir ingredientes reales.`);

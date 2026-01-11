@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, Edit2, Check, Plus, Trash2, Save, ChevronDown, ChevronUp } from 'lucide-react';
+import { muscleCategories } from '../data/exerciseDatabase';
 
 interface Exercise {
   id: string;
@@ -7,6 +8,7 @@ interface Exercise {
   sets: number;
   reps: string;
   restTime: number;
+  category?: string;
 }
 
 interface DayPlan {
@@ -21,17 +23,37 @@ interface EditFullTrainingPlanProps {
 }
 
 export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditFullTrainingPlanProps) {
-  const [localPlan, setLocalPlan] = useState<DayPlan[]>(() => {
-    try {
-      return JSON.parse(JSON.stringify(weekPlan));
-    } catch (error) {
-      console.error('Error al clonar weekPlan:', error);
-      return weekPlan; // Fallback al original
-    }
-  });
+  const [localPlan, setLocalPlan] = useState<DayPlan[]>(JSON.parse(JSON.stringify(weekPlan)));
   // Abrir el primer día por defecto
   const [expandedDays, setExpandedDays] = useState<{ [key: number]: boolean }>({ 0: true });
   const [isSaving, setIsSaving] = useState(false);
+
+  // Función para obtener los grupos musculares de un día
+  const getMuscleGroups = (exercises: Exercise[]): string => {
+    if (exercises.length === 0) return '';
+    
+    // Contar ejercicios por categoría
+    const categoryCount: { [key: string]: number } = {};
+    exercises.forEach(ex => {
+      const cat = ex.category || 'otros';
+      categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+    });
+    
+    // Ordenar por cantidad de ejercicios (más repetidos primero)
+    const sortedCategories = Object.entries(categoryCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat]) => cat);
+    
+    // Obtener nombres legibles de las categorías
+    const categoryNames = sortedCategories
+      .slice(0, 3) // Máximo 3 grupos musculares
+      .map(catId => {
+        const found = muscleCategories.find(mc => mc.id === catId);
+        return found ? found.name : catId;
+      });
+    
+    return categoryNames.join(' + ');
+  };
 
   const toggleDayExpanded = (index: number) => {
     setExpandedDays(prev => ({
@@ -146,7 +168,8 @@ export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditF
                         placeholder="Nombre del día"
                       />
                       <p className="text-xs sm:text-sm text-neutral-500 px-2 mt-1">
-                        {day.exercises.length} ejercicio{day.exercises.length !== 1 ? 's' : ''}
+                        {day.exercises.length} ejercicio{day.exercises.length !== 1 ? 's' : ''} 
+                        {getMuscleGroups(day.exercises) && ` · ${getMuscleGroups(day.exercises)}`}
                       </p>
                     </div>
 

@@ -642,13 +642,18 @@ app.get(`${basePath}/training-completed/:email`, async (c) => {
 
     if (error) throw error;
     
+    console.log('🔍 [GET /training-completed] Raw data from Supabase:', JSON.stringify(data, null, 2));
+    
     // Mapear snake_case a camelCase para el frontend
     const formattedData = data.map(item => ({
       date: item.date,
-      dayIndex: item.day_index,
+      dayPlanIndex: item.day_plan_index,
+      dayPlanName: item.day_plan_name,
       exerciseReps: item.exercise_reps,
       exerciseWeights: item.exercise_weights
     }));
+    
+    console.log('🔍 [GET /training-completed] Formatted data:', JSON.stringify(formattedData, null, 2));
 
     return c.json(formattedData || []);
   } catch (error) {
@@ -672,7 +677,8 @@ app.post(`${basePath}/training-completed`, async (c) => {
     const dbWorkouts = completedWorkouts.map((workout: any) => ({
       user_id: userId,
       date: workout.date,
-      day_index: workout.dayIndex,
+      day_plan_index: workout.dayPlanIndex,
+      day_plan_name: workout.dayPlanName,
       exercise_reps: workout.exerciseReps,
       exercise_weights: workout.exerciseWeights,
       updated_at: new Date().toISOString()
@@ -790,4 +796,4 @@ if (import.meta.main) {
   Deno.serve(app.fetch);
 }
 
-export default app;;
+export default app;
