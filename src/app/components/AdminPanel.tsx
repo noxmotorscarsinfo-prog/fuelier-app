@@ -600,14 +600,10 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
   const handleDeleteMeal = async (mealId: string) => {
     if (confirm('¿Estás seguro de eliminar este plato? Esto lo quitará para TODOS los usuarios.')) {
       try {
-        const updatedMeals = [
-          ...globalMeals.breakfast,
-          ...globalMeals.lunch,
-          ...globalMeals.snack,
-          ...globalMeals.dinner
-        ].filter(m => m.id !== mealId);
-        
-        await api.saveGlobalMeals(updatedMeals);
+        const success = await api.deleteGlobalMeal(mealId);
+        if (!success) {
+          throw new Error('Delete failed');
+        }
         await loadGlobalData();
       } catch (error) {
         console.error('Error al eliminar plato:', error);

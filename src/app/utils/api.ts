@@ -23,8 +23,10 @@ export const getAuthToken = (): string | null => {
 
 const getHeaders = () => {
   const token = getAuthToken();
-  if (!token) {
-    console.warn("[API] getHeaders: No token found, using Anon Key");
+  // Token es opcional para algunos endpoints públicos (global-meals, global-ingredients)
+  // Solo mostrar warning en nivel debug
+  if (!token && process.env.NODE_ENV === 'development') {
+    console.debug("[API] Using Anon Key (no user token)");
   }
   return {
     'Content-Type': 'application/json',
@@ -487,6 +489,24 @@ export const saveGlobalMeals = async (meals: Meal[]): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Error saving global meals:', error);
+    return false;
+  }
+};
+
+export const deleteGlobalMeal = async (mealId: string): Promise<boolean> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/global-meals/${mealId}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete global meal');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting global meal:', error);
     return false;
   }
 };

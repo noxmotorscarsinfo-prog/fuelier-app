@@ -754,6 +754,29 @@ app.post(`${basePath}/global-meals`, async (c) => {
   }
 });
 
+// DELETE /global-meals/:id - Eliminar un plato específico
+app.delete(`${basePath}/global-meals/:id`, async (c) => {
+  try {
+    const mealId = c.req.param('id');
+    if (!mealId) return c.json({ error: 'Meal ID required' }, 400);
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { error } = await supabase
+      .from('base_meals')
+      .delete()
+      .eq('id', mealId);
+    
+    if (error) throw error;
+
+    console.log(`[DELETE /global-meals/:id] Deleted meal: ${mealId}`);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[DELETE /global-meals/:id] Error:', error);
+    return c.json({ error: 'Failed to delete meal' }, 500);
+  }
+});
+
 app.get(`${basePath}/global-ingredients`, async (c) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
