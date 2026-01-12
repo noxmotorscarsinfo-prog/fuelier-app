@@ -46,13 +46,13 @@ export const calculateTDEE = (
     activityFactor = 1.2; // Sedentario: Poco o ningún ejercicio
   } else if (trainingFrequency >= 1 && trainingFrequency <= 2) {
     activityFactor = 1.375; // Ligero: 1-2 entrenos/semana
-  } else if (trainingFrequency >= 3 && trainingFrequency <= 5) {
-    activityFactor = 1.55; // Moderado: 3-5 entrenos/semana (EL MÁS COMÚN)
-  } else if (trainingFrequency === 6 || trainingFrequency === 7) {
-    activityFactor = 1.725; // Muy activo: 6-7 entrenos/semana
-  } else if (trainingFrequency > 7) {
-    // Para casos extremos (ej: doble sesión diaria)
-    activityFactor = 1.9; // Extra activo: Entrenamiento intenso diario + alta actividad
+  } else if (trainingFrequency >= 3 && trainingFrequency <= 4) {
+    activityFactor = 1.55; // Moderado: 3-4 entrenos/semana (EL MÁS COMÚN)
+  } else if (trainingFrequency === 5 || trainingFrequency === 6) {
+    activityFactor = 1.725; // Muy activo: 5-6 entrenos/semana
+  } else if (trainingFrequency >= 7) {
+    // 7 días = Extra activo (entrenamiento diario intenso)
+    activityFactor = 1.9; // Extra activo: Entrenamiento intenso diario
   }
   
   return bmr * activityFactor;

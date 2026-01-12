@@ -28,16 +28,16 @@ export default function QuestionActivity({ onSelect }: QuestionActivityProps) {
       emoji: '🏃'
     },
     { 
-      frequency: 6, 
+      frequency: 5, 
       label: 'Muy activo', 
-      description: '6-7 entrenamientos/semana',
+      description: '5-6 entrenamientos/semana',
       detail: 'Factor: 1.725',
       emoji: '💪'
     },
     { 
-      frequency: 8, 
+      frequency: 7, 
       label: 'Extra activo', 
-      description: 'Entrenamiento intenso diario + alta actividad',
+      description: 'Entrenamiento diario intenso',
       detail: 'Factor: 1.9',
       emoji: '🏋️'
     }
