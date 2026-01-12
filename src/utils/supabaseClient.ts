@@ -1,6 +1,33 @@
-// Re-export del cliente singleton de Supabase para evitar múltiples instancias
-// Este archivo redirige a la instancia única en /src/app/utils/supabase.ts
-export { supabase } from '../app/utils/supabase';
+// Cliente singleton de Supabase - instancia única para toda la aplicación
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+// ============================================
+// CONFIGURACIÓN DE SUPABASE
+// ============================================
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+// Singleton pattern para evitar múltiples instancias
+let supabaseInstance: SupabaseClient | null = null;
+
+export const supabase: SupabaseClient = (() => {
+  if (!supabaseInstance) {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn('Supabase URL or Anon Key not configured. Using mock client.');
+      // Retornar un cliente vacío para evitar errores en desarrollo
+      supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder-key');
+    } else {
+      supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+        }
+      });
+    }
+  }
+  return supabaseInstance;
+})();
 
 // ============================================
 // TIPOS DE BASE DE DATOS
