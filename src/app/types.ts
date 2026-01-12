@@ -4,8 +4,11 @@ export type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner';
 export type MealPool = 'light' | 'main';
 
 // Función helper para obtener el pool de un tipo de comida
-export function getMealPool(mealType: MealType): MealPool {
-  if (mealType === 'breakfast' || mealType === 'snack') {
+// CORREGIDO: Ahora acepta tanto un MealType como un array de MealTypes
+export function getMealPool(mealType: MealType | MealType[]): MealPool {
+  // Si es un array, usar el primer tipo para determinar el pool
+  const type = Array.isArray(mealType) ? mealType[0] : mealType;
+  if (type === 'breakfast' || type === 'snack') {
     return 'light';
   }
   return 'main'; // lunch o dinner

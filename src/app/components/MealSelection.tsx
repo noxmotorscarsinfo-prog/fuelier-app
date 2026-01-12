@@ -92,7 +92,13 @@ export default function MealSelection({
 
   // Función para obtener todas las comidas disponibles
   const getMealsData = (): Meal[] => {
-    const filteredCustomMeals = customMeals.filter(meal => meal.type === mealType);
+    // CORREGIDO: Manejar meal.type como array o string
+    const filteredCustomMeals = customMeals.filter(meal => {
+      if (Array.isArray(meal.type)) {
+        return meal.type.includes(mealType);
+      }
+      return meal.type === mealType;
+    });
     
     // ⭐ LÓGICA MEJORADA: Usar globalMeals SI existen, sino usar ALL_MEALS_FROM_DB
     // Esto evita duplicados cuando los platos de BD ya están en Supabase
