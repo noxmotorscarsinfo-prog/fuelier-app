@@ -1411,9 +1411,10 @@ export default function App() {
             }}
           />
         )}
-        {currentScreen === 'create-meal' && (
+        {currentScreen === 'create-meal' && user && (
           <CreateMeal
             mealType={selectedMealType || undefined}
+            userEmail={user.email}
             onBack={handleBack}
             onSave={(createdMeal: Meal) => {
               try {

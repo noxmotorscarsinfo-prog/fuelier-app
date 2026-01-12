@@ -3,7 +3,6 @@ import { ArrowLeft, Plus, X, Save, Info, ChefHat, Sparkles, Search, Check } from
 import { Meal, MealType } from '../types';
 import { INGREDIENTS_DATABASE, calculateMacrosFromIngredients, Ingredient as DBIngredient } from '../../data/ingredientsDatabase';
 import * as api from '../utils/api';
-import { getBaseIngredients, getCustomIngredients, createCustomIngredient } from '../../utils/db/ingredients';
 
 interface CreateMealProps {
   mealType?: MealType;
@@ -56,23 +55,23 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
   useEffect(() => {
     const loadAllIngredients = async () => {
       try {
-        // 1. Cargar ingredientes globales (creados por admin en Supabase)
-        const globalIngredients = await getBaseIngredients();
-        console.log(`✅ Loaded ${globalIngredients?.length || 0} global ingredients from Supabase`);
+        // 1. Cargar ingredientes globales usando API (evita RLS)
+        const globalIngredients = await api.getGlobalIngredients();
+        console.log(`✅ Loaded ${globalIngredients?.length || 0} global ingredients from API`);
         
-        // 2. Cargar ingredientes personalizados del usuario
-        const userIngredients = await getCustomIngredients(userEmail);
-        console.log(`✅ Loaded ${userIngredients?.length || 0} custom ingredients from Supabase`);
+        // 2. Cargar ingredientes personalizados del usuario usando API
+        const userIngredients = await api.getCustomIngredients(userEmail);
+        console.log(`✅ Loaded ${userIngredients?.length || 0} custom ingredients from API`);
         
         // Convertir ingredientes de Supabase al formato DBIngredient
         const formattedGlobal = (globalIngredients || []).map((ing: any) => ({
           id: ing.id,
           name: ing.name,
           category: ing.category || 'otros',
-          caloriesPer100g: ing.calories_per_100g,
-          proteinPer100g: ing.protein_per_100g,
-          carbsPer100g: ing.carbs_per_100g,
-          fatPer100g: ing.fat_per_100g,
+          caloriesPer100g: ing.caloriesPer100g || ing.calories_per_100g || ing.calories || 0,
+          proteinPer100g: ing.proteinPer100g || ing.protein_per_100g || ing.protein || 0,
+          carbsPer100g: ing.carbsPer100g || ing.carbs_per_100g || ing.carbs || 0,
+          fatPer100g: ing.fatPer100g || ing.fat_per_100g || ing.fat || 0,
           isCustom: false
         }));
         
@@ -320,28 +319,18 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
         isCustom: true
       };
 
-      // ✅ 3. Guardar en Supabase
+      // ✅ 3. Guardar en Supabase usando la API (evita RLS)
       const success = await api.saveCustomIngredients(userEmail, [...existingIngredients, newCustomIngredient]);
       
       if (!success) {
         throw new Error('Failed to save ingredient');
       }
 
-      // ✅ 4. También guardar en la tabla de Supabase usando la función existente
-      await createCustomIngredient(userEmail, {
-        name: newIngredientData.name.trim(),
-        calories_per_100g: parseFloat(newIngredientData.calories),
-        protein_per_100g: parseFloat(newIngredientData.protein),
-        carbs_per_100g: parseFloat(newIngredientData.carbs),
-        fat_per_100g: parseFloat(newIngredientData.fat),
-        category: 'personalizado'
-      });
-
-      // ✅ 5. Añadir al estado local inmediatamente para que aparezca en sugerencias
+      // ✅ 4. Añadir al estado local inmediatamente para que aparezca en sugerencias
       setCustomIngredients([...customIngredients, newCustomIngredient]);
       console.log('✅ Ingrediente personalizado guardado en Supabase');
 
-      // ✅ 6. Auto-seleccionar el ingrediente recién creado si se creó desde el input
+      // ✅ 5. Auto-seleccionar el ingrediente recién creado si se creó desde el input
       if (currentIngredientId) {
         setIngredients(ingredients.map(ing => 
           ing.id === currentIngredientId ? { ...ing, name: newCustomIngredient.name, ingredientId: newCustomIngredient.id, showSuggestions: false } : ing
