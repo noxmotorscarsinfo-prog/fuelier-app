@@ -749,8 +749,10 @@ export default function App() {
       // El token ya se guardó en api.signup, solo iniciar onboarding
       console.log(`[handleSignup] ✅ Auth token set, starting onboarding`);
       
-      // Guardar credenciales temporalmente
-      setTempData({ email, name });
+      // Guardar credenciales temporalmente (INCLUYENDO EL ID del usuario de Supabase Auth)
+      const userId = result.user?.id;
+      console.log(`[handleSignup] 👤 User ID from signup: ${userId}`);
+      setTempData({ email, name, id: userId });
       setCurrentScreen('onboarding-sex');
     } catch (error: any) {
       console.error('[handleSignup] Error during signup:', error);
@@ -826,6 +828,7 @@ export default function App() {
       const isAdmin = adminEmails.includes(tempData.email.toLowerCase());
       
       const newUser: User = {
+        id: (tempData as any).id, // CRÍTICO: ID del usuario de Supabase Auth
         email: tempData.email,
         name: tempData.name,
         sex: tempData.sex,

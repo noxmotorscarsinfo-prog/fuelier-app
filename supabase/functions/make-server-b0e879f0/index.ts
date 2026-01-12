@@ -39,6 +39,22 @@ const healthHandler = (c: any) => {
 app.get("/health", healthHandler);
 app.get("/make-server-b0e879f0/health", healthHandler);
 
+// Helper para extraer user ID del JWT token de Supabase Auth
+async function getUserIdFromToken(c: any, supabase: any): Promise<string | null> {
+  try {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+    
+    const token = authHeader.replace('Bearer ', '');
+    const { data, error } = await supabase.auth.getUser(token);
+    
+    if (error || !data?.user) return null;
+    return data.user.id;
+  } catch {
+    return null;
+  }
+}
+
 // Helper para obtener ID de usuario por email
 async function getUserIdByEmail(supabase: any, email: string): Promise<string | null> {
   const { data, error } = await supabase
@@ -292,8 +308,27 @@ app.post(`${basePath}/user`, async (c) => {
     const user = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
+    // CRÍTICO: Obtener ID del usuario de múltiples fuentes (en orden de prioridad)
+    // 1. ID enviado directamente en el body
+    // 2. ID extraído del JWT token de autenticación
+    // 3. ID buscado en la tabla users por email (para usuarios existentes)
+    let userId = user.id;
+    if (!userId) {
+      userId = await getUserIdFromToken(c, supabase);
+      console.log(`[POST /user] ID from JWT token: ${userId}`);
+    }
+    if (!userId) {
+      userId = await getUserIdByEmail(supabase, user.email);
+      console.log(`[POST /user] ID from DB lookup: ${userId}`);
+    }
+    
+    if (!userId) {
+      console.error(`[POST /user] ❌ No user ID found for email: ${user.email}`);
+      return c.json({ error: "User ID not found. Please re-authenticate." }, 400);
+    }
+    
     const dbUser = {
-      id: user.id || (await getUserIdByEmail(supabase, user.email)),
+      id: userId,
       email: user.email,
       name: user.name,
       sex: user.sex,
