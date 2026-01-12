@@ -227,6 +227,16 @@ export default function Dashboard({
       });
     }
 
+    // ✅ NUEVO: Añadir comidas extra
+    if (currentLog.extraFoods && currentLog.extraFoods.length > 0) {
+      currentLog.extraFoods.forEach(extra => {
+        baseTotals.calories += extra.calories;
+        baseTotals.protein += extra.protein;
+        baseTotals.carbs += extra.carbs;
+        baseTotals.fat += extra.fat;
+      });
+    }
+
     return baseTotals;
   };
 

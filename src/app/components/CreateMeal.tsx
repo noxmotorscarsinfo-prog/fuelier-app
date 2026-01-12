@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, X, Save, Info, ChefHat, Sparkles, Search, Check } from
 import { Meal, MealType } from '../types';
 import { INGREDIENTS_DATABASE, calculateMacrosFromIngredients, Ingredient as DBIngredient } from '../../data/ingredientsDatabase';
 import * as api from '../utils/api';
+import { getBaseIngredients, getCustomIngredients, createCustomIngredient } from '../../utils/db/ingredients';
 
 interface CreateMealProps {
   mealType?: MealType;

@@ -908,3 +908,26 @@ export const saveCustomIngredients = async (email: string, ingredients: Ingredie
     return false;
   }
 };
+
+// ===== BASE INGREDIENTS API (for UI ingredient search) =====
+export const getBaseIngredientsFromAPI = async (): Promise<Ingredient[]> => {
+  try {
+    console.log('[API] Loading base ingredients');
+    
+    const response = await fetch(`${API_BASE_URL}/global-ingredients`, {
+      headers: getHeaders()
+    });
+    
+    if (!response.ok) {
+      console.error('[API] Failed to load base ingredients');
+      return [];
+    }
+    
+    const data = await response.json();
+    console.log(`[API] Loaded ${data.length} base ingredients from Supabase`);
+    return data;
+  } catch (error) {
+    console.error('[API] Error loading base ingredients:', error);
+    return [];
+  }
+};

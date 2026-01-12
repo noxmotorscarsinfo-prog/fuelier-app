@@ -629,8 +629,9 @@ export function calculateMacrosFromIngredients(ingredients: MealIngredientRefere
   
   return {
     calories: Math.round(totalCalories),
-    protein: Math.round(totalProtein * 10) / 10,
-    carbs: Math.round(totalCarbs * 10) / 10,
-    fat: Math.round(totalFat * 10) / 10
+    // Siempre devolver enteros (sin decimales)
+    protein: Math.round(totalProtein),
+    carbs: Math.round(totalCarbs),
+    fat: Math.round(totalFat)
   };
 }

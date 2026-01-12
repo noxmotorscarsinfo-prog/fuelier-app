@@ -1477,9 +1477,10 @@ export default function App() {
 
       {showExtraFood && (
         <ExtraFood
+          user={user!}
           currentLog={getCurrentLog()}
           onClose={() => setShowExtraFood(false)}
-          onSave={(food) => {
+          onAdd={(food) => {
             const currentLogData = getCurrentLog();
             const updatedLog: DailyLog = {
               ...currentLogData,
@@ -1488,17 +1489,6 @@ export default function App() {
             const filteredLogs = dailyLogs.filter(log => log.date !== updatedLog.date);
             setDailyLogs([...filteredLogs, updatedLog]);
             setShowExtraFood(false);
-          }}
-          onDelete={(index) => {
-            const currentLogData = getCurrentLog();
-            const updatedExtras = [...(currentLogData.extraFoods || [])];
-            updatedExtras.splice(index, 1);
-            const updatedLog: DailyLog = {
-              ...currentLogData,
-              extraFoods: updatedExtras
-            };
-            const filteredLogs = dailyLogs.filter(log => log.date !== currentDate);
-            setDailyLogs([...filteredLogs, updatedLog]);
           }}
         />
       )}

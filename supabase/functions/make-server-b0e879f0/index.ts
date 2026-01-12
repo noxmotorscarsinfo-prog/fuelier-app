@@ -391,22 +391,35 @@ app.post(`${basePath}/custom-meals`, async (c) => {
     const userId = await getUserIdByEmail(supabase, email);
     if (!userId) return c.json({ error: "User not found" }, 404);
 
-    const dbMeals = meals.map((meal: any) => ({
-      id: meal.id,
-      user_id: userId,
-      name: meal.name,
-      type: meal.type,
-      ingredients: meal.ingredients,
-      macros: {
-        calories: meal.calories,
-        protein: meal.protein,
-        carbs: meal.carbs,
-        fat: meal.fat
-      },
-      image: meal.image,
-      is_custom: true,
-      updated_at: new Date().toISOString()
-    }));
+    const dbMeals = meals.map((meal: any) => {
+      // Normalize type -> meal_types array
+      const mealTypes = Array.isArray(meal.type) ? meal.type : (meal.type ? [meal.type] : []);
+
+      // Normalize macros (support both meal.calories or meal.macros)
+      const calories = Math.round(Number(meal.calories ?? meal.macros?.calories ?? 0));
+      const protein = Math.round(Number(meal.protein ?? meal.macros?.protein ?? 0));
+      const carbs = Math.round(Number(meal.carbs ?? meal.macros?.carbs ?? 0));
+      const fat = Math.round(Number(meal.fat ?? meal.macros?.fat ?? 0));
+
+      return {
+        id: meal.id,
+        user_id: userId,
+        name: meal.name,
+        meal_types: mealTypes,
+        variant: meal.variant || null,
+        calories,
+        protein,
+        carbs,
+        fat,
+        ingredients: meal.ingredients || [],
+        detailed_ingredients: meal.detailedIngredients || null,
+        base_quantity: Math.round(Number(meal.baseQuantity ?? 100)),
+        preparation_steps: meal.preparationSteps || [],
+        tips: meal.tips || [],
+        is_favorite: meal.isFavorite || false,
+        updated_at: new Date().toISOString()
+      };
+    });
 
     const { error } = await supabase
       .from('custom_meals')
@@ -415,6 +428,7 @@ app.post(`${basePath}/custom-meals`, async (c) => {
     if (error) throw error;
     return c.json({ success: true });
   } catch (error) {
+    console.error('[POST /custom-meals] Error:', error);
     return c.json({ error: "Failed to save custom meals" }, 500);
   }
 });
@@ -554,8 +568,68 @@ app.post(`${basePath}/training-plan`, async (c) => {
 // no explote con 404, aunque la funcionalidad SQL completa aún no esté lista para ellas.
 
 // Global Meals & Ingredients (Admin)
-app.get(`${basePath}/global-meals`, (c) => c.json([]));
-app.post(`${basePath}/global-meals`, (c) => c.json({ success: true }));
+app.get(`${basePath}/global-meals`, async (c) => {
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data, error } = await supabase.from('base_meals').select('*').order('name', { ascending: true });
+    if (error) throw error;
+
+    const formatted = (data || []).map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      type: m.meal_types,
+      variant: m.variant,
+      calories: Math.round(Number(m.calories)),
+      protein: Math.round(Number(m.protein)),
+      carbs: Math.round(Number(m.carbs)),
+      fat: Math.round(Number(m.fat)),
+      baseQuantity: Math.round(Number(m.base_quantity)),
+      ingredients: m.ingredients || [],
+      ingredientReferences: m.ingredient_references || undefined,
+      preparationSteps: m.preparation_steps || undefined,
+      tips: m.tips || undefined
+    }));
+
+    return c.json(formatted);
+  } catch (error) {
+    console.error('[GET /global-meals] Error:', error);
+    return c.json([], 200);
+  }
+});
+
+app.post(`${basePath}/global-meals`, async (c) => {
+  try {
+    const { meals } = await c.req.json();
+    if (!Array.isArray(meals)) return c.json({ error: 'Invalid payload' }, 400);
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const dbMeals = meals.map((meal: any) => ({
+      id: meal.id,
+      name: meal.name,
+      meal_types: Array.isArray(meal.type) ? meal.type : (meal.type ? [meal.type] : []),
+      variant: meal.variant || null,
+      calories: Math.round(Number(meal.calories || (meal.macros?.calories ?? 0))),
+      protein: Math.round(Number(meal.protein || (meal.macros?.protein ?? 0))),
+      carbs: Math.round(Number(meal.carbs || (meal.macros?.carbs ?? 0))),
+      fat: Math.round(Number(meal.fat || (meal.macros?.fat ?? 0))),
+      base_quantity: Math.round(Number(meal.baseQuantity || 100)),
+      ingredients: meal.ingredients || [],
+      ingredient_references: meal.ingredientReferences || null,
+      preparation_steps: meal.preparationSteps || [],
+      tips: meal.tips || [],
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase.from('base_meals').upsert(dbMeals, { onConflict: 'id' });
+    if (error) throw error;
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[POST /global-meals] Error:', error);
+    return c.json({ error: 'Failed to save global meals' }, 500);
+  }
+});
 
 app.get(`${basePath}/global-ingredients`, (c) => c.json([]));
 app.post(`${basePath}/global-ingredients`, (c) => c.json({ success: true }));
