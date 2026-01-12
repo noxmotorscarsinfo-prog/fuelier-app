@@ -29,8 +29,8 @@ export default function WeeklyProgressWidget({ last7Days, goals }: WeeklyProgres
     );
     
     // Agregar extras si existen
-    if (log.extras && log.extras.length > 0) {
-      log.extras.forEach(extra => {
+    if (log.extraFoods && log.extraFoods.length > 0) {
+      log.extraFoods.forEach(extra => {
         dayTotals.calories += extra.calories || 0;
         dayTotals.protein += extra.protein || 0;
         dayTotals.carbs += extra.carbs || 0;
@@ -38,10 +38,19 @@ export default function WeeklyProgressWidget({ last7Days, goals }: WeeklyProgres
       });
     }
     
-    const caloriesScore = Math.min((dayTotals.calories / goals.calories) * 100, 100);
-    const proteinScore = Math.min((dayTotals.protein / goals.protein) * 100, 100);
-    const carbsScore = Math.min((dayTotals.carbs / goals.carbs) * 100, 100);
-    const fatScore = Math.min((dayTotals.fat / goals.fat) * 100, 100);
+    // Evitar división por cero si goals son 0
+    const caloriesScore = goals.calories > 0 
+      ? Math.min((dayTotals.calories / goals.calories) * 100, 100) 
+      : 0;
+    const proteinScore = goals.protein > 0 
+      ? Math.min((dayTotals.protein / goals.protein) * 100, 100) 
+      : 0;
+    const carbsScore = goals.carbs > 0 
+      ? Math.min((dayTotals.carbs / goals.carbs) * 100, 100) 
+      : 0;
+    const fatScore = goals.fat > 0 
+      ? Math.min((dayTotals.fat / goals.fat) * 100, 100) 
+      : 0;
     
     return Math.round((caloriesScore + proteinScore + carbsScore + fatScore) / 4);
   };

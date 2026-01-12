@@ -154,6 +154,36 @@ export const signout = async (): Promise<boolean> => {
   }
 };
 
+// Validación de admin en servidor (credenciales NO expuestas en frontend)
+export const adminLogin = async (email: string, password: string): Promise<{ success: boolean; error?: string; code?: string; isAdmin?: boolean; user?: any }> => {
+  try {
+    console.log(`[API] Admin login attempt: ${email}`);
+    
+    const response = await fetch(`${API_BASE_URL}/auth/admin-login`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email, password })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('[API] Admin login failed:', data);
+      return { 
+        success: false, 
+        error: data.error || 'Failed to authenticate as admin',
+        code: data.code
+      };
+    }
+    
+    console.log(`[API] Admin login successful: ${email}`);
+    return { success: true, isAdmin: data.isAdmin, user: data.user };
+  } catch (error) {
+    console.error('[API] Error in admin login:', error);
+    return { success: false, error: 'Failed to authenticate admin. Connection error.' };
+  }
+};
+
 // ===== USER API =====
 
 // ⚠️ NO USAR localStorage - TODO EN SUPABASE

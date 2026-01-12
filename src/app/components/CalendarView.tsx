@@ -51,10 +51,19 @@ export default function CalendarView({ dailyLogs, onBack, onCopyDay, user }: Cal
 
   const calculateScore = (log: DailyLog) => {
     const totals = calculateTotals(log);
-    const caloriesScore = Math.min((totals.calories / user.goals.calories) * 100, 100);
-    const proteinScore = Math.min((totals.protein / user.goals.protein) * 100, 100);
-    const carbsScore = Math.min((totals.carbs / user.goals.carbs) * 100, 100);
-    const fatScore = Math.min((totals.fat / user.goals.fat) * 100, 100);
+    // Protección contra división por cero
+    const caloriesScore = user.goals.calories > 0 
+      ? Math.min((totals.calories / user.goals.calories) * 100, 100) 
+      : 0;
+    const proteinScore = user.goals.protein > 0 
+      ? Math.min((totals.protein / user.goals.protein) * 100, 100) 
+      : 0;
+    const carbsScore = user.goals.carbs > 0 
+      ? Math.min((totals.carbs / user.goals.carbs) * 100, 100) 
+      : 0;
+    const fatScore = user.goals.fat > 0 
+      ? Math.min((totals.fat / user.goals.fat) * 100, 100) 
+      : 0;
     
     return Math.round((caloriesScore + proteinScore + carbsScore + fatScore) / 4);
   };

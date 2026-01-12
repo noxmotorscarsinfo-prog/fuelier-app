@@ -1,5 +1,21 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DailyLog, Meal, User, ExtraFood } from '../types';
+import { DailyLog, Meal } from '../types';
+
+// Tipo local para extra food en tests
+type ExtraFood = { name: string; calories: number; protein: number; carbs: number; fat: number };
+
+// Tipo local para mock user sin restricciones de tipado
+type MockUser = {
+  email: string;
+  name: string;
+  sex: 'male' | 'female';
+  age: number;
+  weight: number;
+  height: number;
+  trainingFrequency: number;
+  goals: { calories: number; protein: number; carbs: number; fat: number };
+  preferences: { likes: string[]; dislikes: string[]; intolerances: string[]; allergies: string[] };
+};
 
 /**
  * E2E Tests para la sección de Dieta
@@ -7,7 +23,7 @@ import { DailyLog, Meal, User, ExtraFood } from '../types';
  */
 
 describe('DIET SECTION - E2E Tests', () => {
-  let mockUser: User;
+  let mockUser: MockUser;
   let mockDailyLog: DailyLog;
   let mockMeal: Meal;
   let mockExtraFood: ExtraFood;
@@ -15,10 +31,8 @@ describe('DIET SECTION - E2E Tests', () => {
   beforeEach(() => {
     // Setup usuario mock
     mockUser = {
-      id: 'test-user-123',
       email: 'test@example.com',
       name: 'Test User',
-      isAdmin: false,
       sex: 'male' as const,
       age: 30,
       weight: 80,
@@ -31,8 +45,10 @@ describe('DIET SECTION - E2E Tests', () => {
         fat: 85
       },
       preferences: {
-        favoriteFoods: [],
-        avoidFoods: []
+        likes: [],
+        dislikes: [],
+        intolerances: [],
+        allergies: []
       }
     };
 

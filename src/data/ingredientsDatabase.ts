@@ -604,7 +604,10 @@ export function getAllIngredients(customIngredients: Ingredient[] = []): Ingredi
 }
 
 // Función para calcular macros de una lista de ingredientes
-export function calculateMacrosFromIngredients(ingredients: MealIngredientReference[]): {
+export function calculateMacrosFromIngredients(
+  ingredients: MealIngredientReference[],
+  customIngredients: Ingredient[] = []  // ✅ AÑADIDO: Parámetro para ingredientes personalizados
+): {
   calories: number;
   protein: number;
   carbs: number;
@@ -616,7 +619,7 @@ export function calculateMacrosFromIngredients(ingredients: MealIngredientRefere
   let totalFat = 0;
   
   for (const ref of ingredients) {
-    const ingredient = getIngredientById(ref.ingredientId);
+    const ingredient = getIngredientById(ref.ingredientId, customIngredients); // ✅ Pasar customIngredients
     if (!ingredient) continue;
     
     const factor = ref.amountInGrams / 100; // Convertir a factor de 100g

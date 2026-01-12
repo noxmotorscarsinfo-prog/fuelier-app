@@ -25,11 +25,12 @@ function calculatePerfectMultiplier(
 ): number {
   
   // Calcular multiplicador individual para cada macro
+  // ✅ Protección mejorada: si target es 0 o base es 0, mantener proporción 1:1
   const multipliers = {
-    cal: baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1,
-    prot: baseMacros.protein > 0 ? targetMacros.protein / baseMacros.protein : 1,
-    carbs: baseMacros.carbs > 0 ? targetMacros.carbs / baseMacros.carbs : 1,
-    fat: baseMacros.fat > 0 ? targetMacros.fat / baseMacros.fat : 1
+    cal: (baseMacros.calories > 0 && targetMacros.calories > 0) ? targetMacros.calories / baseMacros.calories : 1,
+    prot: (baseMacros.protein > 0 && targetMacros.protein > 0) ? targetMacros.protein / baseMacros.protein : 1,
+    carbs: (baseMacros.carbs > 0 && targetMacros.carbs > 0) ? targetMacros.carbs / baseMacros.carbs : 1,
+    fat: (baseMacros.fat > 0 && targetMacros.fat > 0) ? targetMacros.fat / baseMacros.fat : 1
   };
   
   console.log('🔢 Multiplicadores individuales:', {

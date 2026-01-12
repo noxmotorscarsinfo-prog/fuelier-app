@@ -576,27 +576,37 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       ];
     }
 
-    // Guardar en Supabase
-    await api.saveGlobalMeals(updatedMeals);
-    
-    // Recargar datos
-    await loadGlobalData();
+    // Guardar en Supabase con manejo de errores
+    try {
+      await api.saveGlobalMeals(updatedMeals);
+      
+      // Recargar datos
+      await loadGlobalData();
 
-    // Limpiar formulario
-    handleCancel();
+      // Limpiar formulario
+      handleCancel();
+    } catch (error) {
+      console.error('Error al guardar plato:', error);
+      alert('Error al guardar el plato. Por favor inténtalo de nuevo.');
+    }
   };
 
   const handleDeleteMeal = async (mealId: string) => {
     if (confirm('¿Estás seguro de eliminar este plato? Esto lo quitará para TODOS los usuarios.')) {
-      const updatedMeals = [
-        ...globalMeals.breakfast,
-        ...globalMeals.lunch,
-        ...globalMeals.snack,
-        ...globalMeals.dinner
-      ].filter(m => m.id !== mealId);
-      
-      await api.saveGlobalMeals(updatedMeals);
-      await loadGlobalData();
+      try {
+        const updatedMeals = [
+          ...globalMeals.breakfast,
+          ...globalMeals.lunch,
+          ...globalMeals.snack,
+          ...globalMeals.dinner
+        ].filter(m => m.id !== mealId);
+        
+        await api.saveGlobalMeals(updatedMeals);
+        await loadGlobalData();
+      } catch (error) {
+        console.error('Error al eliminar plato:', error);
+        alert('Error al eliminar el plato. Por favor inténtalo de nuevo.');
+      }
     }
   };
 
@@ -664,22 +674,32 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       updatedIngredients = [...globalIngredients, newIngredient];
     }
 
-    // Guardar en Supabase
-    await api.saveGlobalIngredients(updatedIngredients);
-    
-    // Recargar datos
-    await loadGlobalData();
+    // Guardar en Supabase con manejo de errores
+    try {
+      await api.saveGlobalIngredients(updatedIngredients);
+      
+      // Recargar datos
+      await loadGlobalData();
 
-    // Limpiar formulario
-    handleCancel();
+      // Limpiar formulario
+      handleCancel();
+    } catch (error) {
+      console.error('Error al guardar ingrediente:', error);
+      alert('Error al guardar el ingrediente. Por favor inténtalo de nuevo.');
+    }
   };
 
   const handleDeleteIngredient = async (ingredientId: string) => {
     if (confirm('¿Estás seguro de eliminar este ingrediente? Esto lo quitará para TODOS los usuarios.')) {
-      const updatedIngredients = globalIngredients.filter(ing => ing.id !== ingredientId);
-      
-      await api.saveGlobalIngredients(updatedIngredients);
-      await loadGlobalData();
+      try {
+        const updatedIngredients = globalIngredients.filter(ing => ing.id !== ingredientId);
+        
+        await api.saveGlobalIngredients(updatedIngredients);
+        await loadGlobalData();
+      } catch (error) {
+        console.error('Error al eliminar ingrediente:', error);
+        alert('Error al eliminar el ingrediente. Por favor inténtalo de nuevo.');
+      }
     }
   };
 
@@ -713,13 +733,18 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     }
 
     if (confirm(`¿Estás seguro de eliminar ${selectedIngredientIds.size} ingrediente(s)? Esto lo quitará para TODOS los usuarios.`)) {
-      const updatedIngredients = globalIngredients.filter(
-        ing => !selectedIngredientIds.has(ing.id)
-      );
-      
-      await api.saveGlobalIngredients(updatedIngredients);
-      await loadGlobalData();
-      setSelectedIngredientIds(new Set());
+      try {
+        const updatedIngredients = globalIngredients.filter(
+          ing => !selectedIngredientIds.has(ing.id)
+        );
+        
+        await api.saveGlobalIngredients(updatedIngredients);
+        await loadGlobalData();
+        setSelectedIngredientIds(new Set());
+      } catch (error) {
+        console.error('Error al eliminar ingredientes:', error);
+        alert('Error al eliminar los ingredientes. Por favor inténtalo de nuevo.');
+      }
     }
   };
 
@@ -739,13 +764,18 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     const ingredientsToDelete = globalIngredients.length - startIndex + 1;
     
     if (confirm(`¿Estás seguro de eliminar ${ingredientsToDelete} ingrediente(s) desde el #${startIndex} hasta el #${globalIngredients.length}? Esto lo quitará para TODOS los usuarios.`)) {
-      // Mantener solo los ingredientes antes del índice especificado
-      const updatedIngredients = globalIngredients.slice(0, startIndex - 1);
-      
-      await api.saveGlobalIngredients(updatedIngredients);
-      await loadGlobalData();
-      setSelectedIngredientIds(new Set());
-      setDeleteFromNumber('');
+      try {
+        // Mantener solo los ingredientes antes del índice especificado
+        const updatedIngredients = globalIngredients.slice(0, startIndex - 1);
+        
+        await api.saveGlobalIngredients(updatedIngredients);
+        await loadGlobalData();
+        setSelectedIngredientIds(new Set());
+        setDeleteFromNumber('');
+      } catch (error) {
+        console.error('Error al eliminar ingredientes:', error);
+        alert('Error al eliminar los ingredientes. Por favor inténtalo de nuevo.');
+      }
     }
   };
 

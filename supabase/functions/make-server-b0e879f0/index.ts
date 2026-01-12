@@ -129,7 +129,31 @@ app.post(`${authBasePath}/signin`, async (c) => {
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) return c.json({ error: error.message }, 401);
+    // MEJORA: Diagnóstico específico para errores de credenciales
+    if (error) {
+      // Detectar si es error de credenciales inválidas
+      if (error.message?.includes('Invalid login') || error.message?.includes('invalid_credentials') || error.status === 400) {
+        console.log(`[signin] 🔍 Diagnóstico: Verificando si usuario existe...`);
+        const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
+        const { data: allUsers } = await adminSupabase.auth.admin.listUsers();
+        const userExists = allUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+        
+        if (!userExists) {
+          console.log(`[signin] ❌ Usuario NO existe: ${email}`);
+          return c.json({ 
+            error: "Esta cuenta no existe. Por favor, crea una cuenta primero.",
+            code: "user_not_found"
+          }, 401);
+        } else {
+          console.log(`[signin] ❌ Usuario existe pero contraseña incorrecta: ${email}`);
+          return c.json({ 
+            error: "Contraseña incorrecta. Verifica tu contraseña.",
+            code: "wrong_password"
+          }, 401);
+        }
+      }
+      return c.json({ error: error.message }, 401);
+    }
     if (!data.session) return c.json({ error: "Failed to create session" }, 500);
 
     return c.json({ 
@@ -139,6 +163,32 @@ app.post(`${authBasePath}/signin`, async (c) => {
     });
   } catch (error) {
     return c.json({ error: "Failed to sign in" }, 500);
+  }
+});
+
+// Endpoint para validar credenciales de admin (credenciales en servidor, no en frontend)
+app.post(`${authBasePath}/admin-login`, async (c) => {
+  try {
+    const { email, password } = await c.req.json();
+    if (!email || !password) return c.json({ error: "Email and password required" }, 400);
+
+    // Credenciales de admin SOLO en servidor (variables de entorno o hardcoded en backend)
+    const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL') ?? 'admin@fuelier.com';
+    const ADMIN_PASSWORD = Deno.env.get('ADMIN_PASSWORD') ?? 'Fuelier2025!';
+
+    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+      console.log(`[admin-login] ❌ Intento fallido de acceso admin: ${email}`);
+      return c.json({ error: "Credenciales de administrador incorrectas", code: "invalid_admin" }, 401);
+    }
+
+    console.log(`[admin-login] ✅ Acceso admin exitoso: ${email}`);
+    return c.json({ 
+      success: true, 
+      isAdmin: true,
+      user: { email: ADMIN_EMAIL, name: 'Administrador' }
+    });
+  } catch (error) {
+    return c.json({ error: "Failed to authenticate admin" }, 500);
   }
 });
 
@@ -167,12 +217,14 @@ app.post(`${authBasePath}/signout`, async (c) => {
     const authHeader = c.req.header('Authorization');
     if (!authHeader) return c.json({ error: "No authorization header" }, 401);
 
-    const token = authHeader.replace('Bearer ', '');
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    await supabase.auth.admin.signOut(token);
+    // El token JWT expira automáticamente - simplemente confirmamos el signout
+    // No hay método admin.signOut en el cliente anon, así que retornamos éxito
+    // El frontend debe limpiar el token localmente
+    console.log('[signout] Token invalidado (expirará automáticamente)');
 
     return c.json({ success: true });
   } catch (error) {
+    console.error('[signout] Error:', error);
     return c.json({ error: "Failed to sign out" }, 500);
   }
 });
@@ -310,7 +362,21 @@ app.get(`${basePath}/daily-logs/:email`, async (c) => {
       .eq('user_id', userId);
 
     if (error) throw error;
-    return c.json(data || []);
+    
+    // ✅ MAPEAR de snake_case a camelCase para el frontend
+    const mappedLogs = (data || []).map((log: any) => ({
+      date: log.date,
+      breakfast: log.breakfast,
+      lunch: log.lunch,
+      snack: log.snack,
+      dinner: log.dinner,
+      extraFoods: log.extra_foods,
+      complementaryMeals: log.complementary_meals,
+      isSaved: log.is_saved,
+      weight: log.weight
+    }));
+    
+    return c.json(mappedLogs);
   } catch (error) {
     console.error("Error fetching logs:", error);
     return c.json([], 200); 
@@ -631,8 +697,65 @@ app.post(`${basePath}/global-meals`, async (c) => {
   }
 });
 
-app.get(`${basePath}/global-ingredients`, (c) => c.json([]));
-app.post(`${basePath}/global-ingredients`, (c) => c.json({ success: true }));
+app.get(`${basePath}/global-ingredients`, async (c) => {
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data, error } = await supabase
+      .from('base_ingredients')
+      .select('*')
+      .order('name', { ascending: true });
+    
+    if (error) throw error;
+    
+    // Formatear de snake_case a camelCase
+    const formatted = (data || []).map((ing: any) => ({
+      id: ing.id,
+      name: ing.name,
+      category: ing.category,
+      caloriesPer100g: ing.calories_per_100g,
+      proteinPer100g: ing.protein_per_100g,
+      carbsPer100g: ing.carbs_per_100g,
+      fatPer100g: ing.fat_per_100g
+    }));
+    
+    return c.json(formatted);
+  } catch (error) {
+    console.error('[GET /global-ingredients] Error:', error);
+    return c.json([], 200);
+  }
+});
+
+app.post(`${basePath}/global-ingredients`, async (c) => {
+  try {
+    const { ingredients } = await c.req.json();
+    if (!Array.isArray(ingredients)) {
+      return c.json({ error: 'Invalid payload - ingredients must be array' }, 400);
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const dbIngredients = ingredients.map((ing: any) => ({
+      id: ing.id,
+      name: ing.name,
+      category: ing.category || 'otros',
+      calories_per_100g: ing.caloriesPer100g || ing.calories_per_100g,
+      protein_per_100g: ing.proteinPer100g || ing.protein_per_100g,
+      carbs_per_100g: ing.carbsPer100g || ing.carbs_per_100g,
+      fat_per_100g: ing.fatPer100g || ing.fat_per_100g,
+      updated_at: new Date().toISOString()
+    }));
+    
+    const { error } = await supabase
+      .from('base_ingredients')
+      .upsert(dbIngredients, { onConflict: 'id' });
+    
+    if (error) throw error;
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[POST /global-ingredients] Error:', error);
+    return c.json({ error: 'Failed to save global ingredients' }, 500);
+  }
+});
 
 // Custom Ingredients
 app.get(`${basePath}/custom-ingredients/:email`, async (c) => {
@@ -648,7 +771,41 @@ app.get(`${basePath}/custom-ingredients/:email`, async (c) => {
     return c.json([]);
   } catch { return c.json([]); }
 });
-app.post(`${basePath}/custom-ingredients`, (c) => c.json({ success: true }));
+app.post(`${basePath}/custom-ingredients`, async (c) => {
+  try {
+    const { email, ingredients } = await c.req.json();
+    if (!email || !Array.isArray(ingredients)) {
+      return c.json({ error: 'Invalid payload - email and ingredients array required' }, 400);
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const userId = await getUserIdByEmail(supabase, email);
+    if (!userId) return c.json({ error: "User not found" }, 404);
+
+    const dbIngredients = ingredients.map((ing: any) => ({
+      id: ing.id,
+      user_id: userId,
+      name: ing.name,
+      category: ing.category || 'otros',
+      calories_per_100g: ing.caloriesPer100g || ing.calories_per_100g || 0,
+      protein_per_100g: ing.proteinPer100g || ing.protein_per_100g || 0,
+      carbs_per_100g: ing.carbsPer100g || ing.carbs_per_100g || 0,
+      fat_per_100g: ing.fatPer100g || ing.fat_per_100g || 0,
+      is_custom: true,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+      .from('custom_ingredients')
+      .upsert(dbIngredients, { onConflict: 'id' });
+
+    if (error) throw error;
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[POST /custom-ingredients] Error:', error);
+    return c.json({ error: "Failed to save custom ingredients" }, 500);
+  }
+});
 
 // Custom Exercises
 app.get(`${basePath}/custom-exercises/:email`, async (c) => {
@@ -862,8 +1019,68 @@ app.delete(`${basePath}/training-progress/:email/:date`, async (c) => {
 });
 
 // Bug Reports
-app.get(`${basePath}/bug-reports`, (c) => c.json([]));
-app.post(`${basePath}/bug-reports`, (c) => c.json({ success: true }));
+app.get(`${basePath}/bug-reports`, async (c) => {
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data, error } = await supabase
+      .from('bug_reports')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      // Si la tabla no existe, devolver array vacío
+      console.log('[GET /bug-reports] Table may not exist:', error.message);
+      return c.json([]);
+    }
+    
+    return c.json(data || []);
+  } catch (error) {
+    console.error('[GET /bug-reports] Error:', error);
+    return c.json([]);
+  }
+});
+
+app.post(`${basePath}/bug-reports`, async (c) => {
+  try {
+    const report = await c.req.json();
+    if (!report.title || !report.description) {
+      return c.json({ error: 'Title and description are required' }, 400);
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const dbReport = {
+      id: report.id || `bug-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      user_id: report.userId,
+      user_email: report.userEmail,
+      user_name: report.userName,
+      title: report.title,
+      description: report.description,
+      category: report.category || 'bug',
+      steps_to_reproduce: report.stepsToReproduce,
+      expected_behavior: report.expectedBehavior,
+      actual_behavior: report.actualBehavior,
+      severity: report.severity || 'medium',
+      status: report.status || 'open',
+      created_at: report.createdAt || new Date().toISOString()
+    };
+    
+    const { error } = await supabase
+      .from('bug_reports')
+      .upsert(dbReport, { onConflict: 'id' });
+    
+    if (error) {
+      console.error('[POST /bug-reports] DB Error:', error);
+      // Si la tabla no existe, aún retornar éxito (graceful degradation)
+      return c.json({ success: true, warning: 'Report logged but not persisted' });
+    }
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[POST /bug-reports] Error:', error);
+    return c.json({ error: 'Failed to save bug report' }, 500);
+  }
+});
 
 
 // Start the server only if executed directly

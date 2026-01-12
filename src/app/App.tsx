@@ -923,16 +923,25 @@ export default function App() {
 
   // NUEVA FUNCIÓN: Actualizar preferencias alimenticias
   const handleUpdatePreferences = (preferences: { likes: string[]; dislikes: string[]; intolerances: string[]; allergies: string[] }) => {
-    setUser(prev => ({
-      ...prev,
-      preferences
-    }));
+    setUser(prev => {
+      if (!prev) return prev; // ✅ Proteger contra null
+      return {
+        ...prev,
+        preferences
+      };
+    });
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  const handleLogout = () => {
-    // Solo limpiar estado, no hay localStorage
+  const handleLogout = async () => {
+    // Limpiar sesión en Supabase y localStorage
+    try {
+      await api.signout();
+      console.log('[handleLogout] ✅ Sesión cerrada correctamente');
+    } catch (error) {
+      console.error('[handleLogout] Error al cerrar sesión:', error);
+    }
     setUser(null);
     setCurrentScreen('login');
   };

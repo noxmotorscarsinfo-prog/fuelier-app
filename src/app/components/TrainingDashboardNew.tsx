@@ -432,6 +432,12 @@ export function TrainingDashboardNew({
 
   // Entrenar un día específico
   const handleStartWorkout = (dayIndex: number) => {
+    // ✅ VALIDAR que el día existe y tiene ejercicios antes de iniciar
+    if (!localWeekPlan[dayIndex] || localWeekPlan[dayIndex].exercises.length === 0) {
+      alert('⚠️ Este día no tiene ejercicios configurados. Añade ejercicios antes de entrenar.');
+      return;
+    }
+    
     setSelectedDayToTrain(dayIndex);
     setShowDaySelector(false);
     
@@ -452,34 +458,51 @@ export function TrainingDashboardNew({
 
   // Actualizar repeticiones de un ejercicio en una serie específica
   const updateExerciseReps = (exerciseId: string, setIndex: number, reps: number) => {
-    setExerciseReps(prev => ({
-      ...prev,
-      [exerciseId]: prev[exerciseId].map((r, i) => i === setIndex ? reps : r)
-    }));
+    setExerciseReps(prev => {
+      const currentArray = prev[exerciseId] || [];
+      return {
+        ...prev,
+        [exerciseId]: currentArray.map((r, i) => i === setIndex ? reps : r)
+      };
+    });
   };
 
   // Actualizar pesos de un ejercicio en una serie específica
   const updateExerciseWeights = (exerciseId: string, setIndex: number, weight: number) => {
-    setExerciseWeights(prev => ({
-      ...prev,
-      [exerciseId]: prev[exerciseId].map((w, i) => i === setIndex ? weight : w)
-    }));
+    setExerciseWeights(prev => {
+      const currentArray = prev[exerciseId] || [];
+      return {
+        ...prev,
+        [exerciseId]: currentArray.map((w, i) => i === setIndex ? weight : w)
+      };
+    });
   };
 
   // Verificar si todas las series tienen repeticiones registradas
   const allSetsCompleted = () => {
     if (selectedDayToTrain === null) return false;
     
-    const currentExercises = localWeekPlan[selectedDayToTrain].exercises;
+    const currentExercises = localWeekPlan[selectedDayToTrain]?.exercises || [];
+    
+    // ✅ VALIDAR que hay al menos un ejercicio
+    if (currentExercises.length === 0) return false;
+    
     return currentExercises.every(exercise => {
       const reps = exerciseReps[exercise.id] || [];
-      return reps.every(r => r > 0);
+      // ✅ Verificar que hay reps Y que todas son > 0
+      return reps.length === exercise.sets && reps.every(r => r > 0);
     });
   };
 
   // Marcar entrenamiento como completado
   const handleCompleteWorkout = async () => {
     if (selectedDayToTrain === null) return;
+    
+    // Validar que el día del plan existe
+    if (!localWeekPlan[selectedDayToTrain]) {
+      alert('❌ Error: No se encontró el plan de entrenamiento para este día.');
+      return;
+    }
 
     if (!allSetsCompleted()) {
       alert('⚠️ Por favor, registra las repeticiones de todas las series antes de marcar como completado.');

@@ -53,7 +53,29 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   };
 
   const handleComplete = () => {
-    onComplete(userData);
+    // Convertir la opción de macros seleccionada a goals
+    let goals = userData.goals;
+    
+    if (userData.macroOption) {
+      // Si hay una opción seleccionada, convertirla a goals
+      goals = macroOptionToGoals(userData.macroOption);
+    } else if (!goals && macroOptions.length > 0) {
+      // Si no hay goals ni opción, usar la opción moderada por defecto
+      const defaultOption = macroOptions.find(opt => opt.level === 'moderate-low') || macroOptions[0];
+      goals = macroOptionToGoals(defaultOption);
+    }
+    
+    // Si aún no hay goals, calcular unos básicos de fallback
+    if (!goals) {
+      goals = {
+        calories: 2000,
+        protein: 150,
+        carbs: 200,
+        fat: 65
+      };
+    }
+    
+    onComplete({ ...userData, goals });
   };
 
   // Progress bar
@@ -63,8 +85,14 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     return ((currentIndex + 1) / steps.length) * 100;
   };
 
-  // Macro options
-  const macroOptions = useMemo(() => generateMacroOptions(userData), [userData]);
+  // Macro options - pasar parámetros individuales
+  const macroOptions = useMemo(() => generateMacroOptions(
+    userData.sex || 'male',
+    userData.weight || 70,
+    userData.height || 170,
+    userData.age || 25,
+    userData.trainingFrequency || 3
+  ), [userData.sex, userData.weight, userData.height, userData.age, userData.trainingFrequency]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-emerald-500 via-teal-600 to-cyan-600 z-50 overflow-y-auto">

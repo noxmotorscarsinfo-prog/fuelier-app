@@ -1077,7 +1077,7 @@ export default function Dashboard({
                         if (e.key === 'Enter' && weightInput) {
                           const weight = parseFloat(weightInput);
                           if (weight > 0 && weight < 300) {
-                            onUpdateWeight(weight);
+                            onUpdateWeight(weight, currentLog.date);
                             setShowWeightSaved(true);
                             setTimeout(() => setShowWeightSaved(false), 2000);
                           }
@@ -1095,7 +1095,7 @@ export default function Dashboard({
                       if (weightInput) {
                         const weight = parseFloat(weightInput);
                         if (weight > 0 && weight < 300) {
-                          onUpdateWeight(weight);
+                          onUpdateWeight(weight, currentLog.date);
                           setShowWeightSaved(true);
                           setTimeout(() => setShowWeightSaved(false), 2000);
                           setShowMacrosUpdated(true);

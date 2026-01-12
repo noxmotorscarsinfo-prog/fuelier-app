@@ -181,9 +181,16 @@ export default function MacroCompletionRecommendations({
 
   // Determinar qué macro falta más
   const getMacroDeficit = () => {
-    const proteinPercent = (remainingMacros.protein / user.goals.protein) * 100;
-    const carbsPercent = (remainingMacros.carbs / user.goals.carbs) * 100;
-    const fatPercent = (remainingMacros.fat / user.goals.fat) * 100;
+    // Protección contra división por cero
+    const proteinPercent = user.goals.protein > 0 
+      ? (remainingMacros.protein / user.goals.protein) * 100 
+      : 0;
+    const carbsPercent = user.goals.carbs > 0 
+      ? (remainingMacros.carbs / user.goals.carbs) * 100 
+      : 0;
+    const fatPercent = user.goals.fat > 0 
+      ? (remainingMacros.fat / user.goals.fat) * 100 
+      : 0;
 
     return {
       protein: proteinPercent,
