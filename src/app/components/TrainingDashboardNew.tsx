@@ -319,16 +319,20 @@ export function TrainingDashboardNew({
   // Usar useMemo para recalcular cuando cambien completedWorkouts o localWeekPlan
   const nextDayPlanIndex = useMemo(() => {
     // Obtener qué días del plan ya se completaron esta semana
-    const completedDayPlanIndices = completedWorkouts.map(w => w.dayPlanIndex);
+    // Filtrar values nulos/indefinidos para evitar comportamientos inesperados
+    const completedDayPlanIndices = completedWorkouts
+      .map(w => (typeof w.dayPlanIndex === 'number' ? w.dayPlanIndex : null))
+      .filter(i => i !== null) as number[];
     
     console.log('[TrainingDashboard] 🔍 Calculando siguiente día...');
     console.log('[TrainingDashboard] 📊 completedWorkouts:', completedWorkouts);
     console.log('[TrainingDashboard] 📋 completedDayPlanIndices:', JSON.stringify(completedDayPlanIndices));
     console.log('[TrainingDashboard] 📅 localWeekPlan length:', localWeekPlan.length);
     
+    const completedSet = new Set(completedDayPlanIndices);
     // Buscar el primer día del plan que no se ha completado
     for (let i = 0; i < localWeekPlan.length; i++) {
-      if (!completedDayPlanIndices.includes(i)) {
+      if (!completedSet.has(i)) {
         console.log(`[TrainingDashboard] ✅ Siguiente día encontrado: ${i} (Día ${i + 1})`);
         return i;
       }
@@ -342,7 +346,9 @@ export function TrainingDashboardNew({
   // Log para debugging - solo cuando cambia el siguiente día a entrenar
   useEffect(() => {
     if (completedWorkouts.length > 0) {
-      const completedDays = completedWorkouts.map(w => `Día ${w.dayPlanIndex + 1}`).join(', ');
+      const completedDays = completedWorkouts
+        .map(w => (typeof w.dayPlanIndex === 'number' ? `Día ${w.dayPlanIndex + 1}` : 'Día ?'))
+        .join(', ');
       console.log(`[TrainingDashboard] ✅ Días completados: ${completedDays} | ➡️ Siguiente: Día ${nextDayPlanIndex + 1}`);
     } else {
       console.log(`[TrainingDashboard] ➡️ Ningún día completado | Siguiente: Día ${nextDayPlanIndex + 1}`);

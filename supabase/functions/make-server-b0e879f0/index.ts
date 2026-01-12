@@ -645,10 +645,11 @@ app.get(`${basePath}/training-completed/:email`, async (c) => {
     console.log('🔍 [GET /training-completed] Raw data from Supabase:', JSON.stringify(data, null, 2));
     
     // Mapear snake_case a camelCase para el frontend
+    // Asegurarnos de devolver un dayPlanIndex válido (0 por defecto) y un dayPlanName razonable
     const formattedData = data.map(item => ({
       date: item.date,
-      dayPlanIndex: item.day_plan_index,
-      dayPlanName: item.day_plan_name,
+      dayPlanIndex: (item.day_plan_index !== null && item.day_plan_index !== undefined) ? item.day_plan_index : 0,
+      dayPlanName: item.day_plan_name || (item.day_plan_index != null ? `Día ${item.day_plan_index + 1}` : null),
       exerciseReps: item.exercise_reps,
       exerciseWeights: item.exercise_weights
     }));
