@@ -788,20 +788,21 @@ app.get(`${basePath}/global-ingredients`, async (c) => {
     if (error) throw error;
     
     // Formatear con AMBOS formatos para compatibilidad
+    // Las columnas en DB son: calories, protein, carbs, fat
     const formatted = (data || []).map((ing: any) => ({
       id: ing.id,
       name: ing.name,
       category: ing.category,
       // Formato para Ingredient (types.ts)
-      calories: ing.calories_per_100g,
-      protein: ing.protein_per_100g,
-      carbs: ing.carbs_per_100g,
-      fat: ing.fat_per_100g,
+      calories: ing.calories || 0,
+      protein: ing.protein || 0,
+      carbs: ing.carbs || 0,
+      fat: ing.fat || 0,
       // Formato para DBIngredient (ingredientsDatabase.ts)
-      caloriesPer100g: ing.calories_per_100g,
-      proteinPer100g: ing.protein_per_100g,
-      carbsPer100g: ing.carbs_per_100g,
-      fatPer100g: ing.fat_per_100g
+      caloriesPer100g: ing.calories || 0,
+      proteinPer100g: ing.protein || 0,
+      carbsPer100g: ing.carbs || 0,
+      fatPer100g: ing.fat || 0
     }));
     
     return c.json(formatted);
@@ -820,26 +821,32 @@ app.post(`${basePath}/global-ingredients`, async (c) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
+    // Las columnas en la DB son: calories, protein, carbs, fat (NOT _per_100g)
     const dbIngredients = ingredients.map((ing: any) => ({
       id: ing.id,
       name: ing.name,
       category: ing.category || 'otros',
-      calories_per_100g: ing.caloriesPer100g || ing.calories_per_100g,
-      protein_per_100g: ing.proteinPer100g || ing.protein_per_100g,
-      carbs_per_100g: ing.carbsPer100g || ing.carbs_per_100g,
-      fat_per_100g: ing.fatPer100g || ing.fat_per_100g,
+      calories: ing.caloriesPer100g || ing.calories_per_100g || ing.calories || 0,
+      protein: ing.proteinPer100g || ing.protein_per_100g || ing.protein || 0,
+      carbs: ing.carbsPer100g || ing.carbs_per_100g || ing.carbs || 0,
+      fat: ing.fatPer100g || ing.fat_per_100g || ing.fat || 0,
       updated_at: new Date().toISOString()
     }));
+    
+    console.log('[POST /global-ingredients] Upserting:', dbIngredients.length, 'ingredients');
     
     const { error } = await supabase
       .from('base_ingredients')
       .upsert(dbIngredients, { onConflict: 'id' });
     
-    if (error) throw error;
-    return c.json({ success: true });
+    if (error) {
+      console.error('[POST /global-ingredients] Supabase error:', error);
+      return c.json({ error: error.message, details: error.details, code: error.code }, 500);
+    }
+    return c.json({ success: true, count: dbIngredients.length });
   } catch (error) {
     console.error('[POST /global-ingredients] Error:', error);
-    return c.json({ error: 'Failed to save global ingredients' }, 500);
+    return c.json({ error: 'Failed to save global ingredients', details: String(error) }, 500);
   }
 });
 
