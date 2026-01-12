@@ -327,14 +327,20 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     // 2. Buscar en globalIngredients (creados por admin en Supabase)
     const fromGlobal = globalIngredients.find(gi => gi.id === ingredientId);
     if (fromGlobal) {
+      // Soportar ambos formatos: caloriesPer100g o calories
+      const calories = (fromGlobal as any).caloriesPer100g ?? fromGlobal.calories ?? 0;
+      const protein = (fromGlobal as any).proteinPer100g ?? fromGlobal.protein ?? 0;
+      const carbs = (fromGlobal as any).carbsPer100g ?? fromGlobal.carbs ?? 0;
+      const fat = (fromGlobal as any).fatPer100g ?? fromGlobal.fat ?? 0;
+      
       return {
         id: fromGlobal.id,
         name: fromGlobal.name,
         category: fromGlobal.category as any,
-        caloriesPer100g: fromGlobal.calories,
-        proteinPer100g: fromGlobal.protein,
-        carbsPer100g: fromGlobal.carbs,
-        fatPer100g: fromGlobal.fat,
+        caloriesPer100g: calories,
+        proteinPer100g: protein,
+        carbsPer100g: carbs,
+        fatPer100g: fat,
         isCustom: false
       };
     }

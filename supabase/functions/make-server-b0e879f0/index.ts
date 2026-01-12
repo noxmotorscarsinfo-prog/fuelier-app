@@ -675,21 +675,32 @@ app.get(`${basePath}/global-meals`, async (c) => {
     const { data, error } = await supabase.from('base_meals').select('*').order('name', { ascending: true });
     if (error) throw error;
 
-    const formatted = (data || []).map((m: any) => ({
-      id: m.id,
-      name: m.name,
-      type: m.meal_types,
-      variant: m.variant,
-      calories: Math.round(Number(m.calories)),
-      protein: Math.round(Number(m.protein)),
-      carbs: Math.round(Number(m.carbs)),
-      fat: Math.round(Number(m.fat)),
-      baseQuantity: Math.round(Number(m.base_quantity)),
-      ingredients: m.ingredients || [],
-      ingredientReferences: m.ingredient_references || undefined,
-      preparationSteps: m.preparation_steps || undefined,
-      tips: m.tips || undefined
-    }));
+    const formatted = (data || []).map((m: any) => {
+      // Normalizar ingredientReferences: puede venir como {id, amount} o {ingredientId, amountInGrams}
+      let normalizedRefs = undefined;
+      if (m.ingredient_references && Array.isArray(m.ingredient_references)) {
+        normalizedRefs = m.ingredient_references.map((ref: any) => ({
+          ingredientId: ref.ingredientId || ref.id,
+          amountInGrams: ref.amountInGrams || ref.amount
+        }));
+      }
+      
+      return {
+        id: m.id,
+        name: m.name,
+        type: m.meal_types,
+        variant: m.variant,
+        calories: Math.round(Number(m.calories)),
+        protein: Math.round(Number(m.protein)),
+        carbs: Math.round(Number(m.carbs)),
+        fat: Math.round(Number(m.fat)),
+        baseQuantity: Math.round(Number(m.base_quantity)),
+        ingredients: m.ingredients || [],
+        ingredientReferences: normalizedRefs,
+        preparationSteps: m.preparation_steps || undefined,
+        tips: m.tips || undefined
+      };
+    });
 
     return c.json(formatted);
   } catch (error) {
@@ -705,22 +716,33 @@ app.post(`${basePath}/global-meals`, async (c) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const dbMeals = meals.map((meal: any) => ({
-      id: meal.id,
-      name: meal.name,
-      meal_types: Array.isArray(meal.type) ? meal.type : (meal.type ? [meal.type] : []),
-      variant: meal.variant || null,
-      calories: Math.round(Number(meal.calories || (meal.macros?.calories ?? 0))),
-      protein: Math.round(Number(meal.protein || (meal.macros?.protein ?? 0))),
-      carbs: Math.round(Number(meal.carbs || (meal.macros?.carbs ?? 0))),
-      fat: Math.round(Number(meal.fat || (meal.macros?.fat ?? 0))),
-      base_quantity: Math.round(Number(meal.baseQuantity || 100)),
-      ingredients: meal.ingredients || [],
-      ingredient_references: meal.ingredientReferences || null,
-      preparation_steps: meal.preparationSteps || [],
-      tips: meal.tips || [],
-      updated_at: new Date().toISOString()
-    }));
+    const dbMeals = meals.map((meal: any) => {
+      // Normalizar ingredientReferences al guardar
+      let normalizedRefs = null;
+      if (meal.ingredientReferences && Array.isArray(meal.ingredientReferences)) {
+        normalizedRefs = meal.ingredientReferences.map((ref: any) => ({
+          ingredientId: ref.ingredientId || ref.id,
+          amountInGrams: ref.amountInGrams || ref.amount
+        }));
+      }
+      
+      return {
+        id: meal.id,
+        name: meal.name,
+        meal_types: Array.isArray(meal.type) ? meal.type : (meal.type ? [meal.type] : []),
+        variant: meal.variant || null,
+        calories: Math.round(Number(meal.calories || (meal.macros?.calories ?? 0))),
+        protein: Math.round(Number(meal.protein || (meal.macros?.protein ?? 0))),
+        carbs: Math.round(Number(meal.carbs || (meal.macros?.carbs ?? 0))),
+        fat: Math.round(Number(meal.fat || (meal.macros?.fat ?? 0))),
+        base_quantity: Math.round(Number(meal.baseQuantity || 100)),
+        ingredients: meal.ingredients || [],
+        ingredient_references: normalizedRefs,
+        preparation_steps: meal.preparationSteps || [],
+        tips: meal.tips || [],
+        updated_at: new Date().toISOString()
+      };
+    });
 
     const { error } = await supabase.from('base_meals').upsert(dbMeals, { onConflict: 'id' });
     if (error) throw error;
@@ -742,11 +764,17 @@ app.get(`${basePath}/global-ingredients`, async (c) => {
     
     if (error) throw error;
     
-    // Formatear de snake_case a camelCase
+    // Formatear con AMBOS formatos para compatibilidad
     const formatted = (data || []).map((ing: any) => ({
       id: ing.id,
       name: ing.name,
       category: ing.category,
+      // Formato para Ingredient (types.ts)
+      calories: ing.calories_per_100g,
+      protein: ing.protein_per_100g,
+      carbs: ing.carbs_per_100g,
+      fat: ing.fat_per_100g,
+      // Formato para DBIngredient (ingredientsDatabase.ts)
       caloriesPer100g: ing.calories_per_100g,
       proteinPer100g: ing.protein_per_100g,
       carbsPer100g: ing.carbs_per_100g,
