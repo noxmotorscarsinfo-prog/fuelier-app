@@ -77,11 +77,11 @@ function findOptimalMultiplierWithTypology(
     fat: multipliers.fat.toFixed(3)
   });
   
-  // 🎯 PASO 3: Usar búsqueda binaria con ajustes por tipología
+  // 🎯 PASO 3: Búsqueda binaria ULTRA-PRECISA con ajustes por tipología
   const avgMultiplier = (multipliers.cal + multipliers.prot + multipliers.carbs + multipliers.fat) / 4;
   const testRange = 0.30;
-  const stepSize = 0.01;
-  const steps = Math.floor((testRange * 2) / stepSize);
+  const stepSize = 0.005; // Reducido de 0.01 a 0.005 para mayor precisión
+  const steps = Math.floor((testRange * 2) / stepSize); // ~120 pruebas
   
   let bestMultiplier = avgMultiplier;
   let bestIngredients: MealIngredientReference[] = [];
@@ -95,9 +95,6 @@ function findOptimalMultiplierWithTypology(
     // 🤖 APLICAR AJUSTES POR TIPOLOGÍA
     const testIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => {
       const flexibility = ingredientFlexibility.get(ref.ingredientId) || 0.5;
-      
-      // Ingredientes más flexibles pueden desviarse más del multiplicador base
-      // Ingredientes menos flexibles se mantienen cerca del multiplicador base
       const adjustedMultiplier = baseTestMultiplier * (0.7 + flexibility * 0.6);
       
       return {
@@ -108,7 +105,6 @@ function findOptimalMultiplierWithTypology(
     
     const testMacros = calculateMacrosFromIngredients(testIngredients, allIngredients);
     
-    // Calcular error ABSOLUTO de cada macro
     const errors = {
       cal: targetMacros.calories > 0 ? Math.abs(testMacros.calories - targetMacros.calories) / targetMacros.calories : 0,
       prot: targetMacros.protein > 0 ? Math.abs(testMacros.protein - targetMacros.protein) / targetMacros.protein : 0,
@@ -116,10 +112,8 @@ function findOptimalMultiplierWithTypology(
       fat: targetMacros.fat > 0 ? Math.abs(testMacros.fat - targetMacros.fat) / targetMacros.fat : 0
     };
     
-    // 🎯 MÉTRICA: El ERROR MÁXIMO de cualquier macro
     const maxError = Math.max(errors.cal, errors.prot, errors.carbs, errors.fat);
     
-    // Guardar si es mejor que el anterior
     if (maxError < bestMaxError) {
       bestMaxError = maxError;
       bestMultiplier = baseTestMultiplier;
@@ -127,12 +121,66 @@ function findOptimalMultiplierWithTypology(
     }
   }
   
-  console.log(`   ✅ Mejor multiplicador encontrado: ${bestMultiplier.toFixed(3)}x (error máx: ${(bestMaxError * 100).toFixed(1)}%)`);
+  // 🎯 PASO 4: MICRO-OPTIMIZACIÓN FINAL para llegar al 100% EXACTO
+  // Ajustar ingredientes flexibles en ±1g para cerrar la brecha final
+  console.log(`   🔬 Iniciando micro-optimización (error actual: ${(bestMaxError * 100).toFixed(2)}%)...`);
+  
+  const microOptimizationAttempts = 50; // Intentos de ajuste fino
+  for (let attempt = 0; attempt < microOptimizationAttempts; attempt++) {
+    const currentMacros = calculateMacrosFromIngredients(bestIngredients, allIngredients);
+    
+    // Calcular cuánto falta de cada macro
+    const deficit = {
+      cal: targetMacros.calories - currentMacros.calories,
+      prot: targetMacros.protein - currentMacros.protein,
+      carbs: targetMacros.carbs - currentMacros.carbs,
+      fat: targetMacros.fat - currentMacros.fat
+    };
+    
+    // Si ya está perfecto, salir
+    const totalDeficit = Math.abs(deficit.cal) + Math.abs(deficit.prot) + Math.abs(deficit.carbs) + Math.abs(deficit.fat);
+    if (totalDeficit < 2) { // Tolerancia: menos de 2 unidades en total
+      console.log(`   ✨ Ajuste PERFECTO alcanzado en ${attempt} micro-ajustes!`);
+      break;
+    }
+    
+    // Encontrar el ingrediente más flexible para ajustar
+    let bestIngredientToAdjust = -1;
+    let bestFlexibility = 0;
+    
+    bestIngredients.forEach((ref, idx) => {
+      const flex = ingredientFlexibility.get(ref.ingredientId) || 0;
+      if (flex > bestFlexibility && ref.amountInGrams > 10) { // No ajustar ingredientes muy pequeños
+        bestFlexibility = flex;
+        bestIngredientToAdjust = idx;
+      }
+    });
+    
+    if (bestIngredientToAdjust === -1) break; // No hay ingredientes ajustables
+    
+    // Ajustar ±1g el ingrediente más flexible
+    const adjustDirection = deficit.cal > 0 ? 1 : -1; // Basarse en calorías
+    bestIngredients[bestIngredientToAdjust].amountInGrams += adjustDirection;
+    
+    iterations++;
+  }
+  
+  // Recalcular error final
+  const finalMacros = calculateMacrosFromIngredients(bestIngredients, allIngredients);
+  const finalErrors = {
+    cal: targetMacros.calories > 0 ? Math.abs(finalMacros.calories - targetMacros.calories) / targetMacros.calories : 0,
+    prot: targetMacros.protein > 0 ? Math.abs(finalMacros.protein - targetMacros.protein) / targetMacros.protein : 0,
+    carbs: targetMacros.carbs > 0 ? Math.abs(finalMacros.carbs - targetMacros.carbs) / targetMacros.carbs : 0,
+    fat: targetMacros.fat > 0 ? Math.abs(finalMacros.fat - targetMacros.fat) / targetMacros.fat : 0
+  };
+  const finalMaxError = Math.max(finalErrors.cal, finalErrors.prot, finalErrors.carbs, finalErrors.fat);
+  
+  console.log(`   ✅ Optimización completa: ${bestMultiplier.toFixed(3)}x (error máx: ${(finalMaxError * 100).toFixed(2)}%)`);
   
   return {
     multiplier: bestMultiplier,
     ingredients: bestIngredients,
-    maxError: bestMaxError,
+    maxError: finalMaxError,
     iterations,
     typologyInfo: ingredientTypologies
   };

@@ -719,7 +719,7 @@ export default function MealSelection({
           <div className="absolute -top-1.5 sm:-top-2 -right-1.5 sm:-right-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1 shadow-md z-10">
             <span className="text-xs sm:text-sm">{proportionCategory.emoji}</span>
             <span className="font-semibold whitespace-nowrap">
-              {proportionCompatibility >= 98 ? '⭐ Perfecto' : 'Top'} #{topNumber} ({Math.round(proportionCompatibility)}%)
+              {proportionCompatibility >= 99.5 ? '💎 100%' : proportionCompatibility >= 98 ? '⭐ Perfecto' : 'Top'} #{topNumber} ({proportionCompatibility.toFixed(1)}%)
             </span>
           </div>
         )}
@@ -789,6 +789,7 @@ export default function MealSelection({
                 {/* NUEVO: Indicador de compatibilidad de proporciones para CENA */}
                 {mealType === 'dinner' && proportionCompatibility > 0 && (
                   <div className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs ${
+                    proportionCompatibility >= 99.5 ? 'bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-800 font-bold' :
                     proportionCompatibility >= 98 ? 'bg-emerald-100 text-emerald-700' :
                     proportionCompatibility >= 95 ? 'bg-green-100 text-green-700' :
                     proportionCompatibility >= 90 ? 'bg-blue-100 text-blue-700' :
@@ -797,7 +798,7 @@ export default function MealSelection({
                   }`}>
                     <span>{proportionCategory.emoji}</span>
                     <span className="font-medium">
-                      {proportionCategory.label} ({Math.round(proportionCompatibility)}%)
+                      {proportionCategory.label} ({proportionCompatibility.toFixed(1)}%)
                     </span>
                   </div>
                 )}
