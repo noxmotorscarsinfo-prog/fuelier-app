@@ -319,6 +319,12 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
   // Función auxiliar para buscar un ingrediente - 100% CLOUD (solo Supabase)
   const findIngredientById = (ingredientId: string): DBIngredient | null => {
+    // Validar que globalIngredients existe
+    if (!globalIngredients || !Array.isArray(globalIngredients)) {
+      console.warn('⚠️ globalIngredients no está disponible aún');
+      return null;
+    }
+    
     // Buscar en globalIngredients (creados por admin en Supabase)
     const fromGlobal = globalIngredients.find(gi => gi.id === ingredientId);
     if (fromGlobal) {
@@ -380,11 +386,22 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     if (selectedMealIngredients.length === 0) {
       return { calories: 0, protein: 0, carbs: 0, fat: 0 };
     }
-    return calculateMacrosFromIngredients(selectedMealIngredients);
-  }, [selectedMealIngredients]);
+    // Validar que globalIngredients existe
+    if (!globalIngredients || !Array.isArray(globalIngredients)) {
+      console.warn('⚠️ globalIngredients no disponible para calcular macros');
+      return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    }
+    return calculateMacrosFromIngredients(selectedMealIngredients, globalIngredients);
+  }, [selectedMealIngredients, globalIngredients]);
 
   // Filtrar ingredientes para el selector
   const filteredIngredients = useMemo(() => {
+    // Validar que globalIngredients existe
+    if (!globalIngredients || !Array.isArray(globalIngredients)) {
+      console.warn('⚠️ globalIngredients no disponible para filtrar');
+      return [];
+    }
+    
     // ⭐ 100% CLOUD: Solo ingredientes de Supabase (globalIngredients)
     const allAvailableIngredients: DBIngredient[] = globalIngredients.map(gi => ({
       id: gi.id,

@@ -258,7 +258,7 @@ export default function App() {
         ]);
         setGlobalIngredients(baseIngredients);
         setCustomIngredients(userIngredients);
-        logger.info(`✅ Ingredientes cargados: ${baseIngredients.length} globales, ${userIngredients.length} personalizados`);
+        logger.log(`✅ Ingredientes cargados: ${baseIngredients.length} globales, ${userIngredients.length} personalizados`);
       } catch (error) {
         logger.error('Error loading ingredients:', error);
       }
