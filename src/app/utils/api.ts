@@ -1,5 +1,6 @@
 import { projectId, publicAnonKey } from '../../../utils/supabase/info';
-import { User, DailyLog, SavedDiet, BugReport, Meal, Ingredient } from '../types';
+import { User, DailyLog, SavedDiet, BugReport, Meal } from '../types';
+import { Ingredient } from '../../data/ingredientTypes'; // Tipo correcto con caloriesPer100g
 
 const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-b0e879f0`;
 
