@@ -861,54 +861,6 @@ export default function MealSelection({
               </div>
             </div>
 
-            {/* NUEVO: Diferencias con macros restantes (SOLO para CENA) */}
-            {mealType === 'dinner' && (
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg px-2.5 sm:px-3 py-2 mb-2 sm:mb-3">
-                <p className="text-[10px] sm:text-xs text-purple-700 font-semibold mb-1.5">📊 Diferencia vs. macros restantes:</p>
-                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                  {(() => {
-                    const mealCals = Math.round(adjustedMeal.calories);
-                    const mealProt = Math.round(adjustedMeal.protein);
-                    const mealCarbs = Math.round(adjustedMeal.carbs);
-                    const mealFat = Math.round(adjustedMeal.fat);
-                    
-                    const diffCals = mealCals - remaining.calories;
-                    const diffProt = mealProt - remaining.protein;
-                    const diffCarbs = mealCarbs - remaining.carbs;
-                    const diffFat = mealFat - remaining.fat;
-                    
-                    return (
-                      <>
-                        <div className="text-center">
-                          <p className={`text-xs sm:text-sm font-bold leading-tight ${Math.abs(diffCals) < 50 ? 'text-emerald-600' : diffCals > 0 ? 'text-red-600' : 'text-orange-600'}`}>
-                            {diffCals > 0 ? '+' : ''}{diffCals}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className={`text-xs sm:text-sm font-bold leading-tight ${Math.abs(diffProt) < 3 ? 'text-emerald-600' : diffProt > 0 ? 'text-red-600' : 'text-orange-600'}`}>
-                            {diffProt > 0 ? '+' : ''}{diffProt}g
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className={`text-xs sm:text-sm font-bold leading-tight ${Math.abs(diffCarbs) < 5 ? 'text-emerald-600' : diffCarbs > 0 ? 'text-red-600' : 'text-orange-600'}`}>
-                            {diffCarbs > 0 ? '+' : ''}{diffCarbs}g
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className={`text-xs sm:text-sm font-bold leading-tight ${Math.abs(diffFat) < 3 ? 'text-emerald-600' : diffFat > 0 ? 'text-red-600' : 'text-orange-600'}`}>
-                            {diffFat > 0 ? '+' : ''}{diffFat}g
-                          </p>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-                <p className="text-[9px] sm:text-[10px] text-purple-600 mt-1 text-center leading-tight">
-                  ✅ Verde = Perfecto | 🔴 Rojo = Exceso | 🟠 Naranja = Defecto
-                </p>
-              </div>
-            )}
-
             {isTopRecommended && topNumber && (
               <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-300 rounded-lg px-3 py-2">
                 <Trophy className="w-4 h-4 text-emerald-600" />
@@ -981,31 +933,6 @@ export default function MealSelection({
               </div>
             </div>
           </div>
-
-          {/* ⚠️ AVISO: Target limitado por macros restantes */}
-          {(() => {
-            const mealGoals = getMealGoals(user, mealType);
-            const isLimited = 
-              intelligentTarget.calories < mealGoals.calories ||
-              intelligentTarget.protein < mealGoals.protein ||
-              intelligentTarget.carbs < mealGoals.carbs ||
-              intelligentTarget.fat < mealGoals.fat;
-            
-            if (isLimited && !intelligentTarget.isLastMeal) {
-              return (
-                <div className="bg-amber-100 border border-amber-300 text-amber-800 px-3 py-2 rounded-lg mb-3 text-xs sm:text-sm flex items-start gap-2">
-                  <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold">⚠️ Macros ajustados automáticamente</p>
-                    <p className="text-amber-700 mt-0.5">
-                      Has consumido macros en comidas anteriores. El target se ha ajustado para no exceder tus objetivos diarios.
-                    </p>
-                  </div>
-                </div>
-              );
-            }
-            return null;
-          })()}
 
           {/* Barra de búsqueda y botón */}
           <div className="flex gap-2 sm:gap-3 mb-3 sm:mb-4">
@@ -1138,47 +1065,7 @@ export default function MealSelection({
         </div>
       </div>
 
-      {/* NUEVO: Banner de Macros Restantes del Día */}
-      {Object.values(currentLog).filter(Boolean).length > 0 && (
-        <div className="max-w-4xl mx-auto px-6 mb-6">
-          <div className="bg-gradient-to-br from-white to-neutral-50 rounded-2xl p-5 shadow-lg border-2 border-emerald-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-neutral-800">
-                {mealType === 'dinner' ? '🎯 Para completar tu día necesitas' : '📊 Te falta para hoy'}
-              </h3>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-3 border border-red-200">
-                <p className="text-xs text-red-700 font-medium mb-1">Caloras</p>
-                <p className="text-2xl font-bold text-red-600">{Math.round(remaining.calories || 0)}</p>
-                <p className="text-xs text-red-600 mt-0.5">kcal</p>
-              </div>
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 border border-blue-200">
-                <p className="text-xs text-blue-700 font-medium mb-1">Proteína</p>
-                <p className="text-2xl font-bold text-blue-600">{Math.round(remaining.protein || 0)}</p>
-                <p className="text-xs text-blue-600 mt-0.5">g</p>
-              </div>
-              <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-3 border border-amber-200">
-                <p className="text-xs text-amber-700 font-medium mb-1">Carbos</p>
-                <p className="text-2xl font-bold text-amber-600">{Math.round(remaining.carbs || 0)}</p>
-                <p className="text-xs text-amber-600 mt-0.5">g</p>
-              </div>
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-3 border border-orange-200">
-                <p className="text-xs text-orange-700 font-medium mb-1">Grasas</p>
-                <p className="text-2xl font-bold text-orange-600">{Math.round(remaining.fat || 0)}</p>
-                <p className="text-xs text-orange-600 mt-0.5">g</p>
-              </div>
-            </div>
-            {mealType === 'dinner' && (
-              <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg p-2 mt-3 border border-emerald-200">
-                💡 <strong>Tip:</strong> Selecciona "Ideal (100%)" para cumplir exactamente con estos macros y completar tu día perfecto.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 🎯 Target Automático Calculado */}
+      {/* 🎯 Target Automático Calculado - Platos escalados al 100% perfecto automáticamente */}
       <div className="max-w-4xl mx-auto px-6 mb-6">
         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 shadow-lg border-2 border-emerald-300">
           <div className="flex items-center gap-4 mb-4">
