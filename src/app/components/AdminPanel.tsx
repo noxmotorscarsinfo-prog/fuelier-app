@@ -519,6 +519,8 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
   };
 
   const handleSaveMeal = async () => {
+    console.log('🔵 [handleSaveMeal] Iniciando guardado de plato...');
+    
     if (!mealFormData.name) {
       alert('Por favor ingresa el nombre del plato');
       return;
@@ -533,6 +535,12 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       alert('Por favor añade al menos un ingrediente');
       return;
     }
+
+    console.log('🔵 [handleSaveMeal] Datos del formulario:', {
+      name: mealFormData.name,
+      types: mealFormData.types,
+      ingredientsCount: selectedMealIngredients.length
+    });
 
     // Convertir SelectedIngredient[] a MealIngredientReference[]
     const ingredientReferences: MealIngredientReference[] = selectedMealIngredients.map(si => ({
@@ -569,9 +577,12 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
         : undefined
     };
 
+    console.log('🔵 [handleSaveMeal] Plato creado:', newMeal);
+
     let updatedMeals: Meal[];
     
     if (editingMeal) {
+      console.log('🔵 [handleSaveMeal] Modo: EDITAR plato existente');
       // Actualizar comida existente
       updatedMeals = [
         ...globalMeals.breakfast,
@@ -580,6 +591,7 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
         ...globalMeals.dinner
       ].map(m => m.id === editingMeal.id ? newMeal : m);
     } else {
+      console.log('🔵 [handleSaveMeal] Modo: CREAR plato nuevo');
       // Crear nueva comida
       updatedMeals = [
         ...globalMeals.breakfast,
@@ -590,18 +602,32 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       ];
     }
 
+    console.log('🔵 [handleSaveMeal] Total platos a guardar:', updatedMeals.length);
+
     // Guardar en Supabase con manejo de errores
     try {
-      await api.saveGlobalMeals(updatedMeals);
+      console.log('🔵 [handleSaveMeal] Llamando a api.saveGlobalMeals...');
+      const result = await api.saveGlobalMeals(updatedMeals);
+      console.log('🔵 [handleSaveMeal] Resultado de guardado:', result);
+      
+      if (!result) {
+        throw new Error('saveGlobalMeals retornó false');
+      }
+      
+      console.log('✅ [handleSaveMeal] Plato guardado exitosamente');
       
       // Recargar datos
+      console.log('🔵 [handleSaveMeal] Recargando datos globales...');
       await loadGlobalData();
+      console.log('✅ [handleSaveMeal] Datos recargados');
 
       // Limpiar formulario
       handleCancel();
+      
+      alert('✅ Plato guardado exitosamente');
     } catch (error) {
-      console.error('Error al guardar plato:', error);
-      alert('Error al guardar el plato. Por favor inténtalo de nuevo.');
+      console.error('❌ [handleSaveMeal] Error al guardar plato:', error);
+      alert(`❌ Error al guardar el plato: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
   };
 

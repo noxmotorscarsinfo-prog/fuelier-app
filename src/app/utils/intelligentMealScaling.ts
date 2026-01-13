@@ -115,9 +115,11 @@ export function scaleToExactTarget(
     console.log(`   Para mejor precisión, considera editarlo en el Admin Panel y añadir ingredientes reales.`);
   }
   
-  // ⭐ ÚLTIMA COMIDA: Ajuste perfecto directo
+  // ⚠️ ÚLTIMA COMIDA: Escalar ingredientes para acercarse al target
+  // IMPORTANTE: Los macros finales se calculan desde los ingredientes escalados
+  // NO se fuerzan artificialmente - esto mantiene las proporciones reales
   if (isLastMeal) {
-    console.log('🌙 ÚLTIMA COMIDA - Aplicando ajuste PERFECTO al 100%');
+    console.log('🌙 ÚLTIMA COMIDA - Escalando ingredientes para acercarse al target');
     
     // Calcular multiplicador base (para escalar ingredientes proporcionalmente)
     const baseMultiplier = baseMacros.calories > 0 
@@ -125,63 +127,67 @@ export function scaleToExactTarget(
       : 1;
     
     if (meal.ingredientReferences && meal.ingredientReferences.length > 0) {
-      // Con ingredientes: escalar cantidades y luego ajustar macros finales
+      // Con ingredientes: escalar cantidades
       const scaledIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => ({
         ingredientId: ref.ingredientId,
         amountInGrams: Math.round(ref.amountInGrams * baseMultiplier)
       }));
       
-      console.log('   🔢 Ingredientes escalados (base):');
+      console.log('   🔢 Ingredientes escalados:');
       scaledIngredients.forEach((ing, i) => {
         const original = meal.ingredientReferences![i];
         console.log(`      ${ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g`);
       });
       
-      // ✅ CLAVE: Para última comida, FORZAR macros exactos al target
-      // Los ingredientes son "aproximados", los macros finales son EXACTOS
+      // ✅ CORRECTO: Calcular macros REALES desde los ingredientes escalados
+      const realMacros = calculateMacrosFromIngredients(scaledIngredients, allIngredients);
+      
       const scaledMeal = {
         ...meal,
         ingredientReferences: scaledIngredients,
-        calories: targetMacros.calories,  // ⭐ EXACTO - para llegar al 100%
-        protein: targetMacros.protein,    // ⭐ EXACTO - para llegar al 100%
-        carbs: targetMacros.carbs,        // ⭐ EXACTO - para llegar al 100%
-        fat: targetMacros.fat,            // ⭐ EXACTO - para llegar al 100%
+        calories: realMacros.calories,     // ✅ REAL - calculado desde ingredientes
+        protein: realMacros.protein,       // ✅ REAL - calculado desde ingredientes
+        carbs: realMacros.carbs,           // ✅ REAL - calculado desde ingredientes
+        fat: realMacros.fat,               // ✅ REAL - calculado desde ingredientes
         baseQuantity: baseMultiplier,
         scaledForTarget: true,
-        isLastMeal: true,
-        perfectMatch: true  // ⭐ Flag para que MealDetail ajuste ingredientes visualmente
+        isLastMeal: true
       };
       
-      console.log('✅ ÚLTIMA COMIDA - Ajuste PERFECTO al 100%:', {
-        cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories}, diff: 0) ⭐ PERFECTO`,
-        prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g, diff: 0.0g) ⭐ PERFECTO`,
-        carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g, diff: 0.0g) ⭐ PERFECTO`,
-        fat: `${scaledMeal.fat}g (target: ${targetMacros.fat}g, diff: 0.0g) ⭐ PERFECTO`,
+      const diffCal = targetMacros.calories - realMacros.calories;
+      const diffProt = targetMacros.protein - realMacros.protein;
+      const diffCarbs = targetMacros.carbs - realMacros.carbs;
+      const diffFat = targetMacros.fat - realMacros.fat;
+      
+      console.log('✅ ÚLTIMA COMIDA - Macros REALES (desde ingredientes):', {
+        cal: `${realMacros.calories} kcal (target: ${targetMacros.calories}, diff: ${diffCal > 0 ? '+' : ''}${diffCal})`,
+        prot: `${realMacros.protein}g (target: ${targetMacros.protein}g, diff: ${diffProt > 0 ? '+' : ''}${diffProt}g)`,
+        carbs: `${realMacros.carbs}g (target: ${targetMacros.carbs}g, diff: ${diffCarbs > 0 ? '+' : ''}${diffCarbs}g)`,
+        fat: `${realMacros.fat}g (target: ${targetMacros.fat}g, diff: ${diffFat > 0 ? '+' : ''}${diffFat}g)`,
         multiplier: `${baseMultiplier.toFixed(3)}x`,
-        nota: '⭐ Macros FORZADOS al target - MealDetail ajustará ingredientes visualmente'
+        nota: '✅ Macros calculados desde ingredientes reales - respeta proporciones'
       });
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       
       return scaledMeal;
     } else {
-      // Sin ingredientes: aplicar macros exactos directamente
+      // Sin ingredientes: escalar proporcionalmente
       const scaledMeal = {
         ...meal,
-        calories: targetMacros.calories,  // ⭐ EXACTO
-        protein: targetMacros.protein,    // ⭐ EXACTO
-        carbs: targetMacros.carbs,        // ⭐ EXACTO
-        fat: targetMacros.fat,            // ⭐ EXACTO
+        calories: Math.round(baseMacros.calories * baseMultiplier),
+        protein: Math.round(baseMacros.protein * baseMultiplier),
+        carbs: Math.round(baseMacros.carbs * baseMultiplier),
+        fat: Math.round(baseMacros.fat * baseMultiplier),
         baseQuantity: baseMultiplier,
         scaledForTarget: true,
-        isLastMeal: true,
-        perfectMatch: true
+        isLastMeal: true
       };
       
-      console.log('✅ ÚLTIMA COMIDA - Ajuste PERFECTO al 100% (sin ingredientes):', {
-        cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories}, diff: 0) ⭐ PERFECTO`,
-        prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g, diff: 0.0g) ⭐ PERFECTO`,
-        carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g, diff: 0.0g) ⭐ PERFECTO`,
-        fat: `${scaledMeal.fat}g (target: ${targetMacros.fat}g, diff: 0.0g) ⭐ PERFECTO`,
+      console.log('✅ ÚLTIMA COMIDA - Macros escalados proporcionalmente:', {
+        cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories})`,
+        prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g)`,
+        carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g)`,
+        fat: `${scaledMeal.fat}g (target: ${targetMacros.fat}g)`,
         multiplier: `${baseMultiplier.toFixed(3)}x`
       });
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');

@@ -476,19 +476,31 @@ export const getGlobalMeals = async (): Promise<Meal[]> => {
 
 export const saveGlobalMeals = async (meals: Meal[]): Promise<boolean> => {
   try {
+    console.log('[API] 💾 saveGlobalMeals - Iniciando guardado...');
+    console.log('[API] Total platos a guardar:', meals.length);
+    console.log('[API] Platos:', meals.map(m => ({ id: m.id, name: m.name, type: m.type })));
+    
     const response = await fetch(`${API_BASE_URL}/global-meals`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ meals })
     });
     
+    console.log('[API] Response status:', response.status);
+    console.log('[API] Response ok:', response.ok);
+    
     if (!response.ok) {
-      throw new Error('Failed to save global meals');
+      const errorText = await response.text();
+      console.error('[API] Error response:', errorText);
+      throw new Error(`Failed to save global meals: ${response.status} - ${errorText}`);
     }
+    
+    const result = await response.json();
+    console.log('[API] ✅ Platos guardados exitosamente:', result);
     
     return true;
   } catch (error) {
-    console.error('Error saving global meals:', error);
+    console.error('[API] ❌ Error saving global meals:', error);
     return false;
   }
 };
