@@ -46,6 +46,24 @@ export default function MealSelection({
   const [customMeals, setCustomMeals] = useState<Meal[]>([]);
   const [isLoadingGlobalMeals, setIsLoadingGlobalMeals] = useState(true);
   const [isLoadingCustomMeals, setIsLoadingCustomMeals] = useState(true);
+  
+  // NUEVO: Ingredientes personalizados del usuario para mostrar en el filtro
+  const [customIngredients, setCustomIngredients] = useState<any[]>([]);
+
+  // Cargar ingredientes personalizados del usuario
+  useEffect(() => {
+    const loadCustomIngredients = async () => {
+      if (!user.email) return;
+      try {
+        const ingredients = await api.getCustomIngredients(user.email);
+        console.log(`✅ Cargados ${ingredients.length} ingredientes personalizados para filtro`);
+        setCustomIngredients(ingredients);
+      } catch (error) {
+        console.error('Error cargando ingredientes personalizados:', error);
+      }
+    };
+    loadCustomIngredients();
+  }, [user.email]);
 
   // Cargar platos globales al montar el componente
   useEffect(() => {
@@ -252,9 +270,18 @@ export default function MealSelection({
     });
   }, [meals, currentPool]);
 
-  // Extraer ingredientes únicos de todas las comidas
+  // Extraer ingredientes únicos de todas las comidas + ingredientes personalizados del usuario
   const allIngredients = useMemo(() => {
     const ingredientsSet = new Set<string>();
+    
+    // 1. Agregar ingredientes personalizados del usuario primero (para que aparezcan destacados)
+    customIngredients.forEach(ing => {
+      if (ing.name && ing.name.length > 2) {
+        ingredientsSet.add(ing.name.toLowerCase().trim());
+      }
+    });
+    
+    // 2. Agregar ingredientes de las comidas
     mealsOfType.forEach(meal => {
       if (meal.ingredients && meal.ingredients.length > 0) {
         meal.ingredients.forEach(ingredient => {
@@ -290,7 +317,7 @@ export default function MealSelection({
       }
     });
     return Array.from(ingredientsSet).sort();
-  }, [mealsOfType]);
+  }, [mealsOfType, customIngredients]);
 
   // NUEVA FUNCIÓN: Calcular porción personalizada según el objetivo de calorías seleccionado
   const calculateCustomPortion = (meal: Meal) => {
@@ -1267,8 +1294,48 @@ export default function MealSelection({
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
+              {/* Sección de ingredientes personalizados del usuario */}
+              {customIngredients.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-purple-700 mb-3 flex items-center gap-2">
+                    <Star className="w-4 h-4" />
+                    Mis Ingredientes Personalizados
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {customIngredients.map(ing => {
+                      const ingredientName = ing.name.toLowerCase().trim();
+                      return (
+                        <button
+                          key={ing.id || ingredientName}
+                          onClick={() => toggleIngredient(ingredientName)}
+                          className={`px-4 py-3 rounded-xl text-sm transition-all border-2 text-left ${ 
+                            selectedIngredients.includes(ingredientName)
+                              ? 'bg-purple-50 border-purple-500 text-purple-700 font-semibold'
+                              : 'bg-purple-50/50 border-purple-200 text-purple-700 hover:border-purple-400'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {selectedIngredients.includes(ingredientName) && (
+                              <Check className="w-4 h-4 text-purple-600" />
+                            )}
+                            <span className="capitalize">{ing.name}</span>
+                            <Star className="w-3 h-3 text-purple-400 ml-auto" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {/* Sección de todos los ingredientes */}
+              <h3 className="text-sm font-semibold text-neutral-600 mb-3">
+                Todos los Ingredientes
+              </h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {allIngredients.map(ingredient => (
+                {allIngredients
+                  .filter(ing => !customIngredients.some(ci => ci.name.toLowerCase().trim() === ing))
+                  .map(ingredient => (
                   <button
                     key={ingredient}
                     onClick={() => toggleIngredient(ingredient)}
@@ -1288,7 +1355,7 @@ export default function MealSelection({
                 ))}
               </div>
 
-              {allIngredients.length === 0 && (
+              {allIngredients.length === 0 && customIngredients.length === 0 && (
                 <div className="text-center py-12">
                   <p className="text-neutral-500">
                     No hay ingredientes disponibles para este tipo de comida

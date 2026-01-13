@@ -78,11 +78,11 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
         const formattedCustom = (userIngredients || []).map((ing: any) => ({
           id: ing.id,
           name: ing.name,
-          category: ing.category || 'otros',
-          caloriesPer100g: ing.calories_per_100g,
-          proteinPer100g: ing.protein_per_100g,
-          carbsPer100g: ing.carbs_per_100g,
-          fatPer100g: ing.fat_per_100g,
+          category: ing.category || 'personalizado',
+          caloriesPer100g: ing.caloriesPer100g || ing.calories_per_100g || ing.calories || 0,
+          proteinPer100g: ing.proteinPer100g || ing.protein_per_100g || ing.protein || 0,
+          carbsPer100g: ing.carbsPer100g || ing.carbs_per_100g || ing.carbs || 0,
+          fatPer100g: ing.fatPer100g || ing.fat_per_100g || ing.fat || 0,
           isCustom: true
         }));
         
@@ -303,13 +303,9 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
     }
 
     try {
-      // ✅ 1. Obtener ingredientes existentes
-      const existingIngredients = await api.getCustomIngredients(userEmail);
-      
-      // ✅ 2. Crear el nuevo ingrediente con ID único
-      const ingredientId = `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // ✅ 1. Crear el nuevo ingrediente
       const newCustomIngredient: DBIngredient = {
-        id: ingredientId,
+        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: newIngredientData.name.trim(),
         category: 'personalizado',
         caloriesPer100g: parseFloat(newIngredientData.calories),
@@ -319,18 +315,18 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
         isCustom: true
       };
 
-      // ✅ 3. Guardar en Supabase usando la API (evita RLS)
-      const success = await api.saveCustomIngredients(userEmail, [...existingIngredients, newCustomIngredient]);
+      // ✅ 2. Guardar SOLO el nuevo ingrediente en Supabase usando la API (evita RLS)
+      const success = await api.saveCustomIngredients(userEmail, [newCustomIngredient]);
       
       if (!success) {
         throw new Error('Failed to save ingredient');
       }
 
-      // ✅ 4. Añadir al estado local inmediatamente para que aparezca en sugerencias
+      // ✅ 3. Añadir al estado local inmediatamente para que aparezca en sugerencias
       setCustomIngredients([...customIngredients, newCustomIngredient]);
       console.log('✅ Ingrediente personalizado guardado en Supabase');
 
-      // ✅ 5. Auto-seleccionar el ingrediente recién creado si se creó desde el input
+      // ✅ 4. Auto-seleccionar el ingrediente recién creado si se creó desde el input
       if (currentIngredientId) {
         setIngredients(ingredients.map(ing => 
           ing.id === currentIngredientId ? { ...ing, name: newCustomIngredient.name, ingredientId: newCustomIngredient.id, showSuggestions: false } : ing

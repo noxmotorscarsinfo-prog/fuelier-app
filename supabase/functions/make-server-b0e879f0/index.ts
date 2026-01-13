@@ -5,6 +5,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const app = new Hono();
 
+// Función para generar UUID v4
+function generateUUID(): string {
+  return crypto.randomUUID();
+}
+
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -55,7 +60,7 @@ async function getUserIdFromToken(c: any, supabase: any): Promise<string | null>
   }
 }
 
-// Helper para obtener ID de usuario por email
+// Helper para obtener ID de usuario por email (busca en tabla users)
 async function getUserIdByEmail(supabase: any, email: string): Promise<string | null> {
   const { data, error } = await supabase
     .from('users')
@@ -852,17 +857,46 @@ app.post(`${basePath}/global-ingredients`, async (c) => {
 
 // Custom Ingredients
 app.get(`${basePath}/custom-ingredients/:email`, async (c) => {
-  // Intentar leer si hay tabla, si no devolver vacío
   try {
     const email = c.req.param("email");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const userId = await getUserIdByEmail(supabase, email);
     if (!userId) return c.json([]);
-    // Si existe tabla 'custom_ingredients', úsala:
-    const { data, error } = await supabase.from('custom_ingredients').select('*').eq('user_id', userId);
-    if (!error && data) return c.json(data);
+    
+    const { data, error } = await supabase
+      .from('custom_ingredients')
+      .select('*')
+      .eq('user_id', userId)
+      .order('name', { ascending: true });
+    
+    if (error) {
+      console.error('[GET /custom-ingredients] Error:', error);
+      return c.json([]);
+    }
+    
+    // Formatear con ambos formatos para compatibilidad
+    const formatted = (data || []).map((ing: any) => ({
+      id: ing.id,
+      name: ing.name,
+      category: ing.category || 'personalizado',
+      // Formato types.ts
+      calories: ing.calories || 0,
+      protein: ing.protein || 0,
+      carbs: ing.carbs || 0,
+      fat: ing.fat || 0,
+      // Formato ingredientsDatabase.ts
+      caloriesPer100g: ing.calories || 0,
+      proteinPer100g: ing.protein || 0,
+      carbsPer100g: ing.carbs || 0,
+      fatPer100g: ing.fat || 0,
+      isCustom: true
+    }));
+    
+    return c.json(formatted);
+  } catch (error) {
+    console.error('[GET /custom-ingredients] Error:', error);
     return c.json([]);
-  } catch { return c.json([]); }
+  }
 });
 app.post(`${basePath}/custom-ingredients`, async (c) => {
   try {
@@ -875,28 +909,37 @@ app.post(`${basePath}/custom-ingredients`, async (c) => {
     const userId = await getUserIdByEmail(supabase, email);
     if (!userId) return c.json({ error: "User not found" }, 404);
 
+    // Las columnas en DB son: calories, protein, carbs, fat (NO _per_100g)
+    // Generar UUID manualmente ya que el DEFAULT no funciona en producción
     const dbIngredients = ingredients.map((ing: any) => ({
-      id: ing.id,
+      id: generateUUID(),
       user_id: userId,
       name: ing.name,
-      category: ing.category || 'otros',
-      calories_per_100g: ing.caloriesPer100g || ing.calories_per_100g || 0,
-      protein_per_100g: ing.proteinPer100g || ing.protein_per_100g || 0,
-      carbs_per_100g: ing.carbsPer100g || ing.carbs_per_100g || 0,
-      fat_per_100g: ing.fatPer100g || ing.fat_per_100g || 0,
-      is_custom: true,
-      updated_at: new Date().toISOString()
+      calories: ing.caloriesPer100g || ing.calories_per_100g || ing.calories || 0,
+      protein: ing.proteinPer100g || ing.protein_per_100g || ing.protein || 0,
+      carbs: ing.carbsPer100g || ing.carbs_per_100g || ing.carbs || 0,
+      fat: ing.fatPer100g || ing.fat_per_100g || ing.fat || 0
     }));
 
-    const { error } = await supabase
-      .from('custom_ingredients')
-      .upsert(dbIngredients, { onConflict: 'id' });
+    console.log('[POST /custom-ingredients] Saving for user:', userId);
+    console.log('[POST /custom-ingredients] Ingredients:', JSON.stringify(dbIngredients));
 
-    if (error) throw error;
-    return c.json({ success: true });
+    const { data, error } = await supabase
+      .from('custom_ingredients')
+      .insert(dbIngredients)
+      .select();
+
+    if (error) {
+      console.error('[POST /custom-ingredients] Supabase error:', error);
+      if (error.code === '23505') {
+        return c.json({ error: 'Ya existe un ingrediente con ese nombre' }, 400);
+      }
+      return c.json({ error: error.message }, 500);
+    }
+    return c.json({ success: true, ingredients: data });
   } catch (error) {
     console.error('[POST /custom-ingredients] Error:', error);
-    return c.json({ error: "Failed to save custom ingredients" }, 500);
+    return c.json({ error: "Failed to save custom ingredients", details: String(error) }, 500);
   }
 });
 
