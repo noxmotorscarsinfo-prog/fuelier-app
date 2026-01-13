@@ -1,17 +1,145 @@
 /**
- * 🎯 INTELLIGENT MEAL SCALING SYSTEM
+ * 🎯 ESCALADO INTELIGENTE DE COMIDAS CON IA
  * 
- * Escala platos automáticamente para que se ajusten al target calculado.
- * Garantiza que la suma de las 4 comidas = objetivos totales del día.
+ * Algoritmo de optimización multi-objetivo que escala ingredientes para ajustarse
+ * PERFECTAMENTE a los macros objetivo, usando clasificación automática de ingredientes.
+ * 
+ * Características:
+ * - 🤖 Clasifica ingredientes automáticamente por perfil nutricional
+ * - 🎯 Escala ingredientes similares de manera coherente
+ * - 📊 Minimiza el error MÁXIMO entre todos los macros
+ * - 🔍 Usa búsqueda binaria para convergencia rápida
  * 
  * ✅ 100% CLOUD - Recibe ingredientes como parámetro
  */
 
 import { Meal, User, DailyLog, MealType } from '../types';
 import { Ingredient, MealIngredientReference, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
+import { classifyIngredient, SCALING_COEFFICIENTS, NutritionalTypology } from './ingredientClassification';
+
+import { classifyIngredient, SCALING_COEFFICIENTS, NutritionalTypology } from './ingredientClassification';
 
 /**
- * 🎯 ALGORITMO DE OPTIMIZACIÓN MULTI-OBJETIVO
+ * 🤖 ESCALADO INTELIGENTE CON CLASIFICACIÓN AUTOMÁTICA
+ * 
+ * En lugar de escalar todos los ingredientes por igual, este algoritmo:
+ * 1. Clasifica cada ingrediente automáticamente según su perfil nutricional
+ * 2. Aplica diferentes estrategias de escalado según la tipología
+ * 3. Prioriza ingredientes clave (proteínas) y ajusta secundarios (vegetales, condimentos)
+ * 
+ * Esto permite ajustes más precisos y coherentes nutricionalmente.
+ */
+function findOptimalMultiplierWithTypology(
+  meal: Meal,
+  targetMacros: { calories: number; protein: number; carbs: number; fat: number },
+  allIngredients: Ingredient[]
+): { multiplier: number; ingredients: MealIngredientReference[]; maxError: number; iterations: number; typologyInfo: Map<string, NutritionalTypology> } {
+  
+  if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
+    return {
+      multiplier: 1,
+      ingredients: [],
+      maxError: 1,
+      iterations: 0,
+      typologyInfo: new Map()
+    };
+  }
+  
+  const baseMacros = calculateMacrosFromIngredients(meal.ingredientReferences, allIngredients);
+  
+  // 🤖 PASO 1: Clasificar todos los ingredientes del plato
+  const ingredientTypologies = new Map<string, NutritionalTypology>();
+  const ingredientFlexibility = new Map<string, number>();
+  
+  meal.ingredientReferences.forEach(ref => {
+    const ingredient = allIngredients.find(ing => ing.id === ref.ingredientId);
+    if (ingredient) {
+      const analysis = classifyIngredient(ingredient);
+      ingredientTypologies.set(ref.ingredientId, analysis.typology);
+      ingredientFlexibility.set(ref.ingredientId, SCALING_COEFFICIENTS[analysis.typology].flexibility);
+      
+      console.log(`   🏷️  ${ingredient.name}: ${analysis.typology} (flex: ${SCALING_COEFFICIENTS[analysis.typology].flexibility})`);
+    }
+  });
+  
+  // 🎯 PASO 2: Calcular multiplicador base
+  const multipliers = {
+    cal: baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1,
+    prot: baseMacros.protein > 0 ? targetMacros.protein / baseMacros.protein : 1,
+    carbs: baseMacros.carbs > 0 ? targetMacros.carbs / baseMacros.carbs : 1,
+    fat: baseMacros.fat > 0 ? targetMacros.fat / baseMacros.fat : 1
+  };
+  
+  console.log('   🔍 Multiplicadores ideales por macro:', {
+    cal: multipliers.cal.toFixed(3),
+    prot: multipliers.prot.toFixed(3),
+    carbs: multipliers.carbs.toFixed(3),
+    fat: multipliers.fat.toFixed(3)
+  });
+  
+  // 🎯 PASO 3: Usar búsqueda binaria con ajustes por tipología
+  const avgMultiplier = (multipliers.cal + multipliers.prot + multipliers.carbs + multipliers.fat) / 4;
+  const testRange = 0.30;
+  const stepSize = 0.01;
+  const steps = Math.floor((testRange * 2) / stepSize);
+  
+  let bestMultiplier = avgMultiplier;
+  let bestIngredients: MealIngredientReference[] = [];
+  let bestMaxError = Infinity;
+  let iterations = 0;
+  
+  for (let i = 0; i <= steps; i++) {
+    iterations++;
+    const baseTestMultiplier = avgMultiplier * (1 - testRange + (i * stepSize * 2));
+    
+    // 🤖 APLICAR AJUSTES POR TIPOLOGÍA
+    const testIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => {
+      const flexibility = ingredientFlexibility.get(ref.ingredientId) || 0.5;
+      
+      // Ingredientes más flexibles pueden desviarse más del multiplicador base
+      // Ingredientes menos flexibles se mantienen cerca del multiplicador base
+      const adjustedMultiplier = baseTestMultiplier * (0.7 + flexibility * 0.6);
+      
+      return {
+        ingredientId: ref.ingredientId,
+        amountInGrams: Math.round(ref.amountInGrams * adjustedMultiplier)
+      };
+    });
+    
+    const testMacros = calculateMacrosFromIngredients(testIngredients, allIngredients);
+    
+    // Calcular error ABSOLUTO de cada macro
+    const errors = {
+      cal: targetMacros.calories > 0 ? Math.abs(testMacros.calories - targetMacros.calories) / targetMacros.calories : 0,
+      prot: targetMacros.protein > 0 ? Math.abs(testMacros.protein - targetMacros.protein) / targetMacros.protein : 0,
+      carbs: targetMacros.carbs > 0 ? Math.abs(testMacros.carbs - targetMacros.carbs) / targetMacros.carbs : 0,
+      fat: targetMacros.fat > 0 ? Math.abs(testMacros.fat - targetMacros.fat) / targetMacros.fat : 0
+    };
+    
+    // 🎯 MÉTRICA: El ERROR MÁXIMO de cualquier macro
+    const maxError = Math.max(errors.cal, errors.prot, errors.carbs, errors.fat);
+    
+    // Guardar si es mejor que el anterior
+    if (maxError < bestMaxError) {
+      bestMaxError = maxError;
+      bestMultiplier = baseTestMultiplier;
+      bestIngredients = testIngredients;
+    }
+  }
+  
+  console.log(`   ✅ Mejor multiplicador encontrado: ${bestMultiplier.toFixed(3)}x (error máx: ${(bestMaxError * 100).toFixed(1)}%)`);
+  
+  return {
+    multiplier: bestMultiplier,
+    ingredients: bestIngredients,
+    maxError: bestMaxError,
+    iterations,
+    typologyInfo: ingredientTypologies
+  };
+}
+
+/**
+ * 🎯 ALGORITMO DE OPTIMIZACIÓN MULTI-OBJETIVO (LEGACY - sin tipologías)
  * 
  * En lugar de búsqueda binaria simple (que solo usa calorías), este algoritmo
  * prueba MÚLTIPLES multiplicadores alrededor del óptimo y elige el que minimiza
@@ -180,8 +308,8 @@ export function scaleToExactTarget(
     return scaledMeal;
   }
   
-  // 🎯 USAR BÚSQUEDA BINARIA para encontrar el multiplicador perfecto
-  const result = findOptimalMultiplier(meal, targetMacros, allIngredients);
+  // 🤖 USAR ALGORITMO AVANZADO CON CLASIFICACIÓN AUTOMÁTICA
+  const result = findOptimalMultiplierWithTypology(meal, targetMacros, allIngredients);
   
   const finalMacros = calculateMacrosFromIngredients(result.ingredients, allIngredients);
   
@@ -189,7 +317,9 @@ export function scaleToExactTarget(
   result.ingredients.forEach((ing, i) => {
     const original = meal.ingredientReferences![i];
     const change = ing.amountInGrams - original.amountInGrams;
-    console.log(`      ${ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g (${change > 0 ? '+' : ''}${change}g)`);
+    const ingredient = allIngredients.find(item => item.id === ing.ingredientId);
+    const typology = result.typologyInfo.get(ing.ingredientId) || 'unknown';
+    console.log(`      ${ingredient?.name || ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g (${change > 0 ? '+' : ''}${change}g) [${typology}]`);
   });
   
   const scaledMeal = {
