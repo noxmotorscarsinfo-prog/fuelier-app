@@ -601,17 +601,25 @@ export default function MealSelection({
   const renderMealCard = (scoredMeal: MealScore & { scaledMeal?: Meal }, isTopRecommended: boolean = false, topNumber?: number) => {
     const { meal, scaledMeal, score, userAcceptanceProbability, adaptationScore } = scoredMeal;
     
+    // ⚠️ VALIDACIÓN CRÍTICA: Todos los platos DEBEN venir escalados al 100%
+    if (!scaledMeal) {
+      console.error('❌ CRÍTICO: Plato sin escalar detectado:', meal.name);
+      console.error('   Esto NO debería ocurrir - todos los platos deben pasar por rankMealsByFit');
+      // Fallar visiblemente para detectar el bug
+      return null;
+    }
+    
     console.log('🎴 Renderizando tarjeta:', {
       nombre: meal.name,
-      tienescaledMeal: !!scaledMeal,
       macrosOriginal: { cal: meal.calories, prot: meal.protein },
-      macrosEscalado: scaledMeal ? { cal: scaledMeal.calories, prot: scaledMeal.protein } : 'N/A'
+      macrosEscalado: { cal: scaledMeal.calories, prot: scaledMeal.protein },
+      escaladoCorrectamente: true
     });
     
-    // ✅ USAR EL SCALED MEAL si existe (ya viene escalado según el target automático)
-    const mealToDisplay = scaledMeal || meal;
+    // ✅ SIEMPRE USAR SCALED MEAL (escalado al 100% del target)
+    const mealToDisplay = scaledMeal;
     
-    console.log('   → Mostrando macros de:', scaledMeal ? 'scaledMeal ✅' : 'meal original ❌', {
+    console.log('   → Mostrando macros escalados al 100%:', {
       cal: mealToDisplay.calories,
       prot: mealToDisplay.protein,
       carbs: mealToDisplay.carbs,
