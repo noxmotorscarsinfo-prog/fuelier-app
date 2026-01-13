@@ -58,11 +58,17 @@ export default function MealSelection({
     reload: reloadIngredients
   } = useIngredientsLoader(user.email, user.isAdmin);
   
+  // Extraer ingredientes personalizados del array combinado (para compatibilidad con código existente)
+  const customIngredients = useMemo(() => {
+    return ingredientsFromSupabase.filter(ing => ing.isCustom || ing.userId);
+  }, [ingredientsFromSupabase]);
+  
   // Log de estado de ingredientes (solo en desarrollo)
   useEffect(() => {
     if (!loadingIngredients) {
       console.log(`📊 [MealSelection] Ingredientes cargados desde: ${ingredientsSource}`);
       console.log(`   Total: ${ingredientsFromSupabase.length} ingredientes`);
+      console.log(`   Custom: ${customIngredients.length} ingredientes`);
       
       if (ingredientsSource === 'local') {
         console.warn('⚠️ [MealSelection] Usando ingredientes LOCALES (fallback)');
@@ -73,7 +79,7 @@ export default function MealSelection({
         console.error('❌ [MealSelection] Error al cargar ingredientes:', ingredientsError);
       }
     }
-  }, [loadingIngredients, ingredientsSource, ingredientsFromSupabase.length, ingredientsError]);
+  }, [loadingIngredients, ingredientsSource, ingredientsFromSupabase.length, customIngredients.length, ingredientsError]);
 
   // Cargar platos globales al montar el componente
   useEffect(() => {
