@@ -132,6 +132,12 @@ export function scaleToExactTarget(
   console.log(`   Última comida: ${isLastMeal ? '✅ SÍ (AJUSTE PERFECTO AL 100%)' : '❌ NO'}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📊 Target:', targetMacros);
+  console.log(`📦 Ingredientes disponibles: ${allIngredients.length}`);
+  if (allIngredients.length > 0) {
+    console.log(`   Primeros 3 IDs: ${allIngredients.slice(0, 3).map(i => i.id).join(', ')}`);
+  } else {
+    console.error('⚠️ CRÍTICO: allIngredients está VACÍO - escalado usará fallback local');
+  }
   
   // Obtener macros base del plato
   const baseMacros = meal.ingredientReferences && meal.ingredientReferences.length > 0

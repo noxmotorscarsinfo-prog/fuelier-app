@@ -10,6 +10,7 @@ import { getMealGoals } from '../utils/mealDistribution';
 import { migrateMealsToStructured } from '../utils/mealMigration';
 import { Ingredient } from '../../data/ingredientTypes';
 import * as api from '../utils/api';
+import { useIngredientsLoader } from '../hooks/useIngredientsLoader';
 
 interface MealSelectionProps {
   user: User;
@@ -48,36 +49,31 @@ export default function MealSelection({
   const [isLoadingGlobalMeals, setIsLoadingGlobalMeals] = useState(true);
   const [isLoadingCustomMeals, setIsLoadingCustomMeals] = useState(true);
   
-  // NUEVO: Ingredientes del usuario y globales para mostrar en el filtro
-  const [customIngredients, setCustomIngredients] = useState<any[]>([]);
-  const [globalIngredients, setGlobalIngredients] = useState<Ingredient[]>([]);
-
-  // Cargar ingredientes globales y personalizados del usuario
+  // 🔄 NUEVO: Hook robusto para carga de ingredientes con fallback automático
+  const { 
+    ingredients: ingredientsFromSupabase, 
+    isLoading: loadingIngredients, 
+    source: ingredientsSource,
+    error: ingredientsError,
+    reload: reloadIngredients
+  } = useIngredientsLoader(user.email, user.isAdmin);
+  
+  // Log de estado de ingredientes (solo en desarrollo)
   useEffect(() => {
-    const loadIngredients = async () => {
-      try {
-        // Cargar ingredientes globales
-        const baseIngredients = await api.getGlobalIngredients();
-        console.log(`✅ Cargados ${baseIngredients.length} ingredientes globales`);
-        setGlobalIngredients(baseIngredients);
-        
-        // Cargar ingredientes personalizados si hay usuario
-        if (user.email) {
-          const userIngredients = await api.getCustomIngredients(user.email);
-          console.log(`✅ Cargados ${userIngredients.length} ingredientes personalizados para filtro`);
-          setCustomIngredients(userIngredients);
-        }
-      } catch (error) {
-        console.error('Error cargando ingredientes:', error);
+    if (!loadingIngredients) {
+      console.log(`📊 [MealSelection] Ingredientes cargados desde: ${ingredientsSource}`);
+      console.log(`   Total: ${ingredientsFromSupabase.length} ingredientes`);
+      
+      if (ingredientsSource === 'local') {
+        console.warn('⚠️ [MealSelection] Usando ingredientes LOCALES (fallback)');
+        console.warn('   Esto indica que Supabase está vacío o tuvo un error');
       }
-    };
-    loadIngredients();
-  }, [user.email]);
-
-  // Combinar ingredientes globales + personalizados para cálculos de macros
-  const ingredientsFromSupabase = useMemo(() => {
-    return [...globalIngredients, ...customIngredients];
-  }, [globalIngredients, customIngredients]);
+      
+      if (ingredientsError) {
+        console.error('❌ [MealSelection] Error al cargar ingredientes:', ingredientsError);
+      }
+    }
+  }, [loadingIngredients, ingredientsSource, ingredientsFromSupabase.length, ingredientsError]);
 
   // Cargar platos globales al montar el componente
   useEffect(() => {
@@ -934,6 +930,25 @@ export default function MealSelection({
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
           <p className="text-neutral-600">Cargando platos desde Supabase...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 🔄 Loading state - No renderizar hasta tener ingredientes
+  if (loadingIngredients || isLoadingGlobalMeals) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 mx-auto border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="space-y-2">
+            <p className="text-lg font-semibold text-neutral-700">
+              {loadingIngredients ? 'Cargando ingredientes...' : 'Cargando platos...'}
+            </p>
+            <p className="text-sm text-neutral-500">
+              Preparando tus opciones de comida
+            </p>
+          </div>
         </div>
       </div>
     );
