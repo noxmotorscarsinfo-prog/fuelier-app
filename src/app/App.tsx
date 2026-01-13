@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { User, Meal, MealType, DailyLog, SavedDiet, BugReport, MacroGoals, MealDistribution } from './types';
 import LoginAuth from './components/LoginAuth';
 import AdminLogin from './components/AdminLogin';
@@ -31,8 +31,8 @@ import { analyzeProgress, applyAutomaticAdjustment, detectMetabolicAdaptation, g
 import { calculateMacrosFromUser, calculateBMR, calculateTDEE, calculateMacros } from './utils/macroCalculations';
 import { calculateIntelligentTarget } from './utils/automaticTargetCalculator';
 import { scaleToExactTarget } from './utils/intelligentMealScaling';
+import { Ingredient } from '../data/ingredientTypes';
 import * as api from './utils/api';
-import { captureError, setSentryUser } from './utils/sentry';
 import logger from './utils/logger';
 
 type Screen = 
@@ -98,6 +98,15 @@ export default function App() {
     newGoals?: MacroGoals;
     warnings?: string[];
   } | null>(null);
+
+  // Estados para ingredientes (100% cloud)
+  const [globalIngredients, setGlobalIngredients] = useState<Ingredient[]>([]);
+  const [customIngredients, setCustomIngredients] = useState<Ingredient[]>([]);
+
+  // Combinar ingredientes globales + personalizados
+  const allIngredients = useMemo(() => {
+    return [...globalIngredients, ...customIngredients];
+  }, [globalIngredients, customIngredients]);
 
   // NUEVO: Detectar ruta de admin al montar
   useEffect(() => {
@@ -237,6 +246,25 @@ export default function App() {
     };
     
     loadUserData();
+    
+    // Cargar ingredientes globales y personalizados
+    const loadIngredients = async () => {
+      if (!user?.email) return;
+      
+      try {
+        const [baseIngredients, userIngredients] = await Promise.all([
+          api.getGlobalIngredients(),
+          api.getCustomIngredients(user.email)
+        ]);
+        setGlobalIngredients(baseIngredients);
+        setCustomIngredients(userIngredients);
+        logger.info(`✅ Ingredientes cargados: ${baseIngredients.length} globales, ${userIngredients.length} personalizados`);
+      } catch (error) {
+        logger.error('Error loading ingredients:', error);
+      }
+    };
+    
+    loadIngredients();
   }, [user]);
 
   // Save user to Supabase ONLY whenever it changes
@@ -503,7 +531,8 @@ export default function App() {
         const scaledMeal = scaleToExactTarget(
           meal,
           intelligentTarget,
-          intelligentTarget.isLastMeal
+          intelligentTarget.isLastMeal,
+          allIngredients
         );
         
         return scaledMeal;
@@ -607,13 +636,6 @@ export default function App() {
         });
         setUser(userData);
         
-        // Configurar contexto de usuario en Sentry
-        setSentryUser({
-          id: userData.id,
-          email: userData.email,
-          name: userData.name
-        });
-        
         setCurrentScreen('dashboard');
       } else {
         console.log(`[handleLogin] ⚠️ Perfil NO encontrado en base de datos`);
@@ -630,13 +652,6 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('[handleLogin] ❌ Error inesperado durante login:', error);
-      
-      // Capturar error en Sentry con contexto
-      captureError(error, {
-        operation: 'user_login',
-        email: email,
-        errorType: 'authentication_error'
-      });
       
       alert(`❌ Error al iniciar sesión: ${error.message || 'Error desconocido'}`);
     }
@@ -1469,7 +1484,8 @@ export default function App() {
                   const scaledMeal = scaleToExactTarget(
                     createdMeal,
                     intelligentTarget,
-                    intelligentTarget.isLastMeal
+                    intelligentTarget.isLastMeal,
+                    allIngredients
                   );
                   
                   console.log('📏 Plato escalado:', scaledMeal);
@@ -1560,7 +1576,8 @@ export default function App() {
               const scaledMeal = scaleToExactTarget(
                 meal,
                 intelligentTarget,
-                intelligentTarget.isLastMeal
+                intelligentTarget.isLastMeal,
+                allIngredients
               );
               
               return scaledMeal;
