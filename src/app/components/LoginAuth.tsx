@@ -5,9 +5,11 @@ interface LoginAuthProps {
   onLoginSuccess: (email: string, password: string, name: string) => void;
   onSignupSuccess?: (email: string, password: string, name: string) => void;
   onAdminAccess?: () => void;
+  onShowPrivacy?: () => void;
+  onShowTerms?: () => void;
 }
 
-export default function LoginAuth({ onLoginSuccess, onSignupSuccess, onAdminAccess }: LoginAuthProps) {
+export default function LoginAuth({ onLoginSuccess, onSignupSuccess, onAdminAccess, onShowPrivacy, onShowTerms }: LoginAuthProps) {
   const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -199,6 +201,23 @@ export default function LoginAuth({ onLoginSuccess, onSignupSuccess, onAdminAcce
         <div className="mt-6 text-center text-emerald-50 text-sm">
           <p>✨ Tus datos se guardan en la nube de forma segura</p>
           <p className="mt-1">🔒 Accede desde cualquier dispositivo</p>
+          
+          {/* Enlaces legales */}
+          <div className="mt-4 flex justify-center gap-4 text-xs">
+            <button
+              onClick={() => onShowPrivacy && onShowPrivacy()}
+              className="text-emerald-100 hover:text-white underline"
+            >
+              Política de Privacidad
+            </button>
+            <span className="text-emerald-200">•</span>
+            <button
+              onClick={() => onShowTerms && onShowTerms()}
+              className="text-emerald-100 hover:text-white underline"
+            >
+              Términos de Uso
+            </button>
+          </div>
         </div>
       </div>
     </div>

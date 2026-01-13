@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ArrowLeft, Plus, X, Save, Info, ChefHat, Sparkles, Search, Check } from 'lucide-react';
 import { Meal, MealType } from '../types';
-import { INGREDIENTS_DATABASE, calculateMacrosFromIngredients, Ingredient as DBIngredient } from '../../data/ingredientsDatabase';
+import { Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
 import * as api from '../utils/api';
 
 interface CreateMealProps {
@@ -111,14 +111,16 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
       amountInGrams: parseFloat(ing.grams) || 0
     }));
 
-    const macros = calculateMacrosFromIngredients(ingredientReferences);
+    // ⭐ FIXED: Pasar todos los ingredientes (base + custom de Supabase) para que pueda buscar por ID
+    const allSupabaseIngredients = [...baseIngredients, ...customIngredients];
+    const macros = calculateMacrosFromIngredients(ingredientReferences, allSupabaseIngredients);
     const totalGrams = validIngredients.reduce((sum, ing) => sum + (parseFloat(ing.grams) || 0), 0);
 
     return {
       ...macros,
       totalGrams: Math.round(totalGrams)
     };
-  }, [ingredients]);
+  }, [ingredients, baseIngredients, customIngredients]);
 
   const getMealTypeLabel = () => {
     const labels = {
@@ -173,8 +175,8 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
   const getFilteredSuggestions = (searchText: string) => {
     if (!searchText || searchText.length < 1) return [];
     
-    // ⭐ FIXED: Combinar ingredientes base + personalizados de forma síncrona
-    const allIngredients: DBIngredient[] = [...INGREDIENTS_DATABASE, ...baseIngredients, ...customIngredients];
+    // ⭐ 100% CLOUD: Solo ingredientes de Supabase (base + personalizados)
+    const allIngredients: DBIngredient[] = [...baseIngredients, ...customIngredients];
     const lowerSearch = searchText.toLowerCase();
     
     return allIngredients

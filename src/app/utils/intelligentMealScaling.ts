@@ -3,10 +3,12 @@
  * 
  * Escala platos automáticamente para que se ajusten al target calculado.
  * Garantiza que la suma de las 4 comidas = objetivos totales del día.
+ * 
+ * ✅ 100% CLOUD - Recibe ingredientes como parámetro
  */
 
 import { Meal, User, DailyLog, MealType } from '../types';
-import { calculateMacrosFromIngredients, MealIngredientReference } from '../../data/ingredientsDatabase';
+import { Ingredient, MealIngredientReference, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
 
 /**
  * ✅ CORREGIDO: Calcula el multiplicador perfecto para escalar un plato
@@ -78,11 +80,17 @@ function calculatePerfectMultiplier(
  * 2. Sin ingredientReferences: Escala los macros proporcionalmente
  * 
  * ⭐ ÚLTIMA COMIDA: Hace ajuste PERFECTO al 100% del target
+ * 
+ * @param meal - Plato a escalar
+ * @param targetMacros - Macros objetivo
+ * @param isLastMeal - Si es la última comida del día
+ * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  */
 export function scaleToExactTarget(
   meal: Meal,
   targetMacros: { calories: number; protein: number; carbs: number; fat: number },
-  isLastMeal: boolean = false
+  isLastMeal: boolean = false,
+  allIngredients: Ingredient[] = []
 ): Meal {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`🔧 ESCALANDO: "${meal.name}"${meal.isCustom ? ' [PLATO PERSONALIZADO]' : ''}${meal.isGlobal ? ' [PLATO ADMIN]' : ''}`);
@@ -92,7 +100,7 @@ export function scaleToExactTarget(
   
   // Obtener macros base del plato
   const baseMacros = meal.ingredientReferences && meal.ingredientReferences.length > 0
-    ? calculateMacrosFromIngredients(meal.ingredientReferences)
+    ? calculateMacrosFromIngredients(meal.ingredientReferences, allIngredients)
     : { calories: meal.calories, protein: meal.protein, carbs: meal.carbs, fat: meal.fat };
   
   console.log('📊 Macros base del plato:', baseMacros);
@@ -225,7 +233,7 @@ export function scaleToExactTarget(
     console.log(`      ${ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g`);
   });
   
-  const scaledMacros = calculateMacrosFromIngredients(scaledIngredients);
+  const scaledMacros = calculateMacrosFromIngredients(scaledIngredients, allIngredients);
   
   const scaledMeal = {
     ...meal,
@@ -290,13 +298,21 @@ function calculateFitScore(
  * 
  * Rankea y escala todos los platos según qué tan bien se ajustan al target.
  * CRÍTICO: Usa el flag isLastMeal del targetMacros calculado automáticamente.
+ * 
+ * @param meals - Lista de platos a rankear
+ * @param user - Usuario actual
+ * @param currentLog - Log del día actual
+ * @param mealType - Tipo de comida
+ * @param targetMacros - Macros objetivo
+ * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  */
 export function rankMealsByFit(
   meals: Meal[],
   user: User,
   currentLog: DailyLog,
   mealType: MealType,
-  targetMacros: { calories: number; protein: number; carbs: number; fat: number; isLastMeal?: boolean }
+  targetMacros: { calories: number; protein: number; carbs: number; fat: number; isLastMeal?: boolean },
+  allIngredients: Ingredient[] = []
 ): Array<{ meal: Meal; scaledMeal: Meal; fitScore: number }> {
   
   // ✅ CLAVE: Usar el flag isLastMeal del target calculado
@@ -315,7 +331,7 @@ export function rankMealsByFit(
   
   const rankedMeals = meals.map(meal => {
     // Escalar el plato al target exacto
-    const scaledMeal = scaleToExactTarget(meal, targetMacros, isLastMeal);
+    const scaledMeal = scaleToExactTarget(meal, targetMacros, isLastMeal, allIngredients);
     
     // Calcular qué tan bien se ajusta
     const fitScore = calculateFitScore(scaledMeal, targetMacros);

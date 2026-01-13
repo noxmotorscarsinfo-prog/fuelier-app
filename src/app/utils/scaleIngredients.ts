@@ -2,22 +2,26 @@
  * ESCALADO INTELIGENTE DE INGREDIENTES
  * 
  * Este módulo escala los ingredientes de un plato según el multiplicador de porción,
- * usando la base de datos de ingredientes para cálculos precisos.
+ * usando la lista de ingredientes proporcionada desde Supabase.
+ * 
+ * ✅ 100% CLOUD - Recibe ingredientes como parámetro
  */
 
 import { Meal, MealIngredient } from '../types';
-import { getIngredientById, MealIngredientReference } from '../../data/ingredientsDatabase';
+import { Ingredient, MealIngredientReference, getIngredientById } from '../../data/ingredientTypes';
 
 /**
  * Escala los ingredientes de un plato según el multiplicador de porción
  * 
  * @param meal - Plato con ingredientReferences
  * @param portionMultiplier - Multiplicador (ej: 1.5 para 150% de la receta base)
+ * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  * @returns Array de ingredientes escalados con macros calculados
  */
 export function scaleIngredientsForMeal(
   meal: Meal,
-  portionMultiplier: number
+  portionMultiplier: number,
+  allIngredients: Ingredient[]
 ): MealIngredient[] {
   // Si el plato no tiene referencias a ingredientes, devolver array vacío
   if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
@@ -27,7 +31,7 @@ export function scaleIngredientsForMeal(
   const scaledIngredients: MealIngredient[] = [];
   
   for (const ref of meal.ingredientReferences) {
-    const ingredient = getIngredientById(ref.ingredientId);
+    const ingredient = getIngredientById(ref.ingredientId, allIngredients);
     
     if (!ingredient) {
       console.warn(`Ingrediente no encontrado: ${ref.ingredientId}`);
@@ -61,14 +65,16 @@ export function scaleIngredientsForMeal(
  * 
  * @param meal - Plato base
  * @param portionMultiplier - Multiplicador
+ * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  * @returns Plato escalado con ingredientes detallados
  */
 export function scaleMealWithIngredients(
   meal: Meal,
-  portionMultiplier: number
+  portionMultiplier: number,
+  allIngredients: Ingredient[]
 ): Meal {
   // Escalar ingredientes
-  const scaledIngredients = scaleIngredientsForMeal(meal, portionMultiplier);
+  const scaledIngredients = scaleIngredientsForMeal(meal, portionMultiplier, allIngredients);
   
   // Calcular macros totales desde los ingredientes escalados
   const totalMacros = scaledIngredients.reduce(

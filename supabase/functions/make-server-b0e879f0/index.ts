@@ -5,6 +5,81 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const app = new Hono();
 
+// ==========================================
+// RATE LIMITING
+// ==========================================
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+// Configuración de rate limiting
+const RATE_LIMIT_CONFIG = {
+  // Endpoints de autenticación (más restrictivos)
+  auth: { maxRequests: 10, windowMs: 60 * 1000 }, // 10 requests por minuto
+  // Endpoints generales
+  general: { maxRequests: 100, windowMs: 60 * 1000 }, // 100 requests por minuto
+  // Endpoints de escritura
+  write: { maxRequests: 30, windowMs: 60 * 1000 }, // 30 requests por minuto
+};
+
+function getClientIP(c: any): string {
+  return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() 
+    || c.req.header('x-real-ip') 
+    || 'unknown';
+}
+
+function isRateLimited(key: string, config: { maxRequests: number; windowMs: number }): boolean {
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+  
+  if (!entry || now > entry.resetTime) {
+    rateLimitStore.set(key, { count: 1, resetTime: now + config.windowMs });
+    return false;
+  }
+  
+  if (entry.count >= config.maxRequests) {
+    return true;
+  }
+  
+  entry.count++;
+  return false;
+}
+
+// Middleware de rate limiting
+function rateLimitMiddleware(type: 'auth' | 'general' | 'write') {
+  return async (c: any, next: any) => {
+    const ip = getClientIP(c);
+    const key = `${type}:${ip}`;
+    const config = RATE_LIMIT_CONFIG[type];
+    
+    if (isRateLimited(key, config)) {
+      return c.json(
+        { 
+          error: 'Too many requests', 
+          message: 'Por favor, espera un momento antes de intentar de nuevo.',
+          retryAfter: Math.ceil(config.windowMs / 1000)
+        }, 
+        429
+      );
+    }
+    
+    await next();
+  };
+}
+
+// Limpieza periódica del store (cada 5 minutos)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore.entries()) {
+    if (now > entry.resetTime) {
+      rateLimitStore.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
 // Función para generar UUID v4
 function generateUUID(): string {
   return crypto.randomUUID();
@@ -76,10 +151,10 @@ const basePath = "/make-server-b0e879f0";
 const authBasePath = `${basePath}/auth`;
 
 // ==========================================
-// AUTHENTICATION ROUTES
+// AUTHENTICATION ROUTES (con rate limiting estricto)
 // ==========================================
 
-app.post(`${authBasePath}/signup`, async (c) => {
+app.post(`${authBasePath}/signup`, rateLimitMiddleware('auth'), async (c) => {
   try {
     const body = await c.req.json();
     const { email, password, name } = body;
@@ -142,7 +217,7 @@ app.post(`${authBasePath}/signup`, async (c) => {
   }
 });
 
-app.post(`${authBasePath}/signin`, async (c) => {
+app.post(`${authBasePath}/signin`, rateLimitMiddleware('auth'), async (c) => {
   try {
     const { email, password } = await c.req.json();
     if (!email || !password) return c.json({ error: "Email and password required" }, 400);
@@ -188,7 +263,7 @@ app.post(`${authBasePath}/signin`, async (c) => {
 });
 
 // Endpoint para validar credenciales de admin (credenciales en servidor, no en frontend)
-app.post(`${authBasePath}/admin-login`, async (c) => {
+app.post(`${authBasePath}/admin-login`, rateLimitMiddleware('auth'), async (c) => {
   try {
     const { email, password } = await c.req.json();
     if (!email || !password) return c.json({ error: "Email and password required" }, 400);
@@ -308,7 +383,7 @@ app.get(`${basePath}/user/:email`, async (c) => {
   }
 });
 
-app.post(`${basePath}/user`, async (c) => {
+app.post(`${basePath}/user`, rateLimitMiddleware('write'), async (c) => {
   try {
     const user = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -423,7 +498,7 @@ app.get(`${basePath}/daily-logs/:email`, async (c) => {
   }
 });
 
-app.post(`${basePath}/daily-logs`, async (c) => {
+app.post(`${basePath}/daily-logs`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { email, logs } = await c.req.json();
     console.log(`[SERVER] POST /daily-logs for ${email}`);
@@ -489,7 +564,7 @@ app.get(`${basePath}/custom-meals/:email`, async (c) => {
   }
 });
 
-app.post(`${basePath}/custom-meals`, async (c) => {
+app.post(`${basePath}/custom-meals`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { email, meals } = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -499,7 +574,7 @@ app.post(`${basePath}/custom-meals`, async (c) => {
 
     const dbMeals = meals.map((meal: any) => {
       // Normalize type -> meal_types array
-      const mealTypes = Array.isArray(meal.type) ? meal.type : (meal.type ? [meal.type] : []);
+      const mealTypes = Array.isArray(meal.type) ? meal.type : (meal.type ? [meal.type] : ['lunch']);
 
       // Normalize macros (support both meal.calories or meal.macros)
       const calories = Math.round(Number(meal.calories ?? meal.macros?.calories ?? 0));
@@ -507,18 +582,22 @@ app.post(`${basePath}/custom-meals`, async (c) => {
       const carbs = Math.round(Number(meal.carbs ?? meal.macros?.carbs ?? 0));
       const fat = Math.round(Number(meal.fat ?? meal.macros?.fat ?? 0));
 
+      // Generar UUID para el id si no es un UUID válido
+      const mealId = meal.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(meal.id) 
+        ? meal.id 
+        : generateUUID();
+
       return {
-        id: meal.id,
+        id: mealId,
         user_id: userId,
-        name: meal.name,
+        name: meal.name || 'Plato sin nombre',
         meal_types: mealTypes,
         variant: meal.variant || null,
         calories,
         protein,
         carbs,
         fat,
-        ingredients: meal.ingredients || [],
-        detailed_ingredients: meal.detailedIngredients || null,
+        detailed_ingredients: meal.detailedIngredients || meal.detailed_ingredients || meal.ingredientReferences || [],
         base_quantity: Math.round(Number(meal.baseQuantity ?? 100)),
         preparation_steps: meal.preparationSteps || [],
         tips: meal.tips || [],
@@ -527,15 +606,21 @@ app.post(`${basePath}/custom-meals`, async (c) => {
       };
     });
 
-    const { error } = await supabase
-      .from('custom_meals')
-      .upsert(dbMeals, { onConflict: 'id' });
+    console.log('[POST /custom-meals] Saving meals:', JSON.stringify(dbMeals));
 
-    if (error) throw error;
-    return c.json({ success: true });
+    const { data, error } = await supabase
+      .from('custom_meals')
+      .upsert(dbMeals, { onConflict: 'id' })
+      .select();
+
+    if (error) {
+      console.error('[POST /custom-meals] Supabase error:', error);
+      return c.json({ error: error.message, code: error.code }, 500);
+    }
+    return c.json({ success: true, meals: data });
   } catch (error) {
     console.error('[POST /custom-meals] Error:', error);
-    return c.json({ error: "Failed to save custom meals" }, 500);
+    return c.json({ error: "Failed to save custom meals", details: String(error) }, 500);
   }
 });
 
@@ -554,7 +639,7 @@ app.get(`${basePath}/saved-diets/:email`, async (c) => {
   } catch (error) { return c.json([], 200); }
 });
 
-app.post(`${basePath}/saved-diets`, async (c) => {
+app.post(`${basePath}/saved-diets`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { email, diets } = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -587,7 +672,7 @@ app.get(`${basePath}/favorite-meals/:email`, async (c) => {
   } catch (error) { return c.json([], 200); }
 });
 
-app.post(`${basePath}/favorite-meals`, async (c) => {
+app.post(`${basePath}/favorite-meals`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { email, favorites } = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -630,7 +715,7 @@ app.get(`${basePath}/training-plan/:email`, async (c) => {
   }
 });
 
-app.post(`${basePath}/training-plan`, async (c) => {
+app.post(`${basePath}/training-plan`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { email, weekPlan } = await c.req.json();
     console.log(`[POST /training-plan] Recibido para ${email}. Plan size: ${weekPlan?.length}`);
@@ -714,7 +799,7 @@ app.get(`${basePath}/global-meals`, async (c) => {
   }
 });
 
-app.post(`${basePath}/global-meals`, async (c) => {
+app.post(`${basePath}/global-meals`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { meals } = await c.req.json();
     if (!Array.isArray(meals)) return c.json({ error: 'Invalid payload' }, 400);
@@ -817,7 +902,7 @@ app.get(`${basePath}/global-ingredients`, async (c) => {
   }
 });
 
-app.post(`${basePath}/global-ingredients`, async (c) => {
+app.post(`${basePath}/global-ingredients`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { ingredients } = await c.req.json();
     if (!Array.isArray(ingredients)) {
@@ -898,7 +983,7 @@ app.get(`${basePath}/custom-ingredients/:email`, async (c) => {
     return c.json([]);
   }
 });
-app.post(`${basePath}/custom-ingredients`, async (c) => {
+app.post(`${basePath}/custom-ingredients`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { email, ingredients } = await c.req.json();
     if (!email || !Array.isArray(ingredients)) {
@@ -967,7 +1052,7 @@ app.get(`${basePath}/custom-exercises/:email`, async (c) => {
   } catch (error) { return c.json([], 200); }
 });
 
-app.post(`${basePath}/custom-exercises`, async (c) => {
+app.post(`${basePath}/custom-exercises`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { email, exercises } = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -1030,7 +1115,7 @@ app.get(`${basePath}/training-completed/:email`, async (c) => {
   }
 });
 
-app.post(`${basePath}/training-completed`, async (c) => {
+app.post(`${basePath}/training-completed`, rateLimitMiddleware('write'), async (c) => {
   try {
     const { email, completedWorkouts } = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -1103,7 +1188,7 @@ app.get(`${basePath}/training-progress/:email/:date`, async (c) => {
   }
 });
 
-app.post(`${basePath}/training-progress`, async (c) => {
+app.post(`${basePath}/training-progress`, rateLimitMiddleware('write'), async (c) => {
   try {
     const body = await c.req.json();
     const { email, date, dayIndex, exerciseReps, exerciseWeights } = body;
@@ -1176,7 +1261,7 @@ app.get(`${basePath}/bug-reports`, async (c) => {
   }
 });
 
-app.post(`${basePath}/bug-reports`, async (c) => {
+app.post(`${basePath}/bug-reports`, rateLimitMiddleware('write'), async (c) => {
   try {
     const report = await c.req.json();
     if (!report.title || !report.description) {

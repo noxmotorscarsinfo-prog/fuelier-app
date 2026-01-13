@@ -26,16 +26,20 @@ import AdminPanel from './components/AdminPanel';
 import TechnicalDocumentation from './components/TechnicalDocumentation';
 import DayCompletedModal from './components/DayCompletedModal';
 import AdaptiveNotification from './components/AdaptiveNotification';
+import { PrivacyPolicy, TermsOfService } from './components/legal';
 import { analyzeProgress, applyAutomaticAdjustment, detectMetabolicAdaptation, generateWeeklyProgress } from './utils/adaptiveSystem';
 import { calculateMacrosFromUser, calculateBMR, calculateTDEE, calculateMacros } from './utils/macroCalculations';
 import { calculateIntelligentTarget } from './utils/automaticTargetCalculator';
 import { scaleToExactTarget } from './utils/intelligentMealScaling';
 import * as api from './utils/api';
+import { captureError, setSentryUser } from './utils/sentry';
 import logger from './utils/logger';
 
 type Screen = 
   | 'login'
   | 'admin-login'
+  | 'privacy-policy'
+  | 'terms-of-service'
   | 'onboarding-sex'
   | 'onboarding-age'
   | 'onboarding-weight'
@@ -602,6 +606,14 @@ export default function App() {
           goalCalories: userData.goals?.calories
         });
         setUser(userData);
+        
+        // Configurar contexto de usuario en Sentry
+        setSentryUser({
+          id: userData.id,
+          email: userData.email,
+          name: userData.name
+        });
+        
         setCurrentScreen('dashboard');
       } else {
         console.log(`[handleLogin] ⚠️ Perfil NO encontrado en base de datos`);
@@ -618,6 +630,14 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('[handleLogin] ❌ Error inesperado durante login:', error);
+      
+      // Capturar error en Sentry con contexto
+      captureError(error, {
+        operation: 'user_login',
+        email: email,
+        errorType: 'authentication_error'
+      });
+      
       alert(`❌ Error al iniciar sesión: ${error.message || 'Error desconocido'}`);
     }
     
@@ -1259,6 +1279,15 @@ export default function App() {
     return <AdminLogin onLogin={handleAdminLogin} />;
   }
 
+  // Show legal pages
+  if (currentScreen === 'privacy-policy') {
+    return <PrivacyPolicy onBack={() => setCurrentScreen('login')} />;
+  }
+
+  if (currentScreen === 'terms-of-service') {
+    return <TermsOfService onBack={() => setCurrentScreen('login')} />;
+  }
+
   // Show login if no user
   if (!user || currentScreen === 'login') {
     return <LoginAuth 
@@ -1269,7 +1298,9 @@ export default function App() {
         console.log('Current screen before:', currentScreen);
         setCurrentScreen('admin-login');
         console.log('Setting screen to: admin-login');
-      }} 
+      }}
+      onShowPrivacy={() => setCurrentScreen('privacy-policy')}
+      onShowTerms={() => setCurrentScreen('terms-of-service')}
     />;
   }
 

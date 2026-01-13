@@ -8,6 +8,7 @@ import { rankMealsByFit } from '../utils/intelligentMealScaling';
 import { calculateIntelligentTarget, getTargetDescription } from '../utils/automaticTargetCalculator';
 import { getMealGoals } from '../utils/mealDistribution';
 import { migrateMealsToStructured } from '../utils/mealMigration';
+import { Ingredient } from '../../data/ingredientTypes';
 import * as api from '../utils/api';
 
 interface MealSelectionProps {
@@ -47,32 +48,51 @@ export default function MealSelection({
   const [isLoadingGlobalMeals, setIsLoadingGlobalMeals] = useState(true);
   const [isLoadingCustomMeals, setIsLoadingCustomMeals] = useState(true);
   
-  // NUEVO: Ingredientes personalizados del usuario para mostrar en el filtro
+  // NUEVO: Ingredientes del usuario y globales para mostrar en el filtro
   const [customIngredients, setCustomIngredients] = useState<any[]>([]);
+  const [globalIngredients, setGlobalIngredients] = useState<Ingredient[]>([]);
 
-  // Cargar ingredientes personalizados del usuario
+  // Cargar ingredientes globales y personalizados del usuario
   useEffect(() => {
-    const loadCustomIngredients = async () => {
-      if (!user.email) return;
+    const loadIngredients = async () => {
       try {
-        const ingredients = await api.getCustomIngredients(user.email);
-        console.log(`✅ Cargados ${ingredients.length} ingredientes personalizados para filtro`);
-        setCustomIngredients(ingredients);
+        // Cargar ingredientes globales
+        const baseIngredients = await api.getGlobalIngredients();
+        console.log(`✅ Cargados ${baseIngredients.length} ingredientes globales`);
+        setGlobalIngredients(baseIngredients);
+        
+        // Cargar ingredientes personalizados si hay usuario
+        if (user.email) {
+          const userIngredients = await api.getCustomIngredients(user.email);
+          console.log(`✅ Cargados ${userIngredients.length} ingredientes personalizados para filtro`);
+          setCustomIngredients(userIngredients);
+        }
       } catch (error) {
-        console.error('Error cargando ingredientes personalizados:', error);
+        console.error('Error cargando ingredientes:', error);
       }
     };
-    loadCustomIngredients();
+    loadIngredients();
   }, [user.email]);
+
+  // Combinar ingredientes globales + personalizados para cálculos de macros
+  const ingredientsFromSupabase = useMemo(() => {
+    return [...globalIngredients, ...customIngredients];
+  }, [globalIngredients, customIngredients]);
 
   // Cargar platos globales al montar el componente
   useEffect(() => {
     const loadGlobalMeals = async () => {
+      // Esperar a tener ingredientes cargados para poder migrar
+      if (ingredientsFromSupabase.length === 0) {
+        console.log('⏳ Esperando ingredientes para cargar platos globales...');
+        return;
+      }
+      
       setIsLoadingGlobalMeals(true);
       const meals = await api.getGlobalMeals();
       
       // 🔄 MIGRACIÓN AUTOMÁTICA: Convertir platos viejos sin ingredientes a formato estructurado
-      const migratedMeals = migrateMealsToStructured(meals);
+      const migratedMeals = migrateMealsToStructured(meals, ingredientsFromSupabase);
       
       // ⚠️ SEGURIDAD: Solo permitir guardar migraciones si el usuario es admin
       const hadMigrations = migratedMeals.some((meal: any) => meal._migrated);
@@ -88,7 +108,7 @@ export default function MealSelection({
       setIsLoadingGlobalMeals(false);
     };
     loadGlobalMeals();
-  }, [user.isAdmin]);
+  }, [user.isAdmin, ingredientsFromSupabase]);
 
   // ✅ Cargar platos personalizados desde Supabase
   useEffect(() => {
@@ -147,7 +167,7 @@ export default function MealSelection({
     
     // 🔄 MIGRACIÓN: Asegurar que TODOS los platos tengan ingredientReferences
     const beforeMigration = allMeals.length;
-    allMeals = migrateMealsToStructured(allMeals);
+    allMeals = migrateMealsToStructured(allMeals, ingredientsFromSupabase);
     
     // ✅ GUARDAR platos personalizados reparados de vuelta en Supabase
     const repairedCustomMeals = allMeals.filter(meal => 
@@ -368,7 +388,8 @@ export default function MealSelection({
       user, 
       currentLog, 
       mealType,
-      intelligentTarget
+      intelligentTarget,
+      ingredientsFromSupabase
     );
     
     console.log('✅ Meals rankeadas y escaladas:', rankedMeals.length);

@@ -4,8 +4,7 @@ import { BREAKFASTS_FROM_DB, LUNCHES_FROM_DB, SNACKS_FROM_DB, DINNERS_FROM_DB } 
 import { ArrowLeft, Plus, Edit, Trash2, Save, X, Coffee, UtensilsCrossed, Apple, Moon, FileText, Package, Search, Check, Sparkles, AlertCircle, Upload, Download } from 'lucide-react';
 import { generateSystemDocumentationPDF } from '../utils/generateSystemDocumentation';
 import * as api from '../utils/api';
-import { INGREDIENTS_DATABASE, getAllIngredients } from '../../data/ingredientsDatabase';
-import { MealIngredientReference, Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientsDatabase';
+import { MealIngredientReference, Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
 import { migrateMealsToStructured } from '../utils/mealMigration';
 import CSVImporter from './CSVImporter';
 import * as XLSX from 'xlsx';
@@ -116,8 +115,9 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     console.log(`📊 Recibidos del servidor: ${meals.length} platos, ${ingredients.length} ingredientes`);
     
     // 🔄 MIGRACIÓN AUTOMÁTICA: Convertir platos viejos sin ingredientes
+    // Necesitamos los ingredientes para la migración
     const originalMealsCount = meals.length;
-    meals = migrateMealsToStructured(meals);
+    meals = migrateMealsToStructured(meals, ingredients);
     
     // Si se migraron platos, guardarlos automáticamente
     const hadMigrations = meals.some((meal: any) => meal._migrated);
@@ -144,9 +144,8 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     }
     
     if (ingredients.length === 0) {
-      // Cargar ingredientes existentes de la app (sistema + personalizados)
-      allIngredients = INGREDIENTS_DATABASE;
-      console.log('✅ Cargados', INGREDIENTS_DATABASE.length, 'ingredientes del sistema desde hardcode');
+      // 100% CLOUD: Si no hay ingredientes del servidor, lista vacía (no hardcode)
+      console.warn('⚠️ No hay ingredientes en el servidor - deben subirse primero');
     } else {
       console.log(`✅ Usando ${ingredients.length} ingredientes del servidor`);
     }
@@ -318,13 +317,9 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
   // ==================== FUNCIONES DE INGREDIENTES PARA PLATOS ====================
 
-  // Función auxiliar para buscar un ingrediente en todas las fuentes disponibles
+  // Función auxiliar para buscar un ingrediente - 100% CLOUD (solo Supabase)
   const findIngredientById = (ingredientId: string): DBIngredient | null => {
-    // 1. Buscar en INGREDIENTS_DATABASE (hardcodeados)
-    const fromDB = INGREDIENTS_DATABASE.find(ing => ing.id === ingredientId);
-    if (fromDB) return fromDB;
-    
-    // 2. Buscar en globalIngredients (creados por admin en Supabase)
+    // Buscar en globalIngredients (creados por admin en Supabase)
     const fromGlobal = globalIngredients.find(gi => gi.id === ingredientId);
     if (fromGlobal) {
       // Soportar ambos formatos: caloriesPer100g o calories
@@ -390,23 +385,19 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
   // Filtrar ingredientes para el selector
   const filteredIngredients = useMemo(() => {
-    // ⭐ FIXED: Combinar ingredientes hardcodeados + ingredientes globales de Supabase
-    const allAvailableIngredients: DBIngredient[] = [
-      ...INGREDIENTS_DATABASE,
-      // Convertir globalIngredients (formato Ingredient) a DBIngredient
-      ...globalIngredients.map(gi => ({
-        id: gi.id,
-        name: gi.name,
-        category: gi.category as any,
-        caloriesPer100g: gi.calories,
-        proteinPer100g: gi.protein,
-        carbsPer100g: gi.carbs,
-        fatPer100g: gi.fat,
-        isCustom: false
-      }))
-    ];
+    // ⭐ 100% CLOUD: Solo ingredientes de Supabase (globalIngredients)
+    const allAvailableIngredients: DBIngredient[] = globalIngredients.map(gi => ({
+      id: gi.id,
+      name: gi.name,
+      category: gi.category as any,
+      caloriesPer100g: (gi as any).caloriesPer100g ?? gi.calories ?? 0,
+      proteinPer100g: (gi as any).proteinPer100g ?? gi.protein ?? 0,
+      carbsPer100g: (gi as any).carbsPer100g ?? gi.carbs ?? 0,
+      fatPer100g: (gi as any).fatPer100g ?? gi.fat ?? 0,
+      isCustom: false
+    }));
     
-    // Eliminar duplicados por NOMBRE (case-insensitive) - prioriza ingredientes hardcodeados
+    // Eliminar duplicados por NOMBRE (case-insensitive)
     const seenNames = new Set<string>();
     const uniqueIngredients = allAvailableIngredients.filter(ing => {
       const nameLower = ing.name.toLowerCase();
