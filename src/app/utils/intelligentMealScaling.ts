@@ -16,8 +16,7 @@
 import { Meal, User, DailyLog, MealType } from '../types';
 import { Ingredient, MealIngredientReference, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
 import { classifyIngredient, SCALING_COEFFICIENTS, NutritionalTypology } from './ingredientClassification';
-
-import { classifyIngredient, SCALING_COEFFICIENTS, NutritionalTypology } from './ingredientClassification';
+import { scaleMealToTarget as preciseScaleMealToTarget } from './preciseIngredientScaling';
 
 /**
  * 🤖 ESCALADO INTELIGENTE CON CLASIFICACIÓN AUTOMÁTICA
@@ -333,7 +332,7 @@ export function scaleToExactTarget(
   }
   
   // 🎯 ALGORITMO DE BÚSQUEDA BINARIA: Encuentra el multiplicador óptimo
-  console.log('🎯 Búsqueda binaria para encontrar multiplicador óptimo...');
+  console.log('🎯 Usando algoritmo PRECISO con distorsión agresiva...');
   
   if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
     // Sin ingredientes: escalar proporcionalmente (legacy - platos sin recetas)
@@ -356,71 +355,8 @@ export function scaleToExactTarget(
     return scaledMeal;
   }
   
-  // 🤖 USAR ALGORITMO AVANZADO CON CLASIFICACIÓN AUTOMÁTICA
-  const result = findOptimalMultiplierWithTypology(meal, targetMacros, allIngredients);
-  
-  const finalMacros = calculateMacrosFromIngredients(result.ingredients, allIngredients);
-  
-  console.log(`   🔢 Ingredientes optimizados (${result.iterations} iteraciones, error máx: ${(result.maxError * 100).toFixed(2)}%):`);
-  result.ingredients.forEach((ing, i) => {
-    const original = meal.ingredientReferences![i];
-    const change = ing.amountInGrams - original.amountInGrams;
-    const ingredient = allIngredients.find(item => item.id === ing.ingredientId);
-    const typology = result.typologyInfo.get(ing.ingredientId) || 'unknown';
-    console.log(`      ${ingredient?.name || ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g (${change > 0 ? '+' : ''}${change}g) [${typology}]`);
-  });
-  
-  const scaledMeal = {
-    ...meal,
-    ingredientReferences: result.ingredients,
-    calories: finalMacros.calories,
-    protein: finalMacros.protein,
-    carbs: finalMacros.carbs,
-    fat: finalMacros.fat,
-    baseQuantity: result.multiplier,
-    scaledForTarget: true,
-    isLastMeal
-  };
-  
-  const diffCal = targetMacros.calories - finalMacros.calories;
-  const diffProt = targetMacros.protein - finalMacros.protein;
-  const diffCarbs = targetMacros.carbs - finalMacros.carbs;
-  const diffFat = targetMacros.fat - finalMacros.fat;
-  
-  const errorPercentages = {
-    cal: targetMacros.calories > 0 ? (Math.abs(diffCal) / targetMacros.calories * 100) : 0,
-    prot: targetMacros.protein > 0 ? (Math.abs(diffProt) / targetMacros.protein * 100) : 0,
-    carbs: targetMacros.carbs > 0 ? (Math.abs(diffCarbs) / targetMacros.carbs * 100) : 0,
-    fat: targetMacros.fat > 0 ? (Math.abs(diffFat) / targetMacros.fat * 100) : 0
-  };
-  
-  const maxErrorPercent = Math.max(errorPercentages.cal, errorPercentages.prot, errorPercentages.carbs, errorPercentages.fat);
-  const completionPercentages = {
-    cal: targetMacros.calories > 0 ? (finalMacros.calories / targetMacros.calories * 100) : 100,
-    prot: targetMacros.protein > 0 ? (finalMacros.protein / targetMacros.protein * 100) : 100,
-    carbs: targetMacros.carbs > 0 ? (finalMacros.carbs / targetMacros.carbs * 100) : 100,
-    fat: targetMacros.fat > 0 ? (finalMacros.fat / targetMacros.fat * 100) : 100
-  };
-  
-  const minCompletion = Math.min(completionPercentages.cal, completionPercentages.prot, completionPercentages.carbs, completionPercentages.fat);
-  const avgCompletion = (completionPercentages.cal + completionPercentages.prot + completionPercentages.carbs + completionPercentages.fat) / 4;
-  
-  console.log('┌─────────────────────────────────────────────────────────────┐');
-  console.log(`│  ${isLastMeal ? '🌙 ÚLTIMA COMIDA' : '🍽️ COMIDA'} - RESULTADO FINAL`.padEnd(62) + '│');
-  console.log('├─────────────────────────────────────────────────────────────┤');
-  console.log(`│  📊 Calorías:  ${finalMacros.calories}/${targetMacros.calories} kcal (${completionPercentages.cal.toFixed(1)}%)`.padEnd(62) + '│');
-  console.log(`│  💪 Proteína:  ${finalMacros.protein}/${targetMacros.protein}g (${completionPercentages.prot.toFixed(1)}%)`.padEnd(62) + '│');
-  console.log(`│  🍚 Carbos:    ${finalMacros.carbs}/${targetMacros.carbs}g (${completionPercentages.carbs.toFixed(1)}%)`.padEnd(62) + '│');
-  console.log(`│  🥑 Grasas:    ${finalMacros.fat}/${targetMacros.fat}g (${completionPercentages.fat.toFixed(1)}%)`.padEnd(62) + '│');
-  console.log('├─────────────────────────────────────────────────────────────┤');
-  console.log(`│  ⭐ Completitud mínima:   ${minCompletion.toFixed(1)}%`.padEnd(62) + '│');
-  console.log(`│  📊 Completitud promedio: ${avgCompletion.toFixed(1)}%`.padEnd(62) + '│');
-  console.log(`│  ⚠️ Error máximo:         ${maxErrorPercent.toFixed(1)}%`.padEnd(62) + '│');
-  console.log(`│  🔢 Multiplicador:        ${result.multiplier.toFixed(3)}x`.padEnd(62) + '│');
-  console.log('└─────────────────────────────────────────────────────────────┘');
-  console.log('');
-  
-  return scaledMeal;
+  // 🚀 USAR ALGORITMO NUEVO: Escalado preciso con distorsión agresiva
+  return preciseScaleMealToTarget(meal, targetMacros, allIngredients);
 }
 
 /**

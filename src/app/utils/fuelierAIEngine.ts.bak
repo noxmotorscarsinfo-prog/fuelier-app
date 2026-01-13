@@ -1,0 +1,963 @@
+/**
+ * ============================================================================
+ * FUELIER AI ENGINE v2.0
+ * ============================================================================
+ * 
+ * Sistema de adaptación inteligente de comidas con precisión máxima (≥90%)
+ * 
+ * Arquitectura: 8 Módulos Especializados
+ * 1. Daily Context Manager - Contexto diario del usuario
+ * 2. Strategy AI Enhanced - Decisiones inteligentes con ingredientes añadibles
+ * 3. Confidence Filter - Pre-filtrado de platos no viables (<85%)
+ * 4. Plate Adaptation Engine - Clasificación y tolerancias por tipo de plato
+ * 5. Hybrid Solver - LP/MIP (global) + Least Squares (refinamiento)
+ * 6. Hard Rules - Validación de restricciones físicas
+ * 7. Verification Reinforced - Verificación con tolerancias flexibles
+ * 8. Orchestrator - Coordinación inteligente con memoria
+ * 
+ * @version 2.0
+ * @author FUELIER Staff Engineering Team
+ * @date 2026-01-13
+ */
+
+import { Meal, User, DailyLog, MealIngredient } from '@/types';
+import * as solver from 'javascript-lp-solver';
+
+// Helper local: Calcular macros directamente de MealIngredient[] (sin necesitar allIngredients)
+function calculateMacrosFromIngredients(ingredients: MealIngredient[]): MacroValues {
+  return ingredients.reduce(
+    (acc, ing) => ({
+      calories: acc.calories + (ing.calories || 0),
+      protein: acc.protein + (ing.protein || 0),
+      carbs: acc.carbs + (ing.carbs || 0),
+      fat: acc.fat + (ing.fat || 0),
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+}
+
+// ============================================================================
+// TYPES & INTERFACES
+// ============================================================================
+
+interface MacroTargets {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+interface MacroValues extends MacroTargets {}
+
+interface DailyContext {
+  remainingMacros: MacroTargets;
+  percentageOfDay: number;
+  timeOfDay: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  userGoals: MacroTargets;
+  flexibilityLevel: 'strict' | 'moderate' | 'flexible';
+}
+
+type PlateType = 
+  | 'sweet_breakfast'      // Pancakes, cereales, etc.
+  | 'savory_breakfast'     // Huevos, tostadas saladas
+  | 'protein_focused'      // Alto en proteína
+  | 'carb_focused'         // Alto en carbohidratos
+  | 'balanced'             // Equilibrado
+  | 'snack'                // Snack ligero
+  | 'dessert';             // Postre
+
+interface PlateClassification {
+  type: PlateType;
+  macroProfile: {
+    proteinPercentage: number;  // % de calorías de proteína
+    carbsPercentage: number;     // % de calorías de carbohidratos
+    fatPercentage: number;       // % de calorías de grasa
+  };
+  tolerances: {
+    calories: number;    // % tolerancia (ej: 5 = ±5%)
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+}
+
+interface StrategyDecision {
+  priorityMacro: 'calories' | 'protein' | 'carbs' | 'fat';
+  rankedIngredients: Array<{
+    id: string;
+    name: string;
+    rank: number;
+    reason: string;
+  }>;
+  aggressiveness: number; // 0.5-1.0
+  addableIngredients?: Array<{
+    id: string;
+    name: string;
+    suggestedGrams: number;
+    reason: string;
+  }>;
+  reason: string;
+}
+
+interface ConfidenceScore {
+  feasible: boolean;
+  confidence: number; // 0-100%
+  reasons: string[];
+  estimatedAccuracy: number; // Predicción de accuracy final
+}
+
+interface HybridSolution {
+  scaledIngredients: MealIngredient[];
+  achievedMacros: MacroValues;
+  accuracy: number;
+  method: 'lp' | 'lp+ls' | 'ls_only' | 'proportional_fallback';
+  iterations: number;
+  reason: string;
+}
+
+interface VerificationResult {
+  approved: boolean;
+  accuracy: number;
+  meetsTolerances: boolean;
+  violations: string[];
+  suggestions: string[];
+}
+
+interface OrchestrationMemory {
+  attemptNumber: number;
+  bestSolution: HybridSolution | null;
+  strategyHistory: StrategyDecision[];
+  accuracyHistory: number[];
+  stagnationCounter: number;
+}
+
+// ============================================================================
+// MODULE 1: DAILY CONTEXT MANAGER
+// ============================================================================
+
+function getDailyContext(
+  user: User,
+  dailyLog: DailyLog | null,
+  mealTimestamp: Date = new Date()
+): DailyContext {
+  const userGoals: MacroTargets = {
+    calories: user.targetCalories || 2000,
+    protein: user.targetProtein || 150,
+    carbs: user.targetCarbs || 200,
+    fat: user.targetFat || 60,
+  };
+
+  let consumedToday: MacroValues = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  
+  if (dailyLog?.meals) {
+    dailyLog.meals.forEach((meal) => {
+      if (meal.ingredients) {
+        const macros = calculateMacrosFromIngredients(meal.ingredients);
+        consumedToday.calories += macros.calories;
+        consumedToday.protein += macros.protein;
+        consumedToday.carbs += macros.carbs;
+        consumedToday.fat += macros.fat;
+      }
+    });
+  }
+
+  const remaining: MacroTargets = {
+    calories: Math.max(0, userGoals.calories - consumedToday.calories),
+    protein: Math.max(0, userGoals.protein - consumedToday.protein),
+    carbs: Math.max(0, userGoals.carbs - consumedToday.carbs),
+    fat: Math.max(0, userGoals.fat - consumedToday.fat),
+  };
+
+  const percentageRemaining = 
+    userGoals.calories > 0 ? (remaining.calories / userGoals.calories) * 100 : 0;
+
+  // Determinar momento del día
+  const hour = mealTimestamp.getHours();
+  let timeOfDay: DailyContext['timeOfDay'] = 'snack';
+  if (hour >= 6 && hour < 11) timeOfDay = 'breakfast';
+  else if (hour >= 12 && hour < 16) timeOfDay = 'lunch';
+  else if (hour >= 19 && hour < 23) timeOfDay = 'dinner';
+
+  // Flexibilidad según % restante
+  let flexibilityLevel: DailyContext['flexibilityLevel'] = 'moderate';
+  if (percentageRemaining > 60) flexibilityLevel = 'flexible';
+  else if (percentageRemaining < 30) flexibilityLevel = 'strict';
+
+  return {
+    remainingMacros: remaining,
+    percentageOfDay: percentageRemaining,
+    timeOfDay,
+    userGoals,
+    flexibilityLevel,
+  };
+}
+
+// ============================================================================
+// MODULE 2: STRATEGY AI ENHANCED
+// ============================================================================
+
+function decideStrategy(
+  currentMacros: MacroValues,
+  targetMacros: MacroTargets,
+  ingredients: MealIngredient[],
+  context: DailyContext,
+  iteration: number
+): StrategyDecision {
+  const gaps = {
+    calories: targetMacros.calories - currentMacros.calories,
+    protein: targetMacros.protein - currentMacros.protein,
+    carbs: targetMacros.carbs - currentMacros.carbs,
+    fat: targetMacros.fat - currentMacros.fat,
+  };
+
+  // Identificar macro prioritario (mayor gap relativo)
+  const relativeGaps = {
+    calories: Math.abs(gaps.calories) / targetMacros.calories,
+    protein: targetMacros.protein > 0 ? Math.abs(gaps.protein) / targetMacros.protein : 0,
+    carbs: targetMacros.carbs > 0 ? Math.abs(gaps.carbs) / targetMacros.carbs : 0,
+    fat: targetMacros.fat > 0 ? Math.abs(gaps.fat) / targetMacros.fat : 0,
+  };
+
+  const priorityMacro = Object.keys(relativeGaps).reduce((a, b) =>
+    relativeGaps[a as keyof typeof relativeGaps] > relativeGaps[b as keyof typeof relativeGaps] ? a : b
+  ) as keyof MacroTargets;
+
+  // Rankear ingredientes por impacto en macro prioritario
+  const rankedIngredients = ingredients
+    .map((ing) => {
+      const macros = {
+        calories: ing.calories || 0,
+        protein: ing.protein || 0,
+        carbs: ing.carbs || 0,
+        fat: ing.fat || 0,
+      };
+
+      // Impacto = cantidad del macro prioritario por gramo
+      const impact = macros[priorityMacro] / Math.max(ing.amount, 1);
+      
+      // Eficiencia = impacto en prioritario vs impacto en otros
+      const otherMacros = Object.keys(macros).filter(k => k !== priorityMacro) as Array<keyof MacroValues>;
+      const sideEffects = otherMacros.reduce((sum, m) => sum + Math.abs(macros[m]), 0);
+      const efficiency = sideEffects > 0 ? impact / sideEffects : impact;
+
+      return {
+        id: ing.id,
+        name: ing.name,
+        rank: efficiency,
+        reason: `${priorityMacro}: ${macros[priorityMacro].toFixed(1)} (impact: ${impact.toFixed(3)})`,
+      };
+    })
+    .sort((a, b) => b.rank - a.rank);
+
+  // Agresividad basada en iteración y flexibilidad
+  let aggressiveness = 0.7;
+  if (context.flexibilityLevel === 'strict') aggressiveness = 0.9;
+  else if (context.flexibilityLevel === 'flexible') aggressiveness = 0.5;
+  
+  // Aumentar agresividad con iteraciones
+  aggressiveness = Math.min(1.0, aggressiveness + iteration * 0.02);
+
+  // NUEVA FEATURE: Sugerir ingredientes añadibles
+  const addableIngredients: StrategyDecision['addableIngredients'] = [];
+  
+  // Si faltan proteínas y tenemos pocas, sugerir whey protein
+  if (gaps.protein > 10 && currentMacros.protein < targetMacros.protein * 0.7) {
+    addableIngredients.push({
+      id: 'whey_protein_suggestion',
+      name: 'Proteína en Polvo',
+      suggestedGrams: Math.min(30, gaps.protein * 0.8),
+      reason: `Falta ${gaps.protein.toFixed(0)}g proteína, añadir ayuda a converger`,
+    });
+  }
+
+  // Si faltan carbos significativos
+  if (gaps.carbs > 20 && currentMacros.carbs < targetMacros.carbs * 0.6) {
+    addableIngredients.push({
+      id: 'oats_suggestion',
+      name: 'Avena',
+      suggestedGrams: Math.min(40, gaps.carbs * 0.5),
+      reason: `Falta ${gaps.carbs.toFixed(0)}g carbohidratos`,
+    });
+  }
+
+  return {
+    priorityMacro,
+    rankedIngredients: rankedIngredients.slice(0, 5), // Top 5
+    aggressiveness,
+    addableIngredients: addableIngredients.length > 0 ? addableIngredients : undefined,
+    reason: `Gap prioritario: ${priorityMacro} (${gaps[priorityMacro].toFixed(1)}). Flex: ${context.flexibilityLevel}`,
+  };
+}
+
+// ============================================================================
+// MODULE 3: CONFIDENCE FILTER
+// ============================================================================
+
+function assessConfidence(
+  originalMeal: Meal,
+  targetMacros: MacroTargets,
+  context: DailyContext
+): ConfidenceScore {
+  const reasons: string[] = [];
+  let confidence = 100;
+
+  const originalMacros = calculateMacrosFromIngredients(originalMeal.ingredients);
+  
+  // Factor 1: Ratio entre target y original
+  const ratios = {
+    calories: targetMacros.calories / Math.max(originalMacros.calories, 1),
+    protein: targetMacros.protein / Math.max(originalMacros.protein, 1),
+    carbs: targetMacros.carbs / Math.max(originalMacros.carbs, 1),
+    fat: targetMacros.fat / Math.max(originalMacros.fat, 1),
+  };
+
+  // Si algún ratio es muy extremo (>3x o <0.33x), penalizar
+  Object.entries(ratios).forEach(([macro, ratio]) => {
+    if (ratio > 3) {
+      confidence -= 20;
+      reasons.push(`${macro} requiere 3x+ aumento (${ratio.toFixed(1)}x)`);
+    } else if (ratio < 0.33) {
+      confidence -= 20;
+      reasons.push(`${macro} requiere reducción a <33% (${ratio.toFixed(1)}x)`);
+    }
+  });
+
+  // Factor 2: Perfil macro incompatible
+  const originalProfile = {
+    proteinPct: (originalMacros.protein * 4) / Math.max(originalMacros.calories, 1) * 100,
+    carbsPct: (originalMacros.carbs * 4) / Math.max(originalMacros.calories, 1) * 100,
+    fatPct: (originalMacros.fat * 9) / Math.max(originalMacros.calories, 1) * 100,
+  };
+
+  const targetProfile = {
+    proteinPct: (targetMacros.protein * 4) / Math.max(targetMacros.calories, 1) * 100,
+    carbsPct: (targetMacros.carbs * 4) / Math.max(targetMacros.calories, 1) * 100,
+    fatPct: (targetMacros.fat * 9) / Math.max(targetMacros.calories, 1) * 100,
+  };
+
+  const profileDiff = Math.abs(originalProfile.proteinPct - targetProfile.proteinPct) +
+                      Math.abs(originalProfile.carbsPct - targetProfile.carbsPct) +
+                      Math.abs(originalProfile.fatPct - targetProfile.fatPct);
+
+  if (profileDiff > 60) {
+    confidence -= 25;
+    reasons.push(`Perfil macro muy diferente (diff: ${profileDiff.toFixed(0)}%)`);
+  }
+
+  // Factor 3: Número de ingredientes (muy pocos = difícil ajustar)
+  if (originalMeal.ingredients.length < 3) {
+    confidence -= 15;
+    reasons.push(`Pocos ingredientes (${originalMeal.ingredients.length}), difícil ajustar`);
+  }
+
+  // Factor 4: Ingredientes con macros muy desbalanceados
+  const unbalancedIngredients = originalMeal.ingredients.filter(ing => {
+    const total = (ing.protein || 0) + (ing.carbs || 0) + (ing.fat || 0);
+    const dominance = Math.max(ing.protein || 0, ing.carbs || 0, ing.fat || 0);
+    return total > 0 && (dominance / total) > 0.9; // Un macro domina >90%
+  });
+
+  if (unbalancedIngredients.length === originalMeal.ingredients.length) {
+    confidence -= 10;
+    reasons.push('Todos los ingredientes son muy desbalanceados');
+  }
+
+  // Estimación de accuracy basada en confianza
+  const estimatedAccuracy = Math.max(50, confidence - 10);
+
+  const feasible = confidence >= 85;
+
+  if (!feasible) {
+    reasons.unshift(`⚠️ PLATO NO VIABLE (confidence: ${confidence}%)`);
+  }
+
+  return {
+    feasible,
+    confidence,
+    reasons,
+    estimatedAccuracy,
+  };
+}
+
+// ============================================================================
+// MODULE 4: PLATE ADAPTATION ENGINE
+// ============================================================================
+
+function classifyPlate(meal: Meal, macros: MacroValues): PlateClassification {
+  const totalCals = Math.max(macros.calories, 1);
+  const proteinPct = (macros.protein * 4) / totalCals * 100;
+  const carbsPct = (macros.carbs * 4) / totalCals * 100;
+  const fatPct = (macros.fat * 9) / totalCals * 100;
+
+  let type: PlateType = 'balanced';
+  let tolerances = { calories: 3, protein: 5, carbs: 5, fat: 5 }; // Default
+
+  // Clasificación basada en perfil macro
+  if (proteinPct > 35) {
+    type = 'protein_focused';
+    tolerances = { calories: 3, protein: 3, carbs: 8, fat: 8 };
+  } else if (carbsPct > 50) {
+    // Distinguir entre sweet y carb-focused
+    const hasSweetIngredients = meal.ingredients.some(ing =>
+      ing.name.toLowerCase().includes('miel') ||
+      ing.name.toLowerCase().includes('azúcar') ||
+      ing.name.toLowerCase().includes('chocolate') ||
+      ing.name.toLowerCase().includes('mermelada')
+    );
+
+    if (hasSweetIngredients || meal.name.toLowerCase().includes('pancake') ||
+        meal.name.toLowerCase().includes('cereales')) {
+      type = 'sweet_breakfast';
+      tolerances = { calories: 5, protein: 8, carbs: 10, fat: 10 };
+    } else {
+      type = 'carb_focused';
+      tolerances = { calories: 4, protein: 7, carbs: 8, fat: 8 };
+    }
+  } else if (fatPct > 40) {
+    type = 'savory_breakfast';
+    tolerances = { calories: 4, protein: 6, carbs: 10, fat: 6 };
+  } else if (macros.calories < 300) {
+    type = 'snack';
+    tolerances = { calories: 8, protein: 10, carbs: 12, fat: 12 };
+  }
+
+  return {
+    type,
+    macroProfile: {
+      proteinPercentage: proteinPct,
+      carbsPercentage: carbsPct,
+      fatPercentage: fatPct,
+    },
+    tolerances,
+  };
+}
+
+// ============================================================================
+// MODULE 5: HYBRID SOLVER (LP/MIP + Least Squares)
+// ============================================================================
+
+function solveWithHybridApproach(
+  meal: Meal,
+  targetMacros: MacroTargets,
+  strategy: StrategyDecision,
+  plateClassification: PlateClassification,
+  maxIterations: number = 50
+): HybridSolution {
+  const ingredients = meal.ingredients;
+
+  // FASE 1: Linear Programming para convergencia global
+  try {
+    const lpSolution = solveWithLP(ingredients, targetMacros, plateClassification.tolerances);
+    
+    if (lpSolution.accuracy >= 90) {
+      return lpSolution; // LP solo ya alcanza objetivo
+    }
+
+    // FASE 2: Refinar con Least Squares
+    const refinedSolution = refineWithLeastSquares(
+      lpSolution.scaledIngredients,
+      targetMacros,
+      strategy,
+      plateClassification.tolerances,
+      Math.min(20, maxIterations)
+    );
+
+    if (refinedSolution.accuracy > lpSolution.accuracy) {
+      return {
+        ...refinedSolution,
+        method: 'lp+ls',
+        reason: `LP alcanzó ${lpSolution.accuracy.toFixed(1)}%, refinado a ${refinedSolution.accuracy.toFixed(1)}%`,
+      };
+    }
+
+    return lpSolution;
+  } catch (error) {
+    // Fallback a Least Squares solo
+    const lsSolution = refineWithLeastSquares(
+      ingredients,
+      targetMacros,
+      strategy,
+      plateClassification.tolerances,
+      maxIterations
+    );
+
+    return {
+      ...lsSolution,
+      method: 'ls_only',
+      reason: `LP falló, usando Least Squares: ${lsSolution.accuracy.toFixed(1)}%`,
+    };
+  }
+}
+
+function solveWithLP(
+  ingredients: MealIngredient[],
+  targetMacros: MacroTargets,
+  tolerances: PlateClassification['tolerances']
+): HybridSolution {
+  // Construir modelo de programación lineal
+  const model: any = {
+    optimize: 'deviation',
+    opType: 'min',
+    constraints: {},
+    variables: {},
+  };
+
+  // Variables: cantidad en gramos de cada ingrediente
+  ingredients.forEach((ing, idx) => {
+    const varName = `ing_${idx}`;
+    
+    // Calcular macros por gramo
+    const calPerG = (ing.calories || 0) / Math.max(ing.amount, 1);
+    const proPerG = (ing.protein || 0) / Math.max(ing.amount, 1);
+    const carbPerG = (ing.carbs || 0) / Math.max(ing.amount, 1);
+    const fatPerG = (ing.fat || 0) / Math.max(ing.amount, 1);
+
+    model.variables[varName] = {
+      calories: calPerG,
+      protein: proPerG,
+      carbs: carbPerG,
+      fat: fatPerG,
+      // Límites: mínimo 0.5g, máximo 100x original
+      min: 0.5,
+      max: ing.amount * 100,
+    };
+  });
+
+  // Constraints: macros target con tolerancias
+  const calTolerance = (tolerances.calories / 100) * targetMacros.calories;
+  const proTolerance = (tolerances.protein / 100) * targetMacros.protein;
+  const carbTolerance = (tolerances.carbs / 100) * targetMacros.carbs;
+  const fatTolerance = (tolerances.fat / 100) * targetMacros.fat;
+
+  model.constraints.calories = {
+    min: targetMacros.calories - calTolerance,
+    max: targetMacros.calories + calTolerance,
+  };
+  model.constraints.protein = {
+    min: targetMacros.protein - proTolerance,
+    max: targetMacros.protein + proTolerance,
+  };
+  model.constraints.carbs = {
+    min: targetMacros.carbs - carbTolerance,
+    max: targetMacros.carbs + carbTolerance,
+  };
+  model.constraints.fat = {
+    min: targetMacros.fat - fatTolerance,
+    max: targetMacros.fat + fatTolerance,
+  };
+
+  // Resolver
+  const result = solver.Solve(model);
+
+  if (!result || result.feasible === false) {
+    throw new Error('LP infeasible');
+  }
+
+  // Extraer solución
+  const scaledIngredients = ingredients.map((ing, idx) => {
+    const varName = `ing_${idx}`;
+    const newGrams = result[varName] || ing.amount;
+
+    const ratio = newGrams / Math.max(ing.amount, 1);
+
+    return {
+      ...ing,
+      grams: Math.max(0.5, newGrams),
+      calories: (ing.calories || 0) * ratio,
+      protein: (ing.protein || 0) * ratio,
+      carbs: (ing.carbs || 0) * ratio,
+      fat: (ing.fat || 0) * ratio,
+    };
+  });
+
+  const achievedMacros = calculateMacrosFromIngredients(scaledIngredients);
+  const accuracy = calculateAccuracy(achievedMacros, targetMacros);
+
+  return {
+    scaledIngredients,
+    achievedMacros,
+    accuracy,
+    method: 'lp',
+    iterations: 1,
+    reason: `LP solver alcanzó ${accuracy.toFixed(1)}% accuracy`,
+  };
+}
+
+function refineWithLeastSquares(
+  ingredients: MealIngredient[],
+  targetMacros: MacroTargets,
+  strategy: StrategyDecision,
+  tolerances: PlateClassification['tolerances'],
+  maxIterations: number
+): HybridSolution {
+  let current = [...ingredients];
+  let bestAccuracy = 0;
+  let noImprovementCount = 0;
+  let iteration = 0;
+
+  for (iteration = 0; iteration < maxIterations; iteration++) {
+    const currentMacros = calculateMacrosFromIngredients(current);
+    const accuracy = calculateAccuracy(currentMacros, targetMacros);
+
+    if (accuracy > bestAccuracy) {
+      bestAccuracy = accuracy;
+      noImprovementCount = 0;
+    } else {
+      noImprovementCount++;
+    }
+
+    if (accuracy >= 98 || noImprovementCount >= 15) break;
+
+    // Ajustar top-3 ingredientes según estrategia
+    const topIngredients = strategy.rankedIngredients.slice(0, 3);
+    
+    topIngredients.forEach((ranked) => {
+      const ing = current.find((i) => i.id === ranked.id);
+      if (!ing) return;
+
+      const gaps = {
+        calories: targetMacros.calories - currentMacros.calories,
+        protein: targetMacros.protein - currentMacros.protein,
+        carbs: targetMacros.carbs - currentMacros.carbs,
+        fat: targetMacros.fat - currentMacros.fat,
+      };
+
+      // Calcular ajuste óptimo usando least squares
+      const macrosPerGram = {
+        calories: (ing.calories || 0) / Math.max(ing.amount, 1),
+        protein: (ing.protein || 0) / Math.max(ing.amount, 1),
+        carbs: (ing.carbs || 0) / Math.max(ing.amount, 1),
+        fat: (ing.fat || 0) / Math.max(ing.amount, 1),
+      };
+
+      // Resolver: minimizar Σ(gap[i] - delta * macrosPerGram[i])²
+      const numerator =
+        gaps.calories * macrosPerGram.calories +
+        gaps.protein * macrosPerGram.protein +
+        gaps.carbs * macrosPerGram.carbs +
+        gaps.fat * macrosPerGram.fat;
+
+      const denominator =
+        macrosPerGram.calories ** 2 +
+        macrosPerGram.protein ** 2 +
+        macrosPerGram.carbs ** 2 +
+        macrosPerGram.fat ** 2;
+
+      if (denominator === 0) return;
+
+      let delta = numerator / denominator;
+      delta *= strategy.aggressiveness;
+
+      const newGrams = Math.max(0.5, Math.min(ing.amount * 100, ing.amount + delta));
+      const ratio = newGrams / Math.max(ing.amount, 1);
+
+      ing.amount = newGrams;
+      ing.calories = (ing.calories || 0) / (ing.amount / newGrams);
+      ing.protein = (ing.protein || 0) / (ing.amount / newGrams);
+      ing.carbs = (ing.carbs || 0) / (ing.amount / newGrams);
+      ing.fat = (ing.fat || 0) / (ing.amount / newGrams);
+    });
+  }
+
+  const achievedMacros = calculateMacrosFromIngredients(current);
+  const finalAccuracy = calculateAccuracy(achievedMacros, targetMacros);
+
+  return {
+    scaledIngredients: current,
+    achievedMacros,
+    accuracy: finalAccuracy,
+    method: 'ls_only',
+    iterations: iteration,
+    reason: `Least Squares ${iteration} iterations: ${finalAccuracy.toFixed(1)}%`,
+  };
+}
+
+// ============================================================================
+// MODULE 6: HARD RULES
+// ============================================================================
+
+function validateHardRules(
+  scaledIngredients: MealIngredient[],
+  strategy: StrategyDecision
+): { valid: boolean; violations: string[] } {
+  const violations: string[] = [];
+
+  scaledIngredients.forEach((ing) => {
+    // Regla 1: Mínimo 0.5g por ingrediente
+    if (ing.amount < 0.5) {
+      violations.push(`${ing.name}: ${ing.amount.toFixed(1)}g < 0.5g mínimo`);
+    }
+
+    // Regla 2: Máximo 100x multiplicador
+    const originalGrams = strategy.rankedIngredients.find((r) => r.id === ing.id);
+    if (originalGrams && ing.amount > originalGrams.rank * 100) {
+      violations.push(`${ing.name}: multiplier >100x`);
+    }
+
+    // Regla 3: Macros no negativos
+    if (
+      (ing.calories || 0) < 0 ||
+      (ing.protein || 0) < 0 ||
+      (ing.carbs || 0) < 0 ||
+      (ing.fat || 0) < 0
+    ) {
+      violations.push(`${ing.name}: macros negativos`);
+    }
+  });
+
+  return {
+    valid: violations.length === 0,
+    violations,
+  };
+}
+
+// ============================================================================
+// MODULE 7: VERIFICATION REINFORCED
+// ============================================================================
+
+function verifyWithTolerances(
+  solution: HybridSolution,
+  targetMacros: MacroTargets,
+  plateClassification: PlateClassification,
+  previousAccuracy: number | null
+): VerificationResult {
+  const { achievedMacros, accuracy } = solution;
+  const { tolerances } = plateClassification;
+  const violations: string[] = [];
+  const suggestions: string[] = [];
+
+  // Verificar tolerancias por macro
+  const checks = [
+    { name: 'calories', target: targetMacros.calories, achieved: achievedMacros.calories, tol: tolerances.calories },
+    { name: 'protein', target: targetMacros.protein, achieved: achievedMacros.protein, tol: tolerances.protein },
+    { name: 'carbs', target: targetMacros.carbs, achieved: achievedMacros.carbs, tol: tolerances.carbs },
+    { name: 'fat', target: targetMacros.fat, achieved: achievedMacros.fat, tol: tolerances.fat },
+  ];
+
+  let meetsTolerances = true;
+  checks.forEach((check) => {
+    const tolerance = (check.tol / 100) * check.target;
+    const diff = Math.abs(check.achieved - check.target);
+    const diffPct = (diff / check.target) * 100;
+
+    if (diff > tolerance) {
+      meetsTolerances = false;
+      violations.push(
+        `${check.name}: ${check.achieved.toFixed(1)} vs ${check.target.toFixed(1)} (±${diffPct.toFixed(1)}%, tol: ±${check.tol}%)`
+      );
+    }
+  });
+
+  // Verificar mejora vs iteración anterior
+  let approved = accuracy >= 90 || meetsTolerances;
+
+  if (previousAccuracy !== null) {
+    const improvement = accuracy - previousAccuracy;
+    if (improvement < -0.5) {
+      // Empeoró >0.5%, rechazar
+      approved = false;
+      violations.push(`Empeoró ${Math.abs(improvement).toFixed(1)}% vs iteración anterior`);
+    } else if (improvement < 0.1 && accuracy < 90) {
+      suggestions.push('Estancamiento detectado, considerar cambio de estrategia');
+    }
+  }
+
+  // Sugerencias según resultado
+  if (accuracy < 85 && meetsTolerances) {
+    suggestions.push('Accuracy baja pero cumple tolerancias, podría ser aceptable');
+  }
+
+  if (!meetsTolerances && accuracy > 85) {
+    suggestions.push('Accuracy alta pero viola tolerancias, necesita refinamiento');
+  }
+
+  return {
+    approved,
+    accuracy,
+    meetsTolerances,
+    violations,
+    suggestions,
+  };
+}
+
+// ============================================================================
+// MODULE 8: ORCHESTRATOR
+// ============================================================================
+
+export function adaptMealWithAIEngine(
+  meal: Meal,
+  targetMacros: MacroTargets,
+  user: User,
+  dailyLog: DailyLog | null,
+  maxIterations: number = 50
+): HybridSolution {
+  // Extraer mealIngredients (pasados temporalmente desde el wrapper)
+  const mealIngredients = (meal as any).mealIngredients as MealIngredient[];
+  
+  if (!mealIngredients || mealIngredients.length === 0) {
+    console.error(`❌ Meal "${meal.name}" no tiene mealIngredients`);
+    return proportionalScalingFallback(meal, targetMacros, 'No mealIngredients provided');
+  }
+
+  // Step 1: Daily Context
+  const context = getDailyContext(user, dailyLog);
+
+  // Step 2: Confidence Filter
+  const confidence = assessConfidence(meal, targetMacros, context, mealIngredients);
+  
+  if (!confidence.feasible) {
+    console.warn(`⚠️ Plato "${meal.name}" no viable (confidence: ${confidence.confidence}%)`);
+    console.warn('Razones:', confidence.reasons);
+    
+    // Fallback proporcional
+    return proportionalScalingFallback(meal, targetMacros, confidence.reasons.join('; '), mealIngredients);
+  }
+
+  // Step 3: Plate Classification
+  const originalMacros = calculateMacrosFromIngredients(mealIngredients);
+  const plateClassification = classifyPlate(meal, originalMacros, mealIngredients);
+
+  console.log(`📊 Plato clasificado como: ${plateClassification.type}`);
+  console.log(`   Tolerancias: cal ±${plateClassification.tolerances.calories}%, pro ±${plateClassification.tolerances.protein}%, carb ±${plateClassification.tolerances.carbs}%, fat ±${plateClassification.tolerances.fat}%`);
+
+  // Step 4: Orchestration Loop
+  const memory: OrchestrationMemory = {
+    attemptNumber: 0,
+    bestSolution: null,
+    strategyHistory: [],
+    accuracyHistory: [],
+    stagnationCounter: 0,
+  };
+
+  let currentIngredients = [...mealIngredients];
+
+  for (let i = 0; i < Math.min(maxIterations, 50); i++) {
+    memory.attemptNumber = i + 1;
+
+    // Decidir estrategia
+    const currentMacros = calculateMacrosFromIngredients(currentIngredients);
+    const strategy = decideStrategy(currentMacros, targetMacros, currentIngredients, context, i);
+    memory.strategyHistory.push(strategy);
+
+    // Validar hard rules ANTES de resolver
+    const rulesCheck = validateHardRules(currentIngredients, strategy);
+    if (!rulesCheck.valid) {
+      console.warn(`⚠️ Violación de hard rules en iteración ${i}:`, rulesCheck.violations);
+      break;
+    }
+
+    // Resolver con Hybrid Solver
+    const solution = solveWithHybridApproach(
+      currentIngredients,
+      targetMacros,
+      strategy,
+      plateClassification,
+      5 // Sub-iteraciones del solver
+    );
+
+    memory.accuracyHistory.push(solution.accuracy);
+
+    // Verificar solución
+    const previousAccuracy = memory.bestSolution?.accuracy || null;
+    const verification = verifyWithTolerances(
+      solution,
+      targetMacros,
+      plateClassification,
+      previousAccuracy
+    );
+
+    // Actualizar mejor solución si mejora
+    if (!memory.bestSolution || solution.accuracy > memory.bestSolution.accuracy) {
+      memory.bestSolution = solution;
+      memory.stagnationCounter = 0;
+    } else {
+      memory.stagnationCounter++;
+    }
+
+    // Condiciones de salida
+    if (verification.approved && verification.accuracy >= 90) {
+      console.log(`✅ Objetivo alcanzado en iteración ${i + 1}: ${verification.accuracy.toFixed(1)}%`);
+      return solution;
+    }
+
+    if (memory.stagnationCounter >= 10) {
+      console.log(`⚠️ Estancamiento en ${memory.stagnationCounter} iteraciones`);
+      break;
+    }
+
+    // Preparar siguiente iteración
+    currentIngredients = solution.scaledIngredients;
+  }
+
+  // Retornar mejor solución encontrada
+  if (memory.bestSolution) {
+    console.log(`🏁 Mejor solución: ${memory.bestSolution.accuracy.toFixed(1)}% (${memory.attemptNumber} iteraciones)`);
+    return memory.bestSolution;
+  }
+
+  // Último fallback
+  console.warn('⚠️ No se encontró solución aceptable, usando fallback proporcional');
+  return proportionalScalingFallback(meal, targetMacros, 'No convergence after max iterations', mealIngredients);
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function calculateAccuracy(achieved: MacroValues, target: MacroTargets): number {
+  const errors = [
+    Math.abs(achieved.calories - target.calories) / Math.max(target.calories, 1),
+    Math.abs(achieved.protein - target.protein) / Math.max(target.protein, 1),
+    Math.abs(achieved.carbs - target.carbs) / Math.max(target.carbs, 1),
+    Math.abs(achieved.fat - target.fat) / Math.max(target.fat, 1),
+  ];
+
+  const avgError = errors.reduce((a, b) => a + b, 0) / errors.length;
+  return Math.max(0, (1 - avgError) * 100);
+}
+
+function proportionalScalingFallback(
+  meal: Meal,
+  targetMacros: MacroTargets,
+  reason: string
+): HybridSolution {
+  const originalMacros = calculateMacrosFromIngredients(meal.ingredients);
+  const ratio = targetMacros.calories / Math.max(originalMacros.calories, 1);
+
+  const scaledIngredients = meal.ingredients.map((ing) => ({
+    ...ing,
+    grams: ing.amount * ratio,
+    calories: (ing.calories || 0) * ratio,
+    protein: (ing.protein || 0) * ratio,
+    carbs: (ing.carbs || 0) * ratio,
+    fat: (ing.fat || 0) * ratio,
+  }));
+
+  const achievedMacros = calculateMacrosFromIngredients(scaledIngredients);
+  const accuracy = calculateAccuracy(achievedMacros, targetMacros);
+
+  return {
+    scaledIngredients,
+    achievedMacros,
+    accuracy,
+    method: 'proportional_fallback',
+    iterations: 0,
+    reason: `Fallback proporcional (${ratio.toFixed(2)}x): ${reason}`,
+  };
+}
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+export type {
+  MacroTargets,
+  MacroValues,
+  DailyContext,
+  PlateType,
+  PlateClassification,
+  StrategyDecision,
+  ConfidenceScore,
+  HybridSolution,
+  VerificationResult,
+};

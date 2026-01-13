@@ -488,13 +488,39 @@ export default function MealSelection({
     });
   }, [recommendedMeals, user.preferences]);
 
+  // 🚀 FILTRO CRÍTICO: Mostrar SOLO platos que alcancen ≥90% de ajuste de macros
+  const mealsWithGoodFit = useMemo(() => {
+    const filtered = mealsFilteredByPreferences.filter(scored => {
+      const accuracy = scored.scaledMeal?.proportionCompatibility || 0;
+      const meetsThreshold = accuracy >= 90;
+      
+      if (!meetsThreshold) {
+        console.log(`🚫 Plato "${scored.meal.name}" filtrado por ajuste insuficiente: ${accuracy.toFixed(1)}% (necesita ≥90%)`);
+      }
+      
+      return meetsThreshold;
+    });
+    
+    console.log(`\n📊 FILTRO DE AJUSTE DE MACROS:`);
+    console.log(`   Total antes del filtro: ${mealsFilteredByPreferences.length} platos`);
+    console.log(`   Total después del filtro (≥90%): ${filtered.length} platos`);
+    console.log(`   Platos eliminados: ${mealsFilteredByPreferences.length - filtered.length}`);
+    
+    if (filtered.length === 0) {
+      console.warn(`⚠️ ADVERTENCIA: Ningún plato alcanza 90%+ de ajuste con el target actual`);
+      console.warn(`   Target: ${intelligentTarget.calories}kcal | ${intelligentTarget.protein}P | ${intelligentTarget.carbs}C | ${intelligentTarget.fat}G`);
+    }
+    
+    return filtered;
+  }, [mealsFilteredByPreferences, intelligentTarget]);
+
   // Aplicar filtro de ingredientes seleccionados (filtro manual de UI)
   const filteredRecommendedMeals = useMemo(() => {
     if (selectedIngredients.length === 0) {
-      return mealsFilteredByPreferences; // ✅ Usar meals ya filtradas por preferencias
+      return mealsWithGoodFit; // ✅ Usar meals filtradas por preferencias Y ajuste de macros
     }
     
-    return mealsFilteredByPreferences.filter(scored => {
+    return mealsWithGoodFit.filter(scored => {
       if (!scored.meal.ingredients || scored.meal.ingredients.length === 0) {
         return false;
       }
@@ -505,7 +531,7 @@ export default function MealSelection({
         );
       });
     });
-  }, [mealsFilteredByPreferences, selectedIngredients]);
+  }, [mealsWithGoodFit, selectedIngredients]);
 
   // Top 3 recomendaciones de la app - SIEMPRE son las mejores opciones
   // Ordenadas por mejor ajuste a objetivos y preferencias del usuario
