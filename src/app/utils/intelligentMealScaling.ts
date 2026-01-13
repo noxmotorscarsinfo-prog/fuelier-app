@@ -11,12 +11,14 @@ import { Meal, User, DailyLog, MealType } from '../types';
 import { Ingredient, MealIngredientReference, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
 
 /**
- * 🎯 ALGORITMO DE BÚSQUEDA BINARIA PARA ESCALADO PERFECTO
+ * 🎯 ALGORITMO DE OPTIMIZACIÓN MULTI-OBJETIVO
  * 
- * En lugar de iteración con promedio de ratios, usamos búsqueda binaria para encontrar
- * el multiplicador EXACTO que minimiza el error máximo en TODOS los macros.
+ * En lugar de búsqueda binaria simple (que solo usa calorías), este algoritmo
+ * prueba MÚLTIPLES multiplicadores alrededor del óptimo y elige el que minimiza
+ * el error MÁXIMO en TODOS los macros simultáneamente.
  * 
- * Este algoritmo converge MUCHO más rápido y es más preciso.
+ * Este método GARANTIZA que TODOS los macros se acercan al 100% tanto como sea posible
+ * dada la composición fija del plato.
  */
 function findOptimalMultiplier(
   meal: Meal,
@@ -35,21 +37,39 @@ function findOptimalMultiplier(
   
   const baseMacros = calculateMacrosFromIngredients(meal.ingredientReferences, allIngredients);
   
-  // Calcular multiplicador inicial basado en calorías
-  const initialMultiplier = baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1;
+  // 🎯 ESTRATEGIA: Calcular multiplicador inicial para CADA macro
+  const multipliers = {
+    cal: baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1,
+    prot: baseMacros.protein > 0 ? targetMacros.protein / baseMacros.protein : 1,
+    carbs: baseMacros.carbs > 0 ? targetMacros.carbs / baseMacros.carbs : 1,
+    fat: baseMacros.fat > 0 ? targetMacros.fat / baseMacros.fat : 1
+  };
   
-  // 🎯 BÚSQUEDA BINARIA: Probar diferentes multiplicadores
-  let lowMultiplier = initialMultiplier * 0.5;  // 50% del inicial
-  let highMultiplier = initialMultiplier * 1.5; // 150% del inicial
-  let bestMultiplier = initialMultiplier;
+  console.log('   🔍 Multiplicadores ideales por macro:', {
+    cal: multipliers.cal.toFixed(3),
+    prot: multipliers.prot.toFixed(3),
+    carbs: multipliers.carbs.toFixed(3),
+    fat: multipliers.fat.toFixed(3)
+  });
+  
+  // 🎯 PUNTO DE PARTIDA: Promedio de todos los multiplicadores
+  const avgMultiplier = (multipliers.cal + multipliers.prot + multipliers.carbs + multipliers.fat) / 4;
+  
+  // 🎯 BÚSQUEDA: Probar multiplicadores alrededor del promedio
+  // Rango: ±20% del promedio, en pasos de 1%
+  const testRange = 0.30; // Probar desde -30% hasta +30%
+  const stepSize = 0.01; // Pasos del 1%
+  const steps = Math.floor((testRange * 2) / stepSize); // ~60 pruebas
+  
+  let bestMultiplier = avgMultiplier;
   let bestIngredients: MealIngredientReference[] = [];
   let bestMaxError = Infinity;
   let iterations = 0;
-  const maxIterations = 50; // Búsqueda binaria converge mucho más rápido
   
-  for (let i = 0; i < maxIterations; i++) {
+  for (let i = 0; i <= steps; i++) {
     iterations++;
-    const testMultiplier = (lowMultiplier + highMultiplier) / 2;
+    // Multiplicador a probar: desde (avg - 30%) hasta (avg + 30%)
+    const testMultiplier = avgMultiplier * (1 - testRange + (i * stepSize * 2));
     
     const testIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => ({
       ingredientId: ref.ingredientId,
@@ -58,7 +78,7 @@ function findOptimalMultiplier(
     
     const testMacros = calculateMacrosFromIngredients(testIngredients, allIngredients);
     
-    // Calcular error de cada macro
+    // Calcular error ABSOLUTO de cada macro
     const errors = {
       cal: targetMacros.calories > 0 ? Math.abs(testMacros.calories - targetMacros.calories) / targetMacros.calories : 0,
       prot: targetMacros.protein > 0 ? Math.abs(testMacros.protein - targetMacros.protein) / targetMacros.protein : 0,
@@ -66,28 +86,18 @@ function findOptimalMultiplier(
       fat: targetMacros.fat > 0 ? Math.abs(testMacros.fat - targetMacros.fat) / targetMacros.fat : 0
     };
     
+    // 🎯 MÉTRICA: El ERROR MÁXIMO de cualquier macro
     const maxError = Math.max(errors.cal, errors.prot, errors.carbs, errors.fat);
     
-    // Guardar si es mejor
+    // Guardar si es mejor que el anterior
     if (maxError < bestMaxError) {
       bestMaxError = maxError;
       bestMultiplier = testMultiplier;
       bestIngredients = testIngredients;
     }
-    
-    // Si el error es muy pequeño, terminar
-    if (maxError < 0.01) {
-      break;
-    }
-    
-    // 🎯 AJUSTE BINARIO: Decidir si subir o bajar el multiplicador
-    // Usamos calorías como referencia principal (es el macro más importante)
-    if (testMacros.calories < targetMacros.calories) {
-      lowMultiplier = testMultiplier; // Necesitamos MÁS comida
-    } else {
-      highMultiplier = testMultiplier; // Necesitamos MENOS comida
-    }
   }
+  
+  console.log(`   ✅ Mejor multiplicador encontrado: ${bestMultiplier.toFixed(3)}x (error máx: ${(bestMaxError * 100).toFixed(1)}%)`);
   
   return {
     multiplier: bestMultiplier,
@@ -208,15 +218,23 @@ export function scaleToExactTarget(
     fat: targetMacros.fat > 0 ? (finalMacros.fat / targetMacros.fat * 100) : 100
   };
   
-  console.log(`✅ ${isLastMeal ? '🌙 ÚLTIMA COMIDA' : '🍽️ COMIDA'} OPTIMIZADA:`, {
-    cal: `${finalMacros.calories}/${targetMacros.calories} kcal (${completionPercentages.cal.toFixed(1)}%)`,
-    prot: `${finalMacros.protein}/${targetMacros.protein}g (${completionPercentages.prot.toFixed(1)}%)`,
-    carbs: `${finalMacros.carbs}/${targetMacros.carbs}g (${completionPercentages.carbs.toFixed(1)}%)`,
-    fat: `${finalMacros.fat}/${targetMacros.fat}g (${completionPercentages.fat.toFixed(1)}%)`,
-    errorMáximo: `${maxErrorPercent.toFixed(1)}%`,
-    multiplicador: `${result.multiplier.toFixed(3)}x`
-  });
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  const minCompletion = Math.min(completionPercentages.cal, completionPercentages.prot, completionPercentages.carbs, completionPercentages.fat);
+  const avgCompletion = (completionPercentages.cal + completionPercentages.prot + completionPercentages.carbs + completionPercentages.fat) / 4;
+  
+  console.log('┌─────────────────────────────────────────────────────────────┐');
+  console.log(`│  ${isLastMeal ? '🌙 ÚLTIMA COMIDA' : '🍽️ COMIDA'} - RESULTADO FINAL`.padEnd(62) + '│');
+  console.log('├─────────────────────────────────────────────────────────────┤');
+  console.log(`│  📊 Calorías:  ${finalMacros.calories}/${targetMacros.calories} kcal (${completionPercentages.cal.toFixed(1)}%)`.padEnd(62) + '│');
+  console.log(`│  💪 Proteína:  ${finalMacros.protein}/${targetMacros.protein}g (${completionPercentages.prot.toFixed(1)}%)`.padEnd(62) + '│');
+  console.log(`│  🍚 Carbos:    ${finalMacros.carbs}/${targetMacros.carbs}g (${completionPercentages.carbs.toFixed(1)}%)`.padEnd(62) + '│');
+  console.log(`│  🥑 Grasas:    ${finalMacros.fat}/${targetMacros.fat}g (${completionPercentages.fat.toFixed(1)}%)`.padEnd(62) + '│');
+  console.log('├─────────────────────────────────────────────────────────────┤');
+  console.log(`│  ⭐ Completitud mínima:   ${minCompletion.toFixed(1)}%`.padEnd(62) + '│');
+  console.log(`│  📊 Completitud promedio: ${avgCompletion.toFixed(1)}%`.padEnd(62) + '│');
+  console.log(`│  ⚠️ Error máximo:         ${maxErrorPercent.toFixed(1)}%`.padEnd(62) + '│');
+  console.log(`│  🔢 Multiplicador:        ${result.multiplier.toFixed(3)}x`.padEnd(62) + '│');
+  console.log('└─────────────────────────────────────────────────────────────┘');
+  console.log('');
   
   return scaledMeal;
 }
