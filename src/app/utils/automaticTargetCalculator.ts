@@ -33,6 +33,15 @@ function countRemainingMeals(currentLog: DailyLog, currentMealType: MealType): n
     }
   }
   
+  console.log(`📊 countRemainingMeals(${currentMealType}):`, {
+    currentIndex,
+    totalMealsInDay: mealOrder.length,
+    mealsAfterCurrent: mealOrder.length - currentIndex - 1,
+    mealsWithoutData: count - 1,
+    totalRemaining: count,
+    isLastMeal: count === 1
+  });
+  
   return count;
 }
 
@@ -156,7 +165,17 @@ export function calculateIntelligentTarget(
   
   // 3. Si es la ÚLTIMA comida → Cubrir EXACTAMENTE lo que falta (cierre perfecto)
   if (mealsLeft === 1) {
-    console.log('🎯 ÚLTIMA COMIDA - Target = TODO lo que falta para llegar al 100%');
+    console.log('┌────────────────────────────────────────────┐');
+    console.log('│  🌙 ÚLTIMA COMIDA DEL DÍA DETECTADA        │');
+    console.log('├────────────────────────────────────────────┤');
+    console.log('│  Target = TODO lo que falta (100% exacto)  │');
+    console.log('├────────────────────────────────────────────┤');
+    console.log(`│  Calorías:  ${remaining.calories} kcal (restante)`.padEnd(45) + '│');
+    console.log(`│  Proteína:  ${remaining.protein}g (restante)`.padEnd(45) + '│');
+    console.log(`│  Carbos:    ${remaining.carbs}g (restante)`.padEnd(45) + '│');
+    console.log(`│  Grasas:    ${remaining.fat}g (restante)`.padEnd(45) + '│');
+    console.log('└────────────────────────────────────────────┘');
+    
     return {
       calories: Math.round(remaining.calories),
       protein: Math.round(remaining.protein),

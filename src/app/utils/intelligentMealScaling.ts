@@ -493,10 +493,14 @@ export function rankMealsByFit(
   console.log(`   🤖 Clasificación automática: ACTIVA`);
   console.log(`   ✨ Objetivo de precisión: 98-100%`);
   
+  // ✅ LOGGING MEJORADO: Mostrar CLARAMENTE si es última comida
   if (isLastMeal) {
-    console.log('   🌙 ÚLTIMA COMIDA DEL DÍA - Ajuste perfecto al 100%');
+    console.log('   ┌────────────────────────────────────────────────┐');
+    console.log('   │  🌙 ÚLTIMA COMIDA DEL DÍA DETECTADA            │');
+    console.log('   │  Ajustando platos para cerrar al 100% exacto   │');
+    console.log('   └────────────────────────────────────────────────┘');
   } else {
-    console.log('   🍽️ Comida normal - Escalado inteligente');
+    console.log('   🍽️ Comida normal - Escalado inteligente estándar');
   }
   
   console.log('   ═══════════════════════════════════════════════════\n');
