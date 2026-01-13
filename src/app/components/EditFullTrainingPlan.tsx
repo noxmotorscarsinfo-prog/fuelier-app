@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Edit2, Check, Plus, Trash2, Save, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Edit2, Check, Plus, Trash2, Save, ChevronDown, ChevronUp, GripVertical, Calendar } from 'lucide-react';
 import { muscleCategories } from '../data/exerciseDatabase';
 
 interface Exercise {
@@ -27,6 +27,7 @@ export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditF
   // Abrir el primer día por defecto
   const [expandedDays, setExpandedDays] = useState<{ [key: number]: boolean }>({ 0: true });
   const [isSaving, setIsSaving] = useState(false);
+  const [draggedDay, setDraggedDay] = useState<number | null>(null);
 
   // Función para obtener los grupos musculares de un día
   const getMuscleGroups = (exercises: Exercise[]): string => {
@@ -68,6 +69,16 @@ export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditF
     setLocalPlan(newPlan);
   };
 
+  // Función para actualizar automáticamente días vacíos a "Descanso"
+  const autoUpdateRestDays = (plan: DayPlan[]) => {
+    return plan.map(day => {
+      if (day.exercises.length === 0 && !day.dayName.toLowerCase().includes('descanso')) {
+        return { ...day, dayName: 'Descanso' };
+      }
+      return day;
+    });
+  };
+
   const updateExercise = (dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: any) => {
     const newPlan = [...localPlan];
     const updatedExercise = { ...newPlan[dayIndex].exercises[exerciseIndex], [field]: value };
@@ -78,6 +89,12 @@ export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditF
   const deleteExercise = (dayIndex: number, exerciseIndex: number) => {
     const newPlan = [...localPlan];
     newPlan[dayIndex].exercises = newPlan[dayIndex].exercises.filter((_, i) => i !== exerciseIndex);
+    
+    // Si se eliminan todos los ejercicios, marcar como Descanso
+    if (newPlan[dayIndex].exercises.length === 0 && !newPlan[dayIndex].dayName.toLowerCase().includes('descanso')) {
+      newPlan[dayIndex].dayName = 'Descanso';
+    }
+    
     setLocalPlan(newPlan);
   };
 
@@ -91,13 +108,81 @@ export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditF
     };
     const newPlan = [...localPlan];
     newPlan[dayIndex].exercises = [...newPlan[dayIndex].exercises, newExercise];
+    
+    // Si el día era "Descanso" y ahora tiene ejercicios, cambiar el nombre
+    if (newPlan[dayIndex].dayName.toLowerCase().includes('descanso') && newPlan[dayIndex].exercises.length > 0) {
+      newPlan[dayIndex].dayName = `Día ${dayIndex + 1}`;
+    }
+    
     setLocalPlan(newPlan);
+  };
+
+  const addDay = () => {
+    if (localPlan.length >= 7) {
+      alert('⚠️ Máximo 7 días permitidos');
+      return;
+    }
+    
+    const newDay: DayPlan = {
+      dayName: `Día ${localPlan.length + 1}`,
+      exercises: []
+    };
+    
+    setLocalPlan([...localPlan, newDay]);
+    // Expandir el nuevo día automáticamente
+    setExpandedDays(prev => ({ ...prev, [localPlan.length]: true }));
+  };
+
+  const deleteDay = (dayIndex: number) => {
+    if (localPlan.length <= 1) {
+      alert('⚠️ Debes tener al menos 1 día en tu plan');
+      return;
+    }
+    
+    if (confirm(`¿Eliminar "${localPlan[dayIndex].dayName}" y todos sus ejercicios?`)) {
+      const newPlan = localPlan.filter((_, i) => i !== dayIndex);
+      setLocalPlan(newPlan);
+      // Limpiar estado de expansión
+      const newExpandedDays: { [key: number]: boolean } = {};
+      Object.keys(expandedDays).forEach(key => {
+        const idx = parseInt(key);
+        if (idx < dayIndex) {
+          newExpandedDays[idx] = expandedDays[idx];
+        } else if (idx > dayIndex) {
+          newExpandedDays[idx - 1] = expandedDays[idx];
+        }
+      });
+      setExpandedDays(newExpandedDays);
+    }
+  };
+
+  const handleDragStart = (dayIndex: number) => {
+    setDraggedDay(dayIndex);
+  };
+
+  const handleDragOver = (e: React.DragEvent, dayIndex: number) => {
+    e.preventDefault();
+    if (draggedDay === null || draggedDay === dayIndex) return;
+    
+    const newPlan = [...localPlan];
+    const draggedItem = newPlan[draggedDay];
+    newPlan.splice(draggedDay, 1);
+    newPlan.splice(dayIndex, 0, draggedItem);
+    
+    setLocalPlan(newPlan);
+    setDraggedDay(dayIndex);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedDay(null);
   };
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave(localPlan);
+      // Aplicar auto-actualización de días vacíos como "Descanso"
+      const updatedPlan = autoUpdateRestDays(localPlan);
+      await onSave(updatedPlan);
       alert('✓ Plan de entrenamiento guardado correctamente');
       onBack();
     } catch (error) {
@@ -125,7 +210,7 @@ export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditF
             <div className="flex-1 text-center">
               <h1 className="text-lg sm:text-xl md:text-2xl font-bold">Editar Plan Completo</h1>
               <p className="text-xs sm:text-sm text-neutral-300">
-                {localPlan.length} días · {localPlan.reduce((acc, day) => acc + day.exercises.length, 0)} ejercicios totales
+                {localPlan.length}/7 días · {localPlan.reduce((acc, day) => acc + day.exercises.length, 0)} ejercicios totales
               </p>
             </div>
 
@@ -143,18 +228,42 @@ export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditF
 
       {/* Content */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {/* Add Day Button */}
+        {localPlan.length < 7 && (
+          <div className="mb-4">
+            <button
+              onClick={addDay}
+              className="w-full border-2 border-dashed border-emerald-400 hover:border-emerald-600 bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 text-emerald-700 rounded-2xl p-5 transition-all flex items-center justify-center gap-3 font-bold text-base shadow-sm hover:shadow-md active:scale-[0.98]"
+            >
+              <Calendar className="w-6 h-6" />
+              Agregar Día ({localPlan.length}/7)
+            </button>
+          </div>
+        )}
+
         <div className="space-y-4">
           {localPlan.map((day, dayIndex) => {
             const isExpanded = expandedDays[dayIndex];
+            const isDragging = draggedDay === dayIndex;
 
             return (
               <div
                 key={dayIndex}
-                className="bg-white rounded-2xl shadow-md border-2 border-neutral-200 overflow-hidden transition-all hover:shadow-lg"
+                draggable
+                onDragStart={() => handleDragStart(dayIndex)}
+                onDragOver={(e) => handleDragOver(e, dayIndex)}
+                onDragEnd={handleDragEnd}
+                className={`bg-white rounded-2xl shadow-md border-2 ${
+                  isDragging ? 'border-emerald-500 opacity-50 scale-95' : 'border-neutral-200'
+                } overflow-hidden transition-all hover:shadow-lg cursor-move`}
               >
                 {/* Day Header */}
                 <div className="bg-gradient-to-r from-neutral-100 to-neutral-50 border-b-2 border-neutral-200 p-4 sm:p-5">
                   <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="cursor-grab active:cursor-grabbing text-neutral-400 hover:text-emerald-600 transition-colors">
+                      <GripVertical className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </div>
+                    
                     <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
                       {dayIndex + 1}
                     </div>
@@ -168,21 +277,45 @@ export default function EditFullTrainingPlan({ weekPlan, onSave, onBack }: EditF
                         placeholder="Nombre del día"
                       />
                       <p className="text-xs sm:text-sm text-neutral-500 px-2 mt-1">
-                        {day.exercises.length} ejercicio{day.exercises.length !== 1 ? 's' : ''} 
-                        {getMuscleGroups(day.exercises) && ` · ${getMuscleGroups(day.exercises)}`}
+                        {day.exercises.length === 0 ? (
+                          <span className="inline-flex items-center gap-1 text-amber-600 font-semibold">
+                            <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                            Día de descanso
+                          </span>
+                        ) : (
+                          <>
+                            {day.exercises.length} ejercicio{day.exercises.length !== 1 ? 's' : ''} 
+                            {getMuscleGroups(day.exercises) && ` · ${getMuscleGroups(day.exercises)}`}
+                          </>
+                        )}
                       </p>
                     </div>
 
-                    <button
-                      onClick={() => toggleDayExpanded(dayIndex)}
-                      className="bg-white hover:bg-neutral-50 text-neutral-700 border-2 border-neutral-300 w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-sm"
-                    >
-                      {isExpanded ? (
-                        <ChevronUp className="w-5 h-5 sm:w-6 sm:h-6" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <div className="flex items-center gap-2">
+                      {localPlan.length > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteDay(dayIndex);
+                          }}
+                          className="bg-red-50 hover:bg-red-100 text-red-600 border-2 border-red-300 w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-sm"
+                          title="Eliminar día"
+                        >
+                          <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
                       )}
-                    </button>
+                      
+                      <button
+                        onClick={() => toggleDayExpanded(dayIndex)}
+                        className="bg-white hover:bg-neutral-50 text-neutral-700 border-2 border-neutral-300 w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-sm"
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="w-5 h-5 sm:w-6 sm:h-6" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 sm:w-6 sm:h-6" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
