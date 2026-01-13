@@ -20,6 +20,26 @@
  * @date 2026-01-13
  */
 
+/**
+ * Obtiene la cantidad mínima inteligente para un ingrediente según su categoría
+ */
+function getSmartMinimumAmount(ingredient: any): number {
+  const category = ingredient.category?.toLowerCase() || '';
+  
+  // Cantidades mínimas prácticas por categoría (en gramos)
+  if (category.includes('proteina')) return 15; // Mín 15g proteína
+  if (category.includes('carbohidrato') || category.includes('cereal')) return 10; // Mín 10g carbos
+  if (category.includes('grasa') || category.includes('aceite')) return 2; // Mín 2g grasas
+  if (category.includes('vegetal') || category.includes('verdura')) return 20; // Mín 20g verduras
+  if (category.includes('fruta')) return 30; // Mín 30g frutas
+  if (category.includes('lacteo')) return 25; // Mín 25g lácteos
+  if (category.includes('legumbre')) return 15; // Mín 15g legumbres
+  if (category.includes('condimento') || category.includes('especia')) return 0.5; // Condimentos pueden ser pequeños
+  
+  // Por defecto: 5g para ingredientes no categorizados
+  return 5;
+}
+
 import { Meal, User, DailyLog, MealIngredient } from '@/types';
 import solver from 'javascript-lp-solver';
 
@@ -768,13 +788,14 @@ function solveWithLP(
     };
   });
 
-  // Constraints: Límites individuales por ingrediente (0.5g min, 100x max)
+  // Constraints: Límites individuales por ingrediente (mínimos inteligentes)
   ingredientData.forEach((data, idx) => {
     const varName = `ing_${idx}`;
     const maxGrams = data.original.amount * 100;
+    const minGrams = getSmartMinimumAmount(data.ingredient);
     
     model.constraints[varName + '_bound'] = { 
-      min: 0.5, 
+      min: minGrams, 
       max: maxGrams 
     };
   });
@@ -812,10 +833,11 @@ function solveWithLP(
   const scaledIngredients = ingredientData.map((data, idx) => {
     const varName = `ing_${idx}`;
     const newAmount = result[varName] || data.original.amount;
+    const minAmount = getSmartMinimumAmount(data.ingredient);
 
     return {
       ...data.original,
-      amount: Math.max(0.5, newAmount),
+      amount: Math.max(minAmount, newAmount),
       calories: data.macrosPerGram.calories * newAmount,
       protein: data.macrosPerGram.protein * newAmount,
       carbs: data.macrosPerGram.carbs * newAmount,
@@ -935,7 +957,9 @@ function refineWithLeastSquares(
       delta *= adaptiveAggressiveness;
 
       const oldAmount = ing.amount;
-      const newAmount = Math.max(0.5, Math.min(ing.amount * 100, ing.amount + delta));
+      const ingredient = allIngredients.find(i => i.id === (ing as any).ingredientId);
+      const minAmount = ingredient ? getSmartMinimumAmount(ingredient) : 5;
+      const newAmount = Math.max(minAmount, Math.min(ing.amount * 100, ing.amount + delta));
       
       // Aplicar cambio TEMPORAL y verificar si mejora
       const macrosPerGramOriginal = {

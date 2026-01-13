@@ -59,6 +59,22 @@ export interface MealIngredient {
   fat: number;
 }
 
+// NUEVO: Para platos personalizados que se pueden recalcular
+export interface CustomMealSettings {
+  allowRecalculation: boolean; // Si se puede recalcular automáticamente
+  preferredPortion: number; // Porción preferida base (multiplicador)
+  macroTarget?: 'match_daily' | 'match_meal' | 'keep_original'; // Cómo recalcular
+  lastRecalculated?: string; // Fecha de último recálculo
+}
+
+// NUEVO: Para platos personalizados que se pueden recalcular
+export interface CustomMealSettings {
+  allowRecalculation: boolean; // Si se puede recalcular automáticamente
+  preferredPortion: number; // Porción preferida base (multiplicador)
+  macroTarget?: 'match_daily' | 'match_meal' | 'keep_original'; // Cómo recalcular
+  lastRecalculated?: string; // Fecha de último recálculo
+}
+
 export interface Meal {
   id: string;
   name: string;
@@ -100,6 +116,9 @@ export interface Meal {
     carbs: number;
     fat: number;
   };
+  
+  // NUEVO: Para platos personalizados recalculables
+  customMealSettings?: CustomMealSettings; // Configuración de recálculo
 }
 
 export interface DailyLog {

@@ -1,19 +1,33 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Trash2, Edit, Flame, Beef, Wheat, Droplet, ChefHat } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit, Flame, Beef, Wheat, Droplet, ChefHat, RefreshCw, Calendar } from 'lucide-react';
 import { Meal } from '../types';
 import * as api from '../utils/api';
+import { canMealBeRecalculated, needsRecalculation, recalculateCustomMealForToday } from '../utils/customMealRecalculation';
 
 interface MyCustomMealsProps {
   onBack: () => void;
   onCreate: () => void;
   onEdit?: (meal: Meal) => void;
   onSelect?: (meal: Meal) => void;
-  userEmail: string; // ✅ NUEVO: Para cargar platos desde Supabase
+  onRecalculate?: (meal: Meal, mealType: string) => Promise<Meal>;
+  userEmail: string;
+  user?: any; // Para contexto de recálculo
+  currentLog?: any; // Log actual del usuario
 }
 
-export default function MyCustomMeals({ onBack, onCreate, onEdit, onSelect, userEmail }: MyCustomMealsProps) {
+export default function MyCustomMeals({ 
+  onBack, 
+  onCreate, 
+  onEdit, 
+  onSelect, 
+  onRecalculate, 
+  userEmail, 
+  user, 
+  currentLog 
+}: MyCustomMealsProps) {
   const [customMeals, setCustomMeals] = useState<Meal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [recalculatingMealId, setRecalculatingMealId] = useState<string | null>(null);
 
   useEffect(() => {
     loadMeals();
@@ -26,6 +40,34 @@ export default function MyCustomMeals({ onBack, onCreate, onEdit, onSelect, user
     console.log(`✅ Cargados ${meals.length} custom meals`);
     setCustomMeals(meals);
     setIsLoading(false);
+  };
+
+  const handleRecalculate = async (meal: Meal, mealType: string) => {
+    if (!onRecalculate || !user || !currentLog) {
+      alert('No se puede recalcular en este momento. Faltan datos del usuario.');
+      return;
+    }
+    
+    setRecalculatingMealId(meal.id);
+    try {
+      const recalculatedMeal = await onRecalculate(meal, mealType);
+      
+      // Actualizar el plato en la lista
+      const updatedMeals = customMeals.map(m => 
+        m.id === meal.id ? recalculatedMeal : m
+      );
+      setCustomMeals(updatedMeals);
+      
+      // Guardar en Supabase
+      await api.saveCustomMeals(userEmail, updatedMeals);
+      
+      console.log('✅ Plato recalculado y guardado');
+    } catch (error) {
+      console.error('❌ Error recalculando plato:', error);
+      alert('Error al recalcular el plato. Por favor, intenta de nuevo.');
+    } finally {
+      setRecalculatingMealId(null);
+    }
   };
 
   const handleDelete = async (mealId: string) => {
@@ -137,6 +179,39 @@ export default function MyCustomMeals({ onBack, onCreate, onEdit, onSelect, user
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {/* Botón Recalcular */}
+                          {canMealBeRecalculated(meal) && onRecalculate && (
+                            <button
+                              onClick={() => handleRecalculate(meal, type)}
+                              disabled={recalculatingMealId === meal.id}
+                              className={`${
+                                recalculatingMealId === meal.id
+                                  ? 'text-gray-400'
+                                  : needsRecalculation(meal) 
+                                    ? 'text-emerald-600 hover:bg-emerald-50' 
+                                    : 'text-orange-500 hover:bg-orange-50'
+                              } p-2 rounded-lg transition-all relative`}
+                              title={
+                                recalculatingMealId === meal.id
+                                  ? 'Recalculando...'
+                                  : needsRecalculation(meal)
+                                    ? 'Recalcular para hoy (recomendado)'
+                                    : 'Recalcular para hoy'
+                              }
+                            >
+                              {recalculatingMealId === meal.id ? (
+                                <div className="animate-spin w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full" />
+                              ) : (
+                                <RefreshCw className="w-4 h-4" />
+                              )}
+                              {needsRecalculation(meal) && (
+                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full flex items-center justify-center">
+                                  <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                </div>
+                              )}
+                            </button>
+                          )}
+                          
                           {onEdit && (
                             <button
                               onClick={() => onEdit(meal)}
