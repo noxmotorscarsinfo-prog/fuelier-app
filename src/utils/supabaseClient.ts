@@ -18,10 +18,16 @@ export const supabase: SupabaseClient = (() => {
       // Retornar un cliente vacío para evitar errores en desarrollo
       supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder-key');
     } else {
+      // Verificar si el usuario quiere recordar la sesión
+      const rememberSession = localStorage.getItem('fuelier_remember_session');
+      const shouldRemember = rememberSession ? JSON.parse(rememberSession) : true;
+      
       supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
           persistSession: true,
           autoRefreshToken: true,
+          storage: shouldRemember ? window.localStorage : window.sessionStorage,
+          storageKey: 'fuelier-auth-token',
         }
       });
     }
