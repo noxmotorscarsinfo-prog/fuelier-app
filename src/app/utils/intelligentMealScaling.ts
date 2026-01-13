@@ -238,14 +238,13 @@ export function scaleToExactTarget(
     }
   }
   
-  // 🍽️ COMIDAS NORMALES: Usar multiplicador ponderado
-  const multiplier = calculatePerfectMultiplier(baseMacros, targetMacros, isLastMeal);
+  // 🍽️ COMIDAS NORMALES: NUEVA ESTRATEGIA - Optimizar TODOS los macros al 100%
+  console.log('🎯 Optimización multi-macro para alcanzar 100% en todos los macros');
   
-  console.log(`   ⚙️ Multiplicador calculado: ${multiplier.toFixed(3)}x`);
-  
-  // Escalar el plato
   if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
-    // Sin ingredientes: escalar proporcionalmente
+    // Sin ingredientes: escalar proporcionalmente (legacy)
+    const multiplier = calculatePerfectMultiplier(baseMacros, targetMacros, isLastMeal);
+    
     const scaledMeal = {
       ...meal,
       calories: Math.round(baseMacros.calories * multiplier),
@@ -257,7 +256,7 @@ export function scaleToExactTarget(
       isLastMeal: false
     };
     
-    console.log('✅ Plato escalado (SIN ingredientes):', {
+    console.log('✅ Plato escalado (SIN ingredientes - legacy):', {
       cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories}, diff: ${scaledMeal.calories - targetMacros.calories})`,
       prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g, diff: ${(scaledMeal.protein - targetMacros.protein).toFixed(1)}g)`,
       carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g, diff: ${(scaledMeal.carbs - targetMacros.carbs).toFixed(1)}g)`,
@@ -269,39 +268,102 @@ export function scaleToExactTarget(
     return scaledMeal;
   }
   
-  // Con ingredientes: escalar cantidades
-  const scaledIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => ({
+  // 🎯 ALGORITMO ITERATIVO MEJORADO: Optimizar TODOS los macros simultáneamente
+  let bestMultiplier = baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1;
+  let bestIngredients: MealIngredientReference[] = [];
+  let iterations = 0;
+  const maxIterations = 100;
+  let bestDiff = Infinity;
+  
+  // Iterar para encontrar el multiplicador que minimiza el error de TODOS los macros
+  for (let i = 0; i < maxIterations; i++) {
+    const testIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => ({
+      ingredientId: ref.ingredientId,
+      amountInGrams: Math.round(ref.amountInGrams * bestMultiplier)
+    }));
+    
+    const testMacros = calculateMacrosFromIngredients(testIngredients, allIngredients);
+    
+    // ✅ Calcular error ponderado de TODOS los macros
+    const errors = {
+      cal: targetMacros.calories > 0 ? Math.abs(testMacros.calories - targetMacros.calories) / targetMacros.calories : 0,
+      prot: targetMacros.protein > 0 ? Math.abs(testMacros.protein - targetMacros.protein) / targetMacros.protein : 0,
+      carbs: targetMacros.carbs > 0 ? Math.abs(testMacros.carbs - targetMacros.carbs) / targetMacros.carbs : 0,
+      fat: targetMacros.fat > 0 ? Math.abs(testMacros.fat - targetMacros.fat) / targetMacros.fat : 0
+    };
+    
+    // Error total ponderado (calorías 40%, proteína 30%, carbos 15%, grasa 15%)
+    const totalError = errors.cal * 0.4 + errors.prot * 0.3 + errors.carbs * 0.15 + errors.fat * 0.15;
+    
+    if (totalError < bestDiff) {
+      bestDiff = totalError;
+      bestIngredients = testIngredients;
+      iterations = i + 1;
+    }
+    
+    // Si ya es muy preciso (<1% error), salir
+    if (totalError < 0.01) break;
+    
+    // ✅ Ajustar multiplicador usando ratio ponderado de TODOS los macros
+    const ratios = {
+      cal: targetMacros.calories > 0 && testMacros.calories > 0 ? targetMacros.calories / testMacros.calories : 1,
+      prot: targetMacros.protein > 0 && testMacros.protein > 0 ? targetMacros.protein / testMacros.protein : 1,
+      carbs: targetMacros.carbs > 0 && testMacros.carbs > 0 ? targetMacros.carbs / testMacros.carbs : 1,
+      fat: targetMacros.fat > 0 && testMacros.fat > 0 ? targetMacros.fat / testMacros.fat : 1
+    };
+    
+    // Ratio ponderado (prioriza calorías y proteína)
+    const weightedRatio = ratios.cal * 0.4 + ratios.prot * 0.3 + ratios.carbs * 0.15 + ratios.fat * 0.15;
+    
+    // Ajuste suave para evitar oscilaciones
+    bestMultiplier *= (weightedRatio * 0.15 + 0.85);
+  }
+  
+  // Aplicar los mejores ingredientes encontrados
+  const finalIngredients = bestIngredients.length > 0 ? bestIngredients : meal.ingredientReferences.map(ref => ({
     ingredientId: ref.ingredientId,
-    amountInGrams: Math.round(ref.amountInGrams * multiplier)
+    amountInGrams: Math.round(ref.amountInGrams * bestMultiplier)
   }));
   
-  console.log('   🔢 Ingredientes escalados:');
-  scaledIngredients.forEach((ing, i) => {
-    const original = meal.ingredientReferences![i];
-    console.log(`      ${ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g`);
-  });
+  const finalMacros = calculateMacrosFromIngredients(finalIngredients, allIngredients);
   
-  const scaledMacros = calculateMacrosFromIngredients(scaledIngredients, allIngredients);
+  console.log('   🔢 Ingredientes optimizados (iteraciones: ' + iterations + ', error: ' + (bestDiff * 100).toFixed(2) + '%):');
+  finalIngredients.forEach((ing, i) => {
+    const original = meal.ingredientReferences![i];
+    console.log(`      ${ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g (${bestMultiplier.toFixed(3)}x)`);
+  });
   
   const scaledMeal = {
     ...meal,
-    ingredientReferences: scaledIngredients,
-    calories: Math.round(scaledMacros.calories),
-    protein: Math.round(scaledMacros.protein * 10) / 10,
-    carbs: Math.round(scaledMacros.carbs * 10) / 10,
-    fat: Math.round(scaledMacros.fat * 10) / 10,
-    baseQuantity: multiplier,
+    ingredientReferences: finalIngredients,
+    calories: finalMacros.calories,
+    protein: finalMacros.protein,
+    carbs: finalMacros.carbs,
+    fat: finalMacros.fat,
+    baseQuantity: bestMultiplier,
     scaledForTarget: true,
     isLastMeal: false
   };
   
-  console.log('✅ Plato escalado (CON ingredientes):', {
-    cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories}, diff: ${scaledMeal.calories - targetMacros.calories})`,
-    prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g, diff: ${(scaledMeal.protein - targetMacros.protein).toFixed(1)}g)`,
-    carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g, diff: ${(scaledMeal.carbs - targetMacros.carbs).toFixed(1)}g)`,
-    fat: `${scaledMeal.fat}g (target: ${targetMacros.fat}g, diff: ${(scaledMeal.fat - targetMacros.fat).toFixed(1)}g)`,
-    multiplier: `${multiplier.toFixed(3)}x`,
-    baseQuantity: scaledMeal.baseQuantity
+  const diffCal = targetMacros.calories - finalMacros.calories;
+  const diffProt = targetMacros.protein - finalMacros.protein;
+  const diffCarbs = targetMacros.carbs - finalMacros.carbs;
+  const diffFat = targetMacros.fat - finalMacros.fat;
+  
+  const errorPercentages = {
+    cal: targetMacros.calories > 0 ? Math.abs(diffCal / targetMacros.calories * 100) : 0,
+    prot: targetMacros.protein > 0 ? Math.abs(diffProt / targetMacros.protein * 100) : 0,
+    carbs: targetMacros.carbs > 0 ? Math.abs(diffCarbs / targetMacros.carbs * 100) : 0,
+    fat: targetMacros.fat > 0 ? Math.abs(diffFat / targetMacros.fat * 100) : 0
+  };
+  
+  console.log('✅ COMIDA OPTIMIZADA (TODOS los macros):', {
+    cal: `${finalMacros.calories} kcal (target: ${targetMacros.calories}, diff: ${diffCal > 0 ? '+' : ''}${diffCal}, error: ${errorPercentages.cal.toFixed(1)}%)`,
+    prot: `${finalMacros.protein}g (target: ${targetMacros.protein}g, diff: ${diffProt > 0 ? '+' : ''}${diffProt}g, error: ${errorPercentages.prot.toFixed(1)}%)`,
+    carbs: `${finalMacros.carbs}g (target: ${targetMacros.carbs}g, diff: ${diffCarbs > 0 ? '+' : ''}${diffCarbs}g, error: ${errorPercentages.carbs.toFixed(1)}%)`,
+    fat: `${finalMacros.fat}g (target: ${targetMacros.fat}g, diff: ${diffFat > 0 ? '+' : ''}${diffFat}g, error: ${errorPercentages.fat.toFixed(1)}%)`,
+    multiplier: `${bestMultiplier.toFixed(3)}x`,
+    nota: '⭐ Algoritmo multi-macro optimizado'
   });
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   

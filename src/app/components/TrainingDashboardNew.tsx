@@ -240,7 +240,21 @@ export function TrainingDashboardNew({
           w.date >= weekStart && w.date <= weekEnd
         );
         console.log('[TrainingDashboard] 📅 Semana:', weekStart, '-', weekEnd, '| Completados esta semana:', thisWeekWorkouts.length);
-        setCompletedWorkouts(thisWeekWorkouts);
+        
+        // Marcar automáticamente como descanso los días pasados sin entrenamiento
+        const updatedWorkouts = markPastDaysAsRest(thisWeekWorkouts, weekStart);
+        
+        setCompletedWorkouts(updatedWorkouts);
+        
+        // Si hubo cambios, guardar en Supabase
+        if (updatedWorkouts.length !== thisWeekWorkouts.length) {
+          try {
+            await api.saveCompletedWorkouts(user.email, updatedWorkouts);
+            console.log('[TrainingDashboard] ✅ Días pasados sin entrenamiento marcados como descanso');
+          } catch (error) {
+            console.error('Error guardando días de descanso automáticos:', error);
+          }
+        }
       } catch (error) {
         console.error('Error loading completed workouts:', error);
         setCompletedWorkouts([]);
@@ -251,6 +265,39 @@ export function TrainingDashboardNew({
 
     loadCompletedWorkouts();
   }, [user.email]);
+
+  // Función para marcar automáticamente como descanso los días pasados sin entrenamiento
+  const markPastDaysAsRest = (workouts: CompletedWorkout[], weekStart: string): CompletedWorkout[] => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const weekStartDate = new Date(weekStart);
+    const updatedWorkouts = [...workouts];
+    
+    // Recorrer todos los días desde el inicio de la semana hasta ayer
+    const currentDate = new Date(weekStartDate);
+    while (currentDate < today) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      // Si este día no tiene ningún entrenamiento registrado, marcarlo como descanso
+      const hasWorkout = workouts.some(w => w.date === dateStr);
+      
+      if (!hasWorkout) {
+        updatedWorkouts.push({
+          date: dateStr,
+          dayPlanIndex: -1, // -1 indica que es un día de descanso automático
+          dayPlanName: 'Descanso',
+          exerciseReps: {},
+          exerciseWeights: {}
+        });
+      }
+      
+      // Avanzar al siguiente día
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return updatedWorkouts;
+  };
 
   // Guardar entrenamientos completados en Supabase
   const saveCompletedWorkouts = async (workouts: CompletedWorkout[]) => {
@@ -664,7 +711,9 @@ export function TrainingDashboardNew({
                           rounded-lg transition-all duration-300 overflow-hidden
                           ${isToday ? 'ring-2 ring-emerald-500 shadow-lg' : ''}
                           ${isCompleted 
-                            ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-md' 
+                            ? isRestDay
+                              ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md'
+                              : 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-md'
                             : 'bg-white border border-neutral-200 shadow-sm'
                           }
                         `}>
@@ -689,9 +738,15 @@ export function TrainingDashboardNew({
                             {/* Indicador de estado */}
                             <div className="flex justify-center">
                               {isCompleted ? (
-                                <div className="w-6 h-6 bg-white/20 backdrop-blur-sm rounded-md flex items-center justify-center">
-                                  <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                                </div>
+                                isRestDay ? (
+                                  <div className="w-6 h-6 bg-amber-100 rounded-md flex items-center justify-center">
+                                    <span className="text-sm">😴</span>
+                                  </div>
+                                ) : (
+                                  <div className="w-6 h-6 bg-white/20 backdrop-blur-sm rounded-md flex items-center justify-center">
+                                    <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                                  </div>
+                                )
                               ) : isToday ? (
                                 <div className="w-6 h-6 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-md flex items-center justify-center shadow-sm">
                                   <Dumbbell className="w-3.5 h-3.5 text-white" />
@@ -719,6 +774,7 @@ export function TrainingDashboardNew({
                     const fullDate = weekFullDates[dayIndex];
                     const isCompleted = isDateCompleted(fullDate);
                     const completedWorkout = getWorkoutForDate(fullDate);
+                    const isRestDay = completedWorkout?.dayPlanIndex === -1; // Día de descanso automático
                     const dateNumber = weekDates[dayIndex];
                     const dayName = weekDays[dayIndex];
                     
@@ -760,19 +816,35 @@ export function TrainingDashboardNew({
                             {/* Indicador de estado */}
                             <div className="flex flex-col items-center gap-3">
                               {isCompleted ? (
-                                <>
-                                  <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                                    <Check className="w-8 h-8 text-white stroke-[2.5]" />
-                                  </div>
-                                  <div className="text-center">
-                                    <span className="text-sm font-bold text-white block mb-1">
-                                      Completado
-                                    </span>
-                                    <span className="text-xs font-medium text-emerald-100">
-                                      {completedWorkout?.dayPlanName}
-                                    </span>
-                                  </div>
-                                </>
+                                isRestDay ? (
+                                  <>
+                                    <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                                      <span className="text-4xl">😴</span>
+                                    </div>
+                                    <div className="text-center">
+                                      <span className="text-sm font-bold text-white block mb-1">
+                                        Descanso
+                                      </span>
+                                      <span className="text-xs font-medium text-amber-100">
+                                        Sin entrenar
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                                      <Check className="w-8 h-8 text-white stroke-[2.5]" />
+                                    </div>
+                                    <div className="text-center">
+                                      <span className="text-sm font-bold text-white block mb-1">
+                                        Completado
+                                      </span>
+                                      <span className="text-xs font-medium text-emerald-100">
+                                        {completedWorkout?.dayPlanName}
+                                      </span>
+                                    </div>
+                                  </>
+                                )
                               ) : isToday ? (
                                 <>
                                   <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
