@@ -66,8 +66,19 @@ export function recalculateCustomMealForToday(
     100 // maxIterations
   );
   
-  // Extraer el meal escalado del resultado
-  const recalculatedMeal = hybridSolution.scaledMeal;
+  // Extraer el meal escalado del resultado - construir desde scaledIngredients
+  const scaledIngredients = hybridSolution.scaledIngredients;
+  const achievedMacros = hybridSolution.achievedMacros;
+  
+  const recalculatedMeal: Meal = {
+    ...meal,
+    calories: achievedMacros.calories,
+    protein: achievedMacros.protein,
+    carbs: achievedMacros.carbs,
+    fat: achievedMacros.fat,
+    detailedIngredients: scaledIngredients,
+    portionMultiplier: 1.0, // Reset multiplier after recalculation
+  };
   
   // 4. Preservar metadatos del plato original
   const finalMeal: Meal = {
