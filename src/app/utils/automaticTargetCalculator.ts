@@ -18,10 +18,21 @@ import { getMealGoals } from './mealDistribution';
  * Cuenta cuántas comidas faltan por hacer (incluyendo la actual)
  * IMPORTANTE: SIEMPRE incluye la comida actual, incluso si ya tiene datos
  * (porque el usuario puede estar editándola/reemplazándola)
+ * 
+ * ✅ ADAPTABLE: Usa mealStructure si está definida, sino usa orden por defecto
  */
-function countRemainingMeals(currentLog: DailyLog, currentMealType: MealType): number {
-  const mealOrder: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner'];
+function countRemainingMeals(currentLog: DailyLog, currentMealType: MealType, user?: User): number {
+  // ✅ NUEVO: Usar estructura personalizada si existe
+  const defaultOrder: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner'];
+  const mealOrder = user?.mealStructure?.activeMeals || defaultOrder;
+  
   const currentIndex = mealOrder.indexOf(currentMealType);
+  
+  // Si la comida actual no está en el orden configurado, fallar graciosamente
+  if (currentIndex === -1) {
+    console.warn(`⚠️ Comida "${currentMealType}" no encontrada en mealOrder:`, mealOrder);
+    return 1; // Asumir que es la última por seguridad
+  }
   
   // SIEMPRE cuenta la comida actual (count = 1)
   let count = 1;
@@ -34,6 +45,8 @@ function countRemainingMeals(currentLog: DailyLog, currentMealType: MealType): n
   }
   
   console.log(`📊 countRemainingMeals(${currentMealType}):`, {
+    usingCustomStructure: !!user?.mealStructure?.activeMeals,
+    mealOrder,
     currentIndex,
     totalMealsInDay: mealOrder.length,
     mealsAfterCurrent: mealOrder.length - currentIndex - 1,
@@ -47,8 +60,9 @@ function countRemainingMeals(currentLog: DailyLog, currentMealType: MealType): n
 
 /**
  * Calcula macros ya consumidos en comidas anteriores (NO incluye la comida actual)
+ * ✅ ADAPTABLE: Usa mealStructure si está definida
  */
-function calculateConsumed(currentLog: DailyLog, currentMealType: MealType) {
+function calculateConsumed(currentLog: DailyLog, currentMealType: MealType, user?: User) {
   const consumed = {
     calories: 0,
     protein: 0,
@@ -56,7 +70,9 @@ function calculateConsumed(currentLog: DailyLog, currentMealType: MealType) {
     fat: 0
   };
 
-  const mealOrder: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner'];
+  // ✅ NUEVO: Usar estructura personalizada si existe
+  const defaultOrder: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner'];
+  const mealOrder = user?.mealStructure?.activeMeals || defaultOrder;
   
   // Solo sumar comidas anteriores a la actual
   for (const mealType of mealOrder) {
@@ -111,10 +127,10 @@ export function calculateIntelligentTarget(
   isLastMeal: boolean;
   mealsLeft: number;
 } {
-  // 1. Calcular estado actual
-  const consumed = calculateConsumed(currentLog, mealType);
+  // 1. Calcular estado actual (✅ Ahora adaptable a estructura personalizada)
+  const consumed = calculateConsumed(currentLog, mealType, user);
   const remaining = calculateRemaining(user, consumed);
-  const mealsLeft = countRemainingMeals(currentLog, mealType);
+  const mealsLeft = countRemainingMeals(currentLog, mealType, user);
   
   console.log('🎯 AutoTarget Calculator:', {
     mealType,
@@ -122,7 +138,8 @@ export function calculateIntelligentTarget(
     consumed,
     remaining,
     mealsLeft,
-    hasCustomDistribution: !!user.mealDistribution
+    hasCustomDistribution: !!user.mealDistribution,
+    hasCustomMealStructure: !!user.mealStructure?.activeMeals
   });
   
   console.log('┌────────────────────────────────────────────┐');
