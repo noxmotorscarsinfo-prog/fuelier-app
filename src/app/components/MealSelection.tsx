@@ -719,7 +719,7 @@ export default function MealSelection({
           <div className="absolute -top-1.5 sm:-top-2 -right-1.5 sm:-right-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1 shadow-md z-10">
             <span className="text-xs sm:text-sm">{proportionCategory.emoji}</span>
             <span className="font-semibold whitespace-nowrap">
-              {proportionCompatibility >= 85 ? 'Perfecto' : 'Top'} #{topNumber} ({Math.round(proportionCompatibility)}%)
+              {proportionCompatibility >= 98 ? '⭐ Perfecto' : 'Top'} #{topNumber} ({Math.round(proportionCompatibility)}%)
             </span>
           </div>
         )}
@@ -789,10 +789,10 @@ export default function MealSelection({
                 {/* NUEVO: Indicador de compatibilidad de proporciones para CENA */}
                 {mealType === 'dinner' && proportionCompatibility > 0 && (
                   <div className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs ${
-                    proportionCompatibility >= 85 ? 'bg-emerald-100 text-emerald-700' :
-                    proportionCompatibility >= 70 ? 'bg-green-100 text-green-700' :
-                    proportionCompatibility >= 55 ? 'bg-blue-100 text-blue-700' :
-                    proportionCompatibility >= 40 ? 'bg-amber-100 text-amber-700' :
+                    proportionCompatibility >= 98 ? 'bg-emerald-100 text-emerald-700' :
+                    proportionCompatibility >= 95 ? 'bg-green-100 text-green-700' :
+                    proportionCompatibility >= 90 ? 'bg-blue-100 text-blue-700' :
+                    proportionCompatibility >= 80 ? 'bg-amber-100 text-amber-700' :
                     'bg-red-100 text-red-700'
                   }`}>
                     <span>{proportionCategory.emoji}</span>
