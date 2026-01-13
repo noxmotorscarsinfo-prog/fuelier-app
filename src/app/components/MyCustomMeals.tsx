@@ -50,6 +50,7 @@ export default function MyCustomMeals({
     
     setRecalculatingMealId(meal.id);
     try {
+      // onRecalculate debería ser una función que retorne Promise<Meal>
       const recalculatedMeal = await onRecalculate(meal, mealType);
       
       // Actualizar el plato en la lista

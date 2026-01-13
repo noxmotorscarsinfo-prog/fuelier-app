@@ -15,18 +15,18 @@ import { calculateIntelligentTarget } from './automaticTargetCalculator';
 /**
  * Recalcula un plato personalizado para que se ajuste a los macros objetivo del día
  */
-export async function recalculateCustomMealForToday(
+export function recalculateCustomMealForToday(
   meal: Meal,
   user: User,
   currentLog: DailyLog,
   mealType: 'breakfast' | 'lunch' | 'snack' | 'dinner',
   allIngredients: Ingredient[]
-): Promise<Meal> {
+): Meal {
   
   console.log(`🔄 Recalculando plato personalizado: ${meal.name} para ${mealType}`);
   
   // 1. Calcular macros objetivo para este tipo de comida
-  const dailyTarget = calculateIntelligentTarget(user, currentLog);
+  const dailyTarget = calculateIntelligentTarget(user, currentLog, mealType as any);
   
   // Distribución típica por comida (puede personalizarse)
   const mealDistribution = {
@@ -52,18 +52,22 @@ export async function recalculateCustomMealForToday(
   }
   
   // 3. Usar FUELIER AI Engine v2.0 para recalcular
-  const recalculatedMeal = await adaptMealWithAIEngine(
-    meal,
+  // Necesitamos agregar mealIngredients temporalmente al meal para el AI Engine
+  const mealWithIngredients = {
+    ...meal,
+    mealIngredients: meal.detailedIngredients
+  };
+  
+  const hybridSolution = adaptMealWithAIEngine(
+    mealWithIngredients,
     targetForMeal,
     user,
     currentLog,
-    allIngredients,
-    {
-      aggressiveness: 1.0, // Menos agresivo para platos personalizados
-      addableIngredients: false, // No agregar ingredientes extra
-      maxIterations: 100
-    }
+    100 // maxIterations
   );
+  
+  // Extraer el meal escalado del resultado
+  const recalculatedMeal = hybridSolution.scaledMeal;
   
   // 4. Preservar metadatos del plato original
   const finalMeal: Meal = {
@@ -76,7 +80,8 @@ export async function recalculateCustomMealForToday(
     preparationSteps: meal.preparationSteps,
     tips: meal.tips,
     customMealSettings: {
-      ...meal.customMealSettings,
+      allowRecalculation: meal.customMealSettings?.allowRecalculation ?? true,
+      preferredPortion: meal.customMealSettings?.preferredPortion ?? 1.0,
       lastRecalculated: new Date().toISOString(),
       macroTarget: 'match_meal'
     }
@@ -174,9 +179,10 @@ export function scaleCustomMealProportionally(
     portionMultiplier: (meal.portionMultiplier || 1) * scaleFactor,
     
     customMealSettings: {
-      ...meal.customMealSettings,
-      lastRecalculated: new Date().toISOString(),
-      preferredPortion: scaleFactor
+      allowRecalculation: meal.customMealSettings?.allowRecalculation ?? true,
+      preferredPortion: scaleFactor,
+      macroTarget: meal.customMealSettings?.macroTarget ?? 'keep_original',
+      lastRecalculated: new Date().toISOString()
     }
   };
   
