@@ -104,16 +104,16 @@ export function scaleToExactTarget(
     console.log(`   Para mejor precisión, considera editarlo en el Admin Panel y añadir ingredientes reales.`);
   }
   
-  // ⭐ ÚLTIMA COMIDA: Ajuste iterativo para alcanzar target EXACTO con ingredientes REALES
+  // ⭐ ÚLTIMA COMIDA: Ajuste iterativo ULTRA PRECISO para alcanzar target EXACTO al 100%
   if (isLastMeal) {
-    console.log('🌙 ÚLTIMA COMIDA - Optimización iterativa para alcanzar 100% exacto');
+    console.log('🌙 ÚLTIMA COMIDA - Optimización ULTRA PRECISA para 100% exacto (eliminar modal de diferencias)');
     
     if (meal.ingredientReferences && meal.ingredientReferences.length > 0) {
-      // 🎯 ALGORITMO ITERATIVO MEJORADO: Optimizar TODOS los macros simultáneamente
+      // 🎯 ALGORITMO ITERATIVO ULTRA MEJORADO: Optimizar TODOS los macros al 100%
       let bestMultiplier = baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1;
       let bestIngredients: MealIngredientReference[] = [];
       let iterations = 0;
-      const maxIterations = 100; // Aumentado para mejor convergencia
+      const maxIterations = 200; // ⬆️ AUMENTADO para máxima precisión
       let bestDiff = Infinity;
       
       // Iterar para encontrar el multiplicador que minimiza el error de TODOS los macros
@@ -125,7 +125,7 @@ export function scaleToExactTarget(
         
         const testMacros = calculateMacrosFromIngredients(testIngredients, allIngredients);
         
-        // ✅ MEJORA: Calcular error ponderado de TODOS los macros (no solo calorías)
+        // ✅ ULTRA PRECISIÓN: Calcular error absoluto de TODOS los macros
         const errors = {
           cal: targetMacros.calories > 0 ? Math.abs(testMacros.calories - targetMacros.calories) / targetMacros.calories : 0,
           prot: targetMacros.protein > 0 ? Math.abs(testMacros.protein - targetMacros.protein) / targetMacros.protein : 0,
@@ -133,8 +133,8 @@ export function scaleToExactTarget(
           fat: targetMacros.fat > 0 ? Math.abs(testMacros.fat - targetMacros.fat) / targetMacros.fat : 0
         };
         
-        // Error total ponderado (calorías 40%, proteína 30%, carbos 15%, grasa 15%)
-        const totalError = errors.cal * 0.4 + errors.prot * 0.3 + errors.carbs * 0.15 + errors.fat * 0.15;
+        // Error total ponderado - PRIORIDAD MÁXIMA en calorías y proteína
+        const totalError = errors.cal * 0.5 + errors.prot * 0.35 + errors.carbs * 0.10 + errors.fat * 0.05;
         
         if (totalError < bestDiff) {
           bestDiff = totalError;
@@ -142,10 +142,10 @@ export function scaleToExactTarget(
           iterations = i + 1;
         }
         
-        // Si ya es muy preciso (<1% error), salir
-        if (totalError < 0.01) break;
+        // ⭐ ULTRA PRECISO: Solo salir si error <0.5% (antes era 1%)
+        if (totalError < 0.005) break;
         
-        // ✅ MEJORA: Ajustar multiplicador usando ratio ponderado de TODOS los macros
+        // ✅ MEJORA: Ajustar multiplicador con mayor agresividad
         const ratios = {
           cal: targetMacros.calories > 0 && testMacros.calories > 0 ? targetMacros.calories / testMacros.calories : 1,
           prot: targetMacros.protein > 0 && testMacros.protein > 0 ? targetMacros.protein / testMacros.protein : 1,
@@ -153,11 +153,11 @@ export function scaleToExactTarget(
           fat: targetMacros.fat > 0 && testMacros.fat > 0 ? targetMacros.fat / testMacros.fat : 1
         };
         
-        // Ratio ponderado (prioriza calorías y proteína)
-        const weightedRatio = ratios.cal * 0.4 + ratios.prot * 0.3 + ratios.carbs * 0.15 + ratios.fat * 0.15;
+        // Ratio ponderado - MAYOR peso en calorías y proteína para última comida
+        const weightedRatio = ratios.cal * 0.5 + ratios.prot * 0.35 + ratios.carbs * 0.10 + ratios.fat * 0.05;
         
-        // Ajuste suave para evitar oscilaciones
-        bestMultiplier *= (weightedRatio * 0.15 + 0.85);
+        // ⚡ Ajuste MÁS AGRESIVO para converger más rápido (antes 0.15, ahora 0.25)
+        bestMultiplier *= (weightedRatio * 0.25 + 0.75);
       }
       
       // Aplicar los mejores ingredientes encontrados

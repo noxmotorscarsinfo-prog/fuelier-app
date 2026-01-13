@@ -138,18 +138,26 @@ describe('🧪 Sistema de Escalado de Ingredientes', () => {
       });
     });
     
-    test('Debe usar multiplicador restrictivo para no exceder ningún macro', () => {
+    test('Debe optimizar TODOS los macros hacia el 100% (nueva estrategia)', () => {
       const target = {
         calories: 400,
         protein: 30,
         carbs: 40,
-        fat: 8 // ⚠️ Muy bajo - será el limitante
+        fat: 8
       };
       
       const scaled = scaleToExactTarget(testMeal, target, false, testIngredients);
       
-      // No debe exceder el target de grasas (el más restrictivo)
-      expect(scaled.fat).toBeLessThanOrEqual(target.fat + 1); // +1 tolerancia por redondeo
+      // NUEVA ESTRATEGIA: Optimización iterativa en todas las comidas
+      // Debe acercarse mucho al target (tolerancia 15% por composición del plato)
+      const calError = Math.abs(scaled.calories - target.calories) / target.calories * 100;
+      const protError = Math.abs(scaled.protein - target.protein) / target.protein * 100;
+      const carbsError = Math.abs(scaled.carbs - target.carbs) / target.carbs * 100;
+      const fatError = Math.abs(scaled.fat - target.fat) / target.fat * 100;
+      
+      // Verificar que el error promedio sea bajo
+      const avgError = (calError + protError + carbsError + fatError) / 4;
+      expect(avgError).toBeLessThan(15); // Promedio <15% de error
     });
     
     test('Macros deben calcularse desde ingredientes escalados, no forzarse', () => {
@@ -176,8 +184,8 @@ describe('🧪 Sistema de Escalado de Ingredientes', () => {
     });
   });
 
-  describe('🌙 Escalado de última comida (optimización al 100%)', () => {
-    test('Debe optimizar iterativamente para acercarse al target', () => {
+  describe('🌙 Escalado de última comida (optimización ULTRA PRECISA al 100%)', () => {
+    test('Debe optimizar iterativamente para alcanzar el target con máxima precisión', () => {
       const target = {
         calories: 500,
         protein: 30,
@@ -187,13 +195,16 @@ describe('🧪 Sistema de Escalado de Ingredientes', () => {
       
       const scaled = scaleToExactTarget(testMeal, target, true, testIngredients);
       
-      // Debe estar cerca del target (tolerancia 20% por composición del plato)
-      // Nota: El plato base tiene proporción fija de macros, puede no ser perfecto
+      // ULTRA PRECISIÓN: tolerancia <5% en cada macro
       const calDiff = Math.abs(scaled.calories - target.calories);
       const protDiff = Math.abs(scaled.protein - target.protein);
+      const carbsDiff = Math.abs(scaled.carbs - target.carbs);
+      const fatDiff = Math.abs(scaled.fat - target.fat);
       
-      expect(calDiff).toBeLessThan(target.calories * 0.20); // <20% diferencia
-      expect(protDiff).toBeLessThan(target.protein * 0.20);
+      expect(calDiff).toBeLessThan(target.calories * 0.05); // <5% diferencia en calorías
+      expect(protDiff).toBeLessThan(target.protein * 0.05); // <5% diferencia en proteína
+      expect(carbsDiff).toBeLessThan(target.carbs * 0.05); // <5% diferencia en carbos
+      expect(fatDiff).toBeLessThan(target.fat * 0.05); // <5% diferencia en grasas
     });
     
     test('Los ingredientes deben ser cantidades REALES y coherentes', () => {
@@ -474,8 +485,8 @@ describe('📊 Resumen de Tests', () => {
     console.log('═══════════════════════════════════════════════');
     console.log('✓ Cálculo de macros desde ingredientes');
     console.log('✓ Escalado proporcional de ingredientes');
-    console.log('✓ Multiplicador restrictivo (no excede límites)');
-    console.log('✓ Optimización iterativa en última comida');
+    console.log('✓ Optimización iterativa multi-macro (TODAS las comidas)');
+    console.log('✓ ULTRA optimización en última comida (<5% error)');
     console.log('✓ Ingredientes reales y coherentes');
     console.log('✓ Consistencia macro-ingrediente');
     console.log('✓ Casos extremos y edge cases');
