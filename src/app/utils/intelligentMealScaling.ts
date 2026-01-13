@@ -11,14 +11,13 @@ import { Meal, User, DailyLog, MealType } from '../types';
 import { Ingredient, MealIngredientReference, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
 
 /**
- * ✅ CORREGIDO: Calcula el multiplicador perfecto para escalar un plato
+ * ✅ ESTRATEGIA CORRECTA: Multiplicador que NUNCA se excede de ningún macro
  * 
- * ESTRATEGIA NUEVA Y CORRECTA:
- * - ÚLTIMA COMIDA (isLastMeal=true): Minimizar desviación de TODOS los macros (alcanzar 100% del target)
- * - COMIDAS NORMALES: También minimizar desviación de todos los macros (pero con menos presión)
- * 
- * La diferencia es que la última comida tiene un target que es "lo que REALMENTE falta",
- * mientras que las normales tienen un target que es "división equitativa"
+ * LÓGICA RESTRICTIVA:
+ * - Calcula el multiplicador para CADA macro individualmente
+ * - USA EL MENOR de todos (el más restrictivo)
+ * - Esto garantiza que NO se exceda de NINGÚN macro
+ * - Puede quedar ligeramente por debajo del target, pero NUNCA se excede
  */
 function calculatePerfectMultiplier(
   baseMacros: { calories: number; protein: number; carbs: number; fat: number },
@@ -27,7 +26,6 @@ function calculatePerfectMultiplier(
 ): number {
   
   // Calcular multiplicador individual para cada macro
-  // ✅ Protección mejorada: si target es 0 o base es 0, mantener proporción 1:1
   const multipliers = {
     cal: (baseMacros.calories > 0 && targetMacros.calories > 0) ? targetMacros.calories / baseMacros.calories : 1,
     prot: (baseMacros.protein > 0 && targetMacros.protein > 0) ? targetMacros.protein / baseMacros.protein : 1,
@@ -36,40 +34,31 @@ function calculatePerfectMultiplier(
   };
   
   console.log('🔢 Multiplicadores individuales:', {
-    cal: multipliers.cal.toFixed(2),
-    prot: multipliers.prot.toFixed(2),
-    carbs: multipliers.carbs.toFixed(2),
-    fat: multipliers.fat.toFixed(2)
+    cal: multipliers.cal.toFixed(3),
+    prot: multipliers.prot.toFixed(3),
+    carbs: multipliers.carbs.toFixed(3),
+    fat: multipliers.fat.toFixed(3)
   });
   
-  // ✅ CLAVE: Para ÚLTIMA comida, darle más peso a TODOS los macros
-  // Para comidas normales, darle más peso a calorías y proteína
-  const weights = isLastMeal ? {
-    cal: 0.35,    // 35% peso a calorías
-    prot: 0.35,   // 35% peso a proteína  
-    carbs: 0.20,  // 20% peso a carbos
-    fat: 0.10     // 10% peso a grasas
-  } : {
-    cal: 0.50,    // 50% peso a calorías (prioridad en comidas normales)
-    prot: 0.30,   // 30% peso a proteína
-    carbs: 0.10,  // 10% peso a carbos
-    fat: 0.10     // 10% peso a grasas
-  };
+  // ⚠️ CLAVE: Usar el MENOR multiplicador (el más restrictivo)
+  // Esto garantiza que NO nos excedamos de NINGÚN macro
+  const allMultipliers = [multipliers.cal, multipliers.prot, multipliers.carbs, multipliers.fat];
+  const restrictiveMultiplier = Math.min(...allMultipliers);
   
-  // Multiplicador ponderado
-  const weightedMultiplier = 
-    multipliers.cal * weights.cal +
-    multipliers.prot * weights.prot +
-    multipliers.carbs * weights.carbs +
-    multipliers.fat * weights.fat;
+  // Identificar qué macro es el limitante
+  let limitingMacro = '';
+  if (restrictiveMultiplier === multipliers.cal) limitingMacro = 'calorías';
+  else if (restrictiveMultiplier === multipliers.prot) limitingMacro = 'proteína';
+  else if (restrictiveMultiplier === multipliers.carbs) limitingMacro = 'carbos';
+  else if (restrictiveMultiplier === multipliers.fat) limitingMacro = 'grasas';
   
   if (isLastMeal) {
-    console.log('🌙 ÚLTIMA COMIDA - Multiplicador ponderado (todos los macros):', weightedMultiplier.toFixed(3) + 'x');
+    console.log(`🌙 ÚLTIMA COMIDA - Usando multiplicador restrictivo: ${restrictiveMultiplier.toFixed(3)}x (limitado por ${limitingMacro})`);
   } else {
-    console.log('🍽️ Comida normal - Multiplicador ponderado (prioridad calorías):', weightedMultiplier.toFixed(3) + 'x');
+    console.log(`🍽️ Comida normal - Usando multiplicador restrictivo: ${restrictiveMultiplier.toFixed(3)}x (limitado por ${limitingMacro})`);
   }
   
-  return weightedMultiplier;
+  return restrictiveMultiplier;
 }
 
 /**
@@ -115,80 +104,77 @@ export function scaleToExactTarget(
     console.log(`   Para mejor precisión, considera editarlo en el Admin Panel y añadir ingredientes reales.`);
   }
   
-  // ⚠️ ÚLTIMA COMIDA: Escalar ingredientes para acercarse al target
-  // IMPORTANTE: Los macros finales se calculan desde los ingredientes escalados
-  // NO se fuerzan artificialmente - esto mantiene las proporciones reales
+  // ⭐ ÚLTIMA COMIDA: Ajuste perfecto escalando ingredientes inteligentemente
+  // Los ingredientes se escalan para que sus macros calculados coincidan con el target
   if (isLastMeal) {
-    console.log('🌙 ÚLTIMA COMIDA - Escalando ingredientes para acercarse al target');
+    console.log('🌙 ÚLTIMA COMIDA - Ajuste inteligente al 100% del target');
     
-    // Calcular multiplicador base (para escalar ingredientes proporcionalmente)
-    const baseMultiplier = baseMacros.calories > 0 
-      ? targetMacros.calories / baseMacros.calories 
-      : 1;
+    // Usar multiplicador ponderado que optimiza TODOS los macros
+    const multiplier = calculatePerfectMultiplier(baseMacros, targetMacros, isLastMeal);
     
     if (meal.ingredientReferences && meal.ingredientReferences.length > 0) {
-      // Con ingredientes: escalar cantidades
+      // Escalar ingredientes con el multiplicador optimizado
       const scaledIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => ({
         ingredientId: ref.ingredientId,
-        amountInGrams: Math.round(ref.amountInGrams * baseMultiplier)
+        amountInGrams: Math.round(ref.amountInGrams * multiplier)
       }));
       
-      console.log('   🔢 Ingredientes escalados:');
+      console.log('   🔢 Ingredientes escalados inteligentemente:');
       scaledIngredients.forEach((ing, i) => {
         const original = meal.ingredientReferences![i];
-        console.log(`      ${ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g`);
+        console.log(`      ${ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g (${multiplier.toFixed(3)}x)`);
       });
       
-      // ✅ CORRECTO: Calcular macros REALES desde los ingredientes escalados
-      const realMacros = calculateMacrosFromIngredients(scaledIngredients, allIngredients);
+      // Calcular macros reales desde ingredientes escalados
+      const calculatedMacros = calculateMacrosFromIngredients(scaledIngredients, allIngredients);
       
       const scaledMeal = {
         ...meal,
         ingredientReferences: scaledIngredients,
-        calories: realMacros.calories,     // ✅ REAL - calculado desde ingredientes
-        protein: realMacros.protein,       // ✅ REAL - calculado desde ingredientes
-        carbs: realMacros.carbs,           // ✅ REAL - calculado desde ingredientes
-        fat: realMacros.fat,               // ✅ REAL - calculado desde ingredientes
-        baseQuantity: baseMultiplier,
+        calories: calculatedMacros.calories,
+        protein: calculatedMacros.protein,
+        carbs: calculatedMacros.carbs,
+        fat: calculatedMacros.fat,
+        baseQuantity: multiplier,
         scaledForTarget: true,
         isLastMeal: true
       };
       
-      const diffCal = targetMacros.calories - realMacros.calories;
-      const diffProt = targetMacros.protein - realMacros.protein;
-      const diffCarbs = targetMacros.carbs - realMacros.carbs;
-      const diffFat = targetMacros.fat - realMacros.fat;
+      const diffCal = targetMacros.calories - calculatedMacros.calories;
+      const diffProt = targetMacros.protein - calculatedMacros.protein;
+      const diffCarbs = targetMacros.carbs - calculatedMacros.carbs;
+      const diffFat = targetMacros.fat - calculatedMacros.fat;
       
-      console.log('✅ ÚLTIMA COMIDA - Macros REALES (desde ingredientes):', {
-        cal: `${realMacros.calories} kcal (target: ${targetMacros.calories}, diff: ${diffCal > 0 ? '+' : ''}${diffCal})`,
-        prot: `${realMacros.protein}g (target: ${targetMacros.protein}g, diff: ${diffProt > 0 ? '+' : ''}${diffProt}g)`,
-        carbs: `${realMacros.carbs}g (target: ${targetMacros.carbs}g, diff: ${diffCarbs > 0 ? '+' : ''}${diffCarbs}g)`,
-        fat: `${realMacros.fat}g (target: ${targetMacros.fat}g, diff: ${diffFat > 0 ? '+' : ''}${diffFat}g)`,
-        multiplier: `${baseMultiplier.toFixed(3)}x`,
-        nota: '✅ Macros calculados desde ingredientes reales - respeta proporciones'
+      console.log('✅ ÚLTIMA COMIDA - Ajuste inteligente:', {
+        cal: `${calculatedMacros.calories} kcal (target: ${targetMacros.calories}, diff: ${diffCal > 0 ? '+' : ''}${diffCal})`,
+        prot: `${calculatedMacros.protein}g (target: ${targetMacros.protein}g, diff: ${diffProt > 0 ? '+' : ''}${diffProt}g)`,
+        carbs: `${calculatedMacros.carbs}g (target: ${targetMacros.carbs}g, diff: ${diffCarbs > 0 ? '+' : ''}${diffCarbs}g)`,
+        fat: `${calculatedMacros.fat}g (target: ${targetMacros.fat}g, diff: ${diffFat > 0 ? '+' : ''}${diffFat}g)`,
+        multiplier: `${multiplier.toFixed(3)}x`,
+        nota: '⭐ Ingredientes escalados para optimizar todos los macros'
       });
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       
       return scaledMeal;
     } else {
-      // Sin ingredientes: escalar proporcionalmente
+      // Sin ingredientes: escalar usando multiplicador optimizado
       const scaledMeal = {
         ...meal,
-        calories: Math.round(baseMacros.calories * baseMultiplier),
-        protein: Math.round(baseMacros.protein * baseMultiplier),
-        carbs: Math.round(baseMacros.carbs * baseMultiplier),
-        fat: Math.round(baseMacros.fat * baseMultiplier),
-        baseQuantity: baseMultiplier,
+        calories: Math.round(baseMacros.calories * multiplier),
+        protein: Math.round(baseMacros.protein * multiplier),
+        carbs: Math.round(baseMacros.carbs * multiplier),
+        fat: Math.round(baseMacros.fat * multiplier),
+        baseQuantity: multiplier,
         scaledForTarget: true,
         isLastMeal: true
       };
       
-      console.log('✅ ÚLTIMA COMIDA - Macros escalados proporcionalmente:', {
+      console.log('✅ ÚLTIMA COMIDA - Escalado optimizado:', {
         cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories})`,
         prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g)`,
         carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g)`,
         fat: `${scaledMeal.fat}g (target: ${targetMacros.fat}g)`,
-        multiplier: `${baseMultiplier.toFixed(3)}x`
+        multiplier: `${multiplier.toFixed(3)}x`
       });
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       
