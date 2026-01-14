@@ -97,6 +97,22 @@ async function syncIngredients(): Promise<void> {
   const currentHash = calculateIngredientsHash();
   console.log(`🔐 Hash actual: ${currentHash.substring(0, 12)}...\n`);
   
+  // PASO 1: LIMPIAR todos los ingredientes del sistema viejos
+  console.log('🧹 PASO 1: Limpiando ingredientes del sistema viejos...');
+  const { error: deleteError, count: deletedCount } = await supabase
+    .from('base_ingredients')
+    .delete({ count: 'exact' })
+    .is('created_by', null);
+
+  if (deleteError) {
+    console.error('❌ Error al limpiar:', deleteError);
+    process.exit(1);
+  }
+  console.log(`✅ Eliminados: ${deletedCount || 0} ingredientes viejos\n`);
+
+  // PASO 2: Insertar los 60 ingredientes correctos
+  console.log('📥 PASO 2: Insertando ingredientes correctos...');
+  
   let synced = 0;
   let errors = 0;
   
@@ -104,7 +120,7 @@ async function syncIngredients(): Promise<void> {
     try {
       const { error } = await supabase
         .from('base_ingredients')
-        .upsert({
+        .insert({
           id: ingredient.id,
           name: ingredient.name,
           category: ingredient.category,
@@ -114,8 +130,6 @@ async function syncIngredients(): Promise<void> {
           fat: ingredient.fatPer100g,
           created_by: null, // Ingredientes del sistema no tienen owner
           updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'id'
         });
       
       if (error) {
