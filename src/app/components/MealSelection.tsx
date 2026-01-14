@@ -22,6 +22,7 @@ interface MealSelectionProps {
   onToggleFavorite?: (mealId: string) => void;
   favoriteMealIds?: string[]; // IDs de comidas favoritas
   onNavigateToCreateMeal?: () => void; // Nueva prop para navegar a crear plato
+  refreshTrigger?: number; // Nuevo: trigger para refrescar custom meals
 }
 
 export default function MealSelection({ 
@@ -32,7 +33,8 @@ export default function MealSelection({
   currentMeal,
   user,
   currentLog,
-  onNavigateToCreateMeal
+  onNavigateToCreateMeal,
+  refreshTrigger
 }: MealSelectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -128,7 +130,7 @@ export default function MealSelection({
       setIsLoadingCustomMeals(false);
     };
     loadCustomMeals();
-  }, [user.email]);
+  }, [user.email, refreshTrigger]); // Añadido refreshTrigger como dependencia
 
   // Función para obtener todas las comidas disponibles
   const getMealsData = (): Meal[] => {

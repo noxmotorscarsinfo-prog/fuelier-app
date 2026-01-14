@@ -88,6 +88,7 @@ export default function App() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [macroRecommendationShownToday, setMacroRecommendationShownToday] = useState(false); // NUEVO: Controla si ya se mostró el modal de recomendaciones hoy
   const [previousScreen, setPreviousScreen] = useState<Screen | null>(null); // NUEVO: Para recordar de dónde venimos
+  const [customMealsRefreshTrigger, setCustomMealsRefreshTrigger] = useState(0); // NUEVO: Para refrescar custom meals
   
   // NUEVO: Estados para notificaciones adaptativas
   const [showAdaptiveNotification, setShowAdaptiveNotification] = useState(false);
@@ -1399,6 +1400,7 @@ export default function App() {
             favoriteMealIds={favoriteMealIds}
             onToggleFavorite={handleToggleFavorite}
             onNavigateToCreateMeal={() => setCurrentScreen('create-meal')}
+            refreshTrigger={customMealsRefreshTrigger}
           />
         )}
         {currentScreen === 'detail' && selectedMeal && selectedMealType && (
@@ -1495,6 +1497,9 @@ export default function App() {
                 } else {
                   console.log('ℹ️ No hay selectedMealType o user, solo guardando plato');
                 }
+                
+                // ✅ NUEVO: Incrementar trigger para refrescar custom meals en UI
+                setCustomMealsRefreshTrigger(prev => prev + 1);
                 
                 // Limpiar estados y volver al dashboard
                 setSelectedMeal(null);
