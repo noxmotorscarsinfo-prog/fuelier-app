@@ -3,7 +3,6 @@ import { Meal, MealType, User, DayLog, getMealPool } from '../types';
 import { ArrowLeft, Search, Check, Sparkles, Heart, ChefHat, Star, Filter, X, Trophy, Info } from 'lucide-react';
 import { recommendMeals, getMacroNeedsMessage, MealScore } from '../utils/mealRecommendation';
 import { getMealTarget } from '../utils/simplePortionCalculator';
-import { ALL_MEALS_FROM_DB } from '../../data/mealsWithIngredients';
 import { rankMealsByFit } from '../utils/intelligentMealScaling';
 import { calculateIntelligentTarget, getTargetDescription } from '../utils/automaticTargetCalculator';
 import { getMealGoals } from '../utils/mealDistribution';
@@ -95,7 +94,37 @@ export default function MealSelection({
       setIsLoadingGlobalMeals(true);
       const meals = await api.getGlobalMeals();
       
-      // 🔄 MIGRACIÓN AUTOMÁTICA: Convertir platos viejos sin ingredientes a formato estructurado
+      // � Si Supabase está vacío, auto-sincronizar platos base
+      if (meals.length === 0) {
+        console.error('🚨 [MealSelection] Supabase vacío (base_meals) - auto-sincronizando...');
+        
+        // Importar platos locales dinámicamente para sincronización inicial
+        const { ALL_MEALS_FROM_DB } = await import('../../data/mealsWithIngredients');
+        
+        try {
+          const syncSuccess = await api.saveGlobalMeals(ALL_MEALS_FROM_DB);
+          if (syncSuccess) {
+            console.log(`✅ [MealSelection] Auto-sincronización completada: ${ALL_MEALS_FROM_DB.length} platos`);
+            
+            // Recargar desde Supabase
+            const reloadedMeals = await api.getGlobalMeals();
+            const migratedMeals = migrateMealsToStructured(reloadedMeals, ingredientsFromSupabase);
+            setGlobalMeals(migratedMeals);
+            setIsLoadingGlobalMeals(false);
+            return;
+          } else {
+            throw new Error('Auto-sincronización de platos falló');
+          }
+        } catch (syncError) {
+          console.error('❌ [MealSelection] Error fatal sincronizando platos:', syncError);
+          // Dejar vacío - forzar corrección manual
+          setGlobalMeals([]);
+          setIsLoadingGlobalMeals(false);
+          return;
+        }
+      }
+      
+      // �🔄 MIGRACIÓN AUTOMÁTICA: Convertir platos viejos sin ingredientes a formato estructurado
       const migratedMeals = migrateMealsToStructured(meals, ingredientsFromSupabase);
       
       // ⚠️ SEGURIDAD: Solo permitir guardar migraciones si el usuario es admin
@@ -142,31 +171,24 @@ export default function MealSelection({
       return meal.type === mealType;
     });
     
-    // ⭐ LÓGICA MEJORADA: Usar globalMeals SI existen, sino usar ALL_MEALS_FROM_DB
-    // Esto evita duplicados cuando los platos de BD ya están en Supabase
-    let dbMeals: Meal[] = [];
+    // 🌍 100% SUPABASE: Solo usar platos de Supabase (base_meals + custom_meals)
+    // NO usar ALL_MEALS_FROM_DB local - todo debe venir de la nube
+    const dbMeals = globalMeals.filter(meal => {
+      if (Array.isArray(meal.type)) {
+        return meal.type.includes(mealType);
+      }
+      return meal.type === mealType;
+    });
     
-    if (globalMeals.length === 0) {
-      // No hay platos globales en Supabase, usar los de la BD local
-      dbMeals = ALL_MEALS_FROM_DB.filter(meal => {
-        if (Array.isArray(meal.type)) {
-          return meal.type.includes(mealType);
-        }
-        return meal.type === mealType;
-      });
-      console.log('📦 Usando platos de BD local:', dbMeals.length);
-    } else {
-      // Hay platos globales, filtrarlos por tipo
-      dbMeals = globalMeals.filter(meal => {
-        if (Array.isArray(meal.type)) {
-          return meal.type.includes(mealType);
-        }
-        return meal.type === mealType;
-      });
-      console.log('🌍 Usando platos globales de Supabase:', dbMeals.length);
+    console.log(`🌍 Platos globales (Supabase): ${dbMeals.length}`);
+    console.log(`👤 Platos personalizados: ${filteredCustomMeals.length}`);
+    
+    if (dbMeals.length === 0 && globalMeals.length === 0) {
+      console.error('🚨 CRÍTICO: No hay platos en Supabase (base_meals vacío)');
+      console.error('   Solución: Ejecutar sincronización de platos o esperar auto-sync');
     }
     
-    // Combinar platos globales/BD + Personalizados
+    // Combinar platos globales + personalizados
     let allMeals = [...dbMeals, ...filteredCustomMeals];
     
     // 🔄 MIGRACIÓN: Asegurar que TODOS los platos tengan ingredientReferences

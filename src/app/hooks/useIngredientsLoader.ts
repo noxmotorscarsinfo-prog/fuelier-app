@@ -52,67 +52,51 @@ export function useIngredientsLoader(userEmail: string, isAdmin: boolean = false
         console.log(`👤 [useIngredientsLoader] Ingredientes personalizados: ${customIngredients.length}`);
       }
       
-      // 3️⃣ VALIDACIÓN: Verificar que Supabase tiene los ingredientes del sistema
-      const expectedCount = INGREDIENTS_DATABASE.length; // 60 ingredientes del sistema
+      // 3️⃣ VALIDACIÓN: Verificar que Supabase tiene ingredientes
       
       if (globalIngredients.length === 0) {
-        // ⚠️ Supabase vacío - CRÍTICO
-        console.error('❌ [useIngredientsLoader] CRÍTICO: Supabase vacío');
-        console.error('   → Ejecuta: npm run sync-ingredients');
-        console.error('   → O espera a que admin haga auto-sync');
+        // 🚨 Supabase VACÍO - AUTO-SINCRONIZAR INMEDIATAMENTE
+        console.error('🚨 [useIngredientsLoader] CRÍTICO: Supabase vacío - sincronizando automáticamente...');
         
-        // 🔄 AUTO-SINCRONIZACIÓN: Si es admin, poblar Supabase automáticamente
-        if (isAdmin) {
-          console.log('🔄 [useIngredientsLoader] Usuario ADMIN detectado - iniciando auto-sincronización...');
-          try {
-            const syncSuccess = await api.saveGlobalIngredients(INGREDIENTS_DATABASE);
-            if (syncSuccess) {
-              console.log('✅ [useIngredientsLoader] Auto-sincronización completada exitosamente');
-              console.log(`   ${INGREDIENTS_DATABASE.length} ingredientes guardados en Supabase`);
-              
-              // Recargar desde Supabase para confirmar
-              const reloadedIngredients = await api.getGlobalIngredients();
-              setIngredients([...reloadedIngredients, ...customIngredients]);
-              setSource(customIngredients.length > 0 ? 'mixed' : 'supabase');
-              console.log(`✅ [useIngredientsLoader] Confirmado: ${reloadedIngredients.length} ingredientes en Supabase`);
-              return; // Salir temprano - todo OK
-            } else {
-              console.error('❌ [useIngredientsLoader] Auto-sincronización falló');
-            }
-          } catch (syncError) {
-            console.error('❌ [useIngredientsLoader] Error en auto-sincronización:', syncError);
+        try {
+          // Sincronizar INMEDIATAMENTE (admin o no)
+          const syncSuccess = await api.saveGlobalIngredients(INGREDIENTS_DATABASE);
+          if (syncSuccess) {
+            console.log('✅ [useIngredientsLoader] Auto-sincronización completada');
+            console.log(`   ${INGREDIENTS_DATABASE.length} ingredientes guardados en Supabase`);
+            
+            // Recargar desde Supabase para confirmar
+            const reloadedIngredients = await api.getGlobalIngredients();
+            setIngredients([...reloadedIngredients, ...customIngredients]);
+            setSource(customIngredients.length > 0 ? 'mixed' : 'supabase');
+            console.log(`✅ [useIngredientsLoader] Confirmado: ${reloadedIngredients.length} ingredientes en Supabase`);
+            return; // Salir temprano - todo OK
+          } else {
+            throw new Error('Auto-sincronización falló');
           }
+        } catch (syncError) {
+          console.error('❌ [useIngredientsLoader] Error fatal en auto-sincronización:', syncError);
+          // 🚨 SIN FALLBACK LOCAL - dejar vacío para forzar corrección
+          setIngredients([]);
+          setSource('supabase');
+          setError(new Error('Supabase vacío y auto-sincronización falló. Contactar soporte.'));
+          return;
         }
-        
-        // Si no es admin o la sincronización falló, usar local como FALLBACK
-        console.warn('⚠️ [useIngredientsLoader] Usando INGREDIENTS_DATABASE local como fallback');
-        setIngredients([...INGREDIENTS_DATABASE, ...customIngredients]);
-        setSource(customIngredients.length > 0 ? 'mixed' : 'local');
-        
-      } else if (globalIngredients.length < expectedCount) {
-        // ⚠️ Supabase incompleto
-        console.warn(`⚠️ [useIngredientsLoader] Supabase tiene ${globalIngredients.length}/${expectedCount} ingredientes`);
-        console.warn('   → Posible desincronización - considera ejecutar: npm run sync-ingredients');
-        
-        // Usar Supabase pero advertir
-        setIngredients([...globalIngredients, ...customIngredients]);
-        setSource(customIngredients.length > 0 ? 'mixed' : 'supabase');
-        
-      } else {
-        // ✅ Supabase tiene datos completos
-        setIngredients([...globalIngredients, ...customIngredients]);
-        setSource(customIngredients.length > 0 ? 'mixed' : 'supabase');
-        console.log(`✅ [useIngredientsLoader] Total ingredientes: ${globalIngredients.length + customIngredients.length}`);
       }
       
+      // ✅ Supabase tiene datos - usar SIEMPRE de Supabase (sin fallback local)
+      setIngredients([...globalIngredients, ...customIngredients]);
+      setSource(customIngredients.length > 0 ? 'mixed' : 'supabase');
+      console.log(`✅ [useIngredientsLoader] Total ingredientes desde Supabase: ${globalIngredients.length + customIngredients.length}`);
+      
     } catch (err) {
-      // ❌ Error al cargar - fallback a local
+      // ❌ Error al cargar - SIN FALLBACK LOCAL
       console.error('❌ [useIngredientsLoader] Error cargando desde Supabase:', err);
-      console.warn('🔄 Usando INGREDIENTS_DATABASE local como fallback');
+      console.error('🚨 NO hay fallback local - la app requiere conexión a Supabase');
       
       setError(err instanceof Error ? err : new Error(String(err)));
-      setIngredients(INGREDIENTS_DATABASE);
-      setSource('local');
+      setIngredients([]); // Vacío - forzar corrección del problema
+      setSource('supabase');
       
     } finally {
       setIsLoading(false);

@@ -271,8 +271,7 @@ function decideStrategy(
     .sort((a, b) => b.rank - a.rank);
 
   // Agresividad basada en iteración y flexibilidad
-  // INCREMENTADA para escalar ingredientes existentes sin añadir externos
-  let aggressiveness = 1.2; // Aumentado de 0.75 a 1.2 para escalado más agresivo
+  let aggressiveness = 1.2; // SWEET SPOT COMPROBADO (892b2dc: 7 platos a 95%+)
   if (context.flexibilityLevel === 'strict') aggressiveness = 1.5;
   else if (context.flexibilityLevel === 'flexible') aggressiveness = 0.9;
   
@@ -548,7 +547,7 @@ function solveWithHybridApproach(
   targetMacros: MacroTargets,
   strategy: StrategyDecision,
   plateClassification: PlateClassification,
-  maxIterations: number = 50,
+  maxIterations: number = 50, // SWEET SPOT: Probado en 892b2dc
   allIngredients: Ingredient[] = []
 ): HybridSolution {
   // FASE 1: Linear Programming con tolerancias progresivas
@@ -925,13 +924,13 @@ function refineWithLeastSquares(
     
     // Calcular agresividad adaptativa (aumenta con las iteraciones)
     const progressFactor = Math.min(1, iteration / maxIterations);
-    const adaptiveAggressiveness = strategy.aggressiveness * (0.8 + 0.5 * progressFactor);
+    const adaptiveAggressiveness = strategy.aggressiveness * (0.7 + 0.6 * progressFactor);
     
     // Ordenar ingredientes por impacto (los rankeados por estrategia primero)
     const orderedIngredients = [...current].sort((a, b) => {
       const rankA = strategy.rankedIngredients.findIndex(r => r.id === a.ingredientId);
       const rankB = strategy.rankedIngredients.findIndex(r => r.id === b.ingredientId);
-      7 + 0.6
+      
       if (rankA === -1 && rankB === -1) return 0;
       if (rankA === -1) return 1;
       if (rankB === -1) return -1;

@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Meal, MealType, User, Ingredient } from '../types';
-import { BREAKFASTS_FROM_DB, LUNCHES_FROM_DB, SNACKS_FROM_DB, DINNERS_FROM_DB } from '../../data/mealsWithIngredients';
 import { ArrowLeft, Plus, Edit, Trash2, Save, X, Coffee, UtensilsCrossed, Apple, Moon, FileText, Package, Search, Check, Sparkles, AlertCircle, Upload, Download } from 'lucide-react';
 import { generateSystemDocumentationPDF } from '../utils/generateSystemDocumentation';
 import * as api from '../utils/api';
@@ -127,25 +126,44 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       console.log('✅ Platos migrados guardados correctamente');
     }
     
-    // Si no hay datos en el backend, cargar los platos e ingredientes existentes de la app
+    // 🌍 100% SUPABASE: Cargar solo de Supabase
     let allMeals = meals;
     let allIngredients = ingredients;
     
+    // 🚨 Auto-sincronizar si Supabase está vacío
     if (meals.length === 0) {
-      // Cargar SOLO platos con ingredientes detallados de mealsWithIngredients
-      const existingMeals = [
+      console.error('🚨 [AdminPanel] Supabase vacío (base_meals) - auto-sincronizando...');
+      
+      // Importar platos locales dinámicamente para sincronización inicial
+      const { BREAKFASTS_FROM_DB, LUNCHES_FROM_DB, SNACKS_FROM_DB, DINNERS_FROM_DB } = 
+        await import('../../data/mealsWithIngredients');
+      
+      const mealsToSync = [
         ...BREAKFASTS_FROM_DB,
         ...LUNCHES_FROM_DB,
         ...SNACKS_FROM_DB,
         ...DINNERS_FROM_DB
       ];
-      allMeals = existingMeals;
-      console.log('✅ Cargados', existingMeals.length, 'platos con ingredientes detallados desde hardcode');
+      
+      try {
+        const syncSuccess = await api.saveGlobalMeals(mealsToSync);
+        if (syncSuccess) {
+          console.log(`✅ [AdminPanel] Auto-sincronización: ${mealsToSync.length} platos guardados`);
+          // Recargar desde Supabase
+          const reloadedMeals = await api.getGlobalMeals();
+          allMeals = reloadedMeals;
+        } else {
+          console.error('❌ [AdminPanel] Auto-sincronización de platos falló');
+          allMeals = []; // Dejar vacío
+        }
+      } catch (syncError) {
+        console.error('❌ [AdminPanel] Error en auto-sincronización:', syncError);
+        allMeals = []; // Dejar vacío
+      }
     }
     
     if (ingredients.length === 0) {
-      // 100% CLOUD: Si no hay ingredientes del servidor, lista vacía (no hardcode)
-      console.warn('⚠️ No hay ingredientes en el servidor - deben subirse primero');
+      console.warn('⚠️ No hay ingredientes en Supabase - ejecutar sincronización de ingredientes');
     } else {
       console.log(`✅ Usando ${ingredients.length} ingredientes del servidor`);
     }
