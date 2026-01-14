@@ -271,17 +271,22 @@ function decideStrategy(
     .sort((a, b) => b.rank - a.rank);
 
   // Agresividad basada en iteración y flexibilidad
-  let aggressiveness = 0.75; // Balance entre 0.7 y 0.85
-  if (context.flexibilityLevel === 'strict') aggressiveness = 0.95;
-  else if (context.flexibilityLevel === 'flexible') aggressiveness = 0.6;
+  // INCREMENTADA para escalar ingredientes existentes sin añadir externos
+  let aggressiveness = 1.2; // Aumentado de 0.75 a 1.2 para escalado más agresivo
+  if (context.flexibilityLevel === 'strict') aggressiveness = 1.5;
+  else if (context.flexibilityLevel === 'flexible') aggressiveness = 0.9;
   
-  // Aumentar agresividad con iteraciones
-  aggressiveness = Math.min(1.0, aggressiveness + iteration * 0.025);
+  // Aumentar agresividad con iteraciones (más agresivo)
+  aggressiveness = Math.min(2.0, aggressiveness + iteration * 0.1);
 
-  // NUEVA FEATURE: Sugerir ingredientes añadibles estratégicos
-  // CRITERIO ULTRA AGRESIVO: Añadir ingredientes incluso para gaps pequeños
+  // DESHABILITADO: No añadir ingredientes estratégicos externos
+  // El AI Engine debe escalar SOLO los ingredientes existentes del plato
   const addableIngredients: StrategyDecision['addableIngredients'] = [];
   
+  // DESHABILITADO: La lógica de añadir ingredientes estratégicos está comentada
+  // para mantener la integridad de las recetas originales
+  
+  /* DESHABILITADO: No añadir ingredientes externos
   // Ingredientes añadibles disponibles con sus macros per 100g
   // ⚠️ IDs deben coincidir con INGREDIENTS_DATABASE (kebab-case)
   const strategicIngredients = [
@@ -330,6 +335,7 @@ function decideStrategy(
       reason: `Añadir ${Math.round(almendraGrams)}g almendras (+${(almendraGrams * 0.5).toFixed(1)}g grasas saludables)`,
     });
   }
+  FIN COMENTARIO */
 
   return {
     priorityMacro,
@@ -575,7 +581,8 @@ function solveWithHybridApproach(
         return lpSolution;
       }
       
-      // Si estamos entre 90-95%, intentar añadir ingredientes para empujar a 95%+
+      // Si estamos entre 90-95%, ya no intentamos añadir ingredientes externos
+      /* DESHABILITADO: No añadir ingredientes externos
       if (maxErrorAccuracy >= 90 && maxErrorAccuracy < 95 && strategy.addableIngredients && !usedAddedIngredients) {
         console.log(`🎯 MAX error ${maxErrorAccuracy.toFixed(1)}% en 90-95%, añadiendo ingredientes para alcanzar 95%+...`);
         workingIngredients = addStrategicIngredients(mealIngredients, targetMacros, strategy.addableIngredients);
@@ -608,13 +615,15 @@ function solveWithHybridApproach(
           };
         }
       }
+      FIN COMENTARIO */
       
       // Si ya estamos en 90%+, devolver
       if (maxErrorAccuracy >= 90) {
         return lpSolution;
       }
 
-      // Si estamos < 90% y tenemos ingredientes añadibles, usarlos
+      // Si estamos < 90%, ya no usamos ingredientes externos
+      /* DESHABILITADO: No añadir ingredientes externos
       if (maxErrorAccuracy < 90 && multiplier >= 3 && strategy.addableIngredients && !usedAddedIngredients) {
         console.log(`⚠️ MAX error ${maxErrorAccuracy.toFixed(1)}% < 90%, probando con ingredientes añadibles...`);
         workingIngredients = addStrategicIngredients(mealIngredients, targetMacros, strategy.addableIngredients);
@@ -648,6 +657,7 @@ function solveWithHybridApproach(
           };
         }
       }
+      FIN COMENTARIO */
 
       // FASE 2: Refinar con Least Squares
       const refinedSolution = refineWithLeastSquares(
@@ -671,7 +681,8 @@ function solveWithHybridApproach(
 
       // Si con este multiplier no llegamos a 90%, probar con el siguiente
       if (multiplier === toleranceMultipliers[toleranceMultipliers.length - 1]) {
-        // ÚLTIMO RECURSO: Si no usamos ingredientes añadibles aún, intentar ahora
+        // DESHABILITADO: Ya no añadimos ingredientes como último recurso
+        /* COMENTADO: No añadir ingredientes externos
         if (strategy.addableIngredients && !usedAddedIngredients) {
           console.log(`🚨 Último recurso: añadiendo ingredientes estratégicos...`);
           const ingredientsWithAdded = addStrategicIngredients(mealIngredients, targetMacros, strategy.addableIngredients);
@@ -703,6 +714,7 @@ function solveWithHybridApproach(
             };
           }
         }
+        FIN COMENTARIO */
         
         // Último intento, devolver lo mejor que tenemos
         return refinedMaxError > maxErrorAccuracy ? {
