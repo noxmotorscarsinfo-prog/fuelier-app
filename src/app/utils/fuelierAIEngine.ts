@@ -271,13 +271,13 @@ function decideStrategy(
     .sort((a, b) => b.rank - a.rank);
 
   // Agresividad basada en iteración y flexibilidad
-  // Optimizada para convergencia estable sin ingredientes externos
-  let aggressiveness = 1.0; // Balance óptimo
-  if (context.flexibilityLevel === 'strict') aggressiveness = 1.3;
-  else if (context.flexibilityLevel === 'flexible') aggressiveness = 0.8;
+  // OPTIMIZADO: Agresividad inicial más alta para mejor convergencia
+  let aggressiveness = 1.3; // AUMENTADO: 1.0 → 1.3 para converger más rápido
+  if (context.flexibilityLevel === 'strict') aggressiveness = 1.5; // AUMENTADO: 1.3 → 1.5
+  else if (context.flexibilityLevel === 'flexible') aggressiveness = 1.0; // AUMENTADO: 0.8 → 1.0
   
   // Aumentar agresividad con iteraciones progresivamente
-  aggressiveness = Math.min(2.0, aggressiveness + iteration * 0.08);
+  aggressiveness = Math.min(2.5, aggressiveness + iteration * 0.1); // AUMENTADO límite: 2.0 → 2.5
 
   // DESHABILITADO: No añadir ingredientes estratégicos externos
   // El AI Engine debe escalar SOLO los ingredientes existentes del plato
@@ -548,7 +548,7 @@ function solveWithHybridApproach(
   targetMacros: MacroTargets,
   strategy: StrategyDecision,
   plateClassification: PlateClassification,
-  maxIterations: number = 50,
+  maxIterations: number = 100, // AUMENTADO: 50 → 100 para mejor convergencia
   allIngredients: Ingredient[] = []
 ): HybridSolution {
   // FASE 1: Linear Programming con tolerancias progresivas
@@ -917,10 +917,11 @@ function refineWithLeastSquares(
 
     if (maxErrorAccuracy >= 98) break; // Objetivo perfecto alcanzado
     
-    // Si llevamos 8 iteraciones estancados, aumentar agresividad dramáticamente
-    if (stagnationCount >= 8) {
+    // Si llevamos 5 iteraciones estancados, aumentar agresividad dramáticamente
+    // OPTIMIZADO: 8 → 5 para reaccionar más rápido
+    if (stagnationCount >= 5) {
       console.log(`⚡ Aumentando agresividad por estancamiento (${stagnationCount} iter)`);
-      strategy.aggressiveness = Math.min(2.5, strategy.aggressiveness * 1.5); // x1.5 en vez de x1.3
+      strategy.aggressiveness = Math.min(3.0, strategy.aggressiveness * 1.6); // x1.6 más agresivo
     }
     
     // Si tenemos momentum (3+ mejoras consecutivas), mantener agresividad alta
