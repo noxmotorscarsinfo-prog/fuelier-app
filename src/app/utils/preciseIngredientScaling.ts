@@ -112,7 +112,7 @@ export function scaleMealToTarget(
   // IMPORTANTE: Agregar mealIngredients como propiedad temporal para el motor
   (mealForEngine as any).mealIngredients = mealIngredients;
 
-  const result = adaptMealWithAIEngine(mealForEngine, macroTargets, mockUser, mockLog);
+  const result = adaptMealWithAIEngine(mealForEngine, macroTargets, mockUser, mockLog, 100, allIngredients);
 
   // Convertir resultado de vuelta a ingredientReferences
   const scaledReferences = result.scaledIngredients.map(scaledIng => {

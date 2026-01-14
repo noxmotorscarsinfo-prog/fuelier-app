@@ -63,7 +63,8 @@ export function recalculateCustomMealForToday(
     targetForMeal,
     user,
     currentLog,
-    100 // maxIterations
+    100, // maxIterations
+    allIngredients
   );
   
   // Extraer el meal escalado del resultado - construir desde scaledIngredients

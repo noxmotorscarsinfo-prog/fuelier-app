@@ -41,6 +41,7 @@ function getSmartMinimumAmount(ingredient: any): number {
 }
 
 import { Meal, User, DailyLog, MealIngredient } from '@/types';
+import { Ingredient } from '../../data/ingredientTypes';
 import solver from 'javascript-lp-solver';
 
 // Helper local: Calcular macros directamente de MealIngredient[] (sin necesitar allIngredients)
@@ -538,7 +539,8 @@ function solveWithHybridApproach(
   targetMacros: MacroTargets,
   strategy: StrategyDecision,
   plateClassification: PlateClassification,
-  maxIterations: number = 50
+  maxIterations: number = 50,
+  allIngredients: Ingredient[] = []
 ): HybridSolution {
   // FASE 1: Linear Programming con tolerancias progresivas
   // Intentar primero con tolerancias base, luego 1.5x, 2x, 3x, 5x si falla
@@ -1144,7 +1146,8 @@ export function adaptMealWithAIEngine(
   targetMacros: MacroTargets,
   user: User,
   dailyLog: DailyLog | null,
-  maxIterations: number = 100
+  maxIterations: number = 100,
+  allIngredients: Ingredient[] = []
 ): HybridSolution {
   // Extraer mealIngredients (pasados temporalmente desde el wrapper)
   const mealIngredients = (meal as any).mealIngredients as MealIngredient[];
@@ -1207,7 +1210,8 @@ export function adaptMealWithAIEngine(
       targetMacros,
       strategy,
       plateClassification,
-      50 // Aumentado para casos difíciles
+      50, // Aumentado para casos difíciles
+      allIngredients
     );
 
     memory.accuracyHistory.push(solution.accuracy);
