@@ -963,7 +963,7 @@ function refineWithLeastSquares(
       delta *= adaptiveAggressiveness;
 
       const oldAmount = ing.amount;
-      const ingredient = allIngredients.find(i => i.id === (ing as any).ingredientId);
+      const ingredient = allIngredients?.find(i => i.id === (ing as any).ingredientId);
       const minAmount = ingredient ? getSmartMinimumAmount(ingredient) : 5;
       const newAmount = Math.max(minAmount, Math.min(ing.amount * 100, ing.amount + delta));
       
