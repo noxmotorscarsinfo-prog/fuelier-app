@@ -271,13 +271,13 @@ function decideStrategy(
     .sort((a, b) => b.rank - a.rank);
 
   // Agresividad basada en iteración y flexibilidad
-  // ULTRA AGRESIVA para alcanzar 90%+ sin ingredientes externos
-  let aggressiveness = 1.5; // Aumentado de 1.2 a 1.5 para escalado MÁS agresivo
-  if (context.flexibilityLevel === 'strict') aggressiveness = 2.0; // Máximo desde inicio
-  else if (context.flexibilityLevel === 'flexible') aggressiveness = 1.2;
+  // Optimizada para convergencia estable sin ingredientes externos
+  let aggressiveness = 1.0; // Balance óptimo
+  if (context.flexibilityLevel === 'strict') aggressiveness = 1.3;
+  else if (context.flexibilityLevel === 'flexible') aggressiveness = 0.8;
   
-  // Aumentar agresividad con iteraciones (MUY rápido)
-  aggressiveness = Math.min(2.5, aggressiveness + iteration * 0.15); // Max 2.5 en vez de 2.0
+  // Aumentar agresividad con iteraciones progresivamente
+  aggressiveness = Math.min(2.0, aggressiveness + iteration * 0.08);
 
   // DESHABILITADO: No añadir ingredientes estratégicos externos
   // El AI Engine debe escalar SOLO los ingredientes existentes del plato
@@ -928,22 +928,37 @@ function refineWithLeastSquares(
       strategy.aggressiveness = Math.min(2.5, strategy.aggressiveness * 1.2);
     }
 
-    // FASE 1: AJUSTE SIMULTÁNEO - Calcular deltas óptimos para TODOS los ingredientes
+    // AJUSTE SECUENCIAL (REVERTIDO): Funciona mejor que simultáneo
     let improved = false;
     
     // Calcular agresividad adaptativa (aumenta con las iteraciones)
     const progressFactor = Math.min(1, iteration / maxIterations);
-    const adaptiveAggressiveness = strategy.aggressiveness * (0.8 + 0.7 * progressFactor); // Más agresivo desde inicio
+    const adaptiveAggressiveness = strategy.aggressiveness * (0.8 + 0.5 * progressFactor);
     
-    // Calcular deltas óptimos para TODOS los ingredientes simultáneamente
-    const gaps = {
-      calories: targetMacros.calories - currentMacros.calories,
-      protein: targetMacros.protein - currentMacros.protein,
-      carbs: targetMacros.carbs - currentMacros.carbs,
-      fat: targetMacros.fat - currentMacros.fat,
-    };
-    
-    const proposedAdjustments = current.map(ing => {
+    // Ordenar ingredientes por impacto (los rankeados por estrategia primero)
+    const orderedIngredients = [...current].sort((a, b) => {
+      const rankA = strategy.rankedIngredients.findIndex(r => r.id === a.ingredientId);
+      const rankB = strategy.rankedIngredients.findIndex(r => r.id === b.ingredientId);
+      
+      if (rankA === -1 && rankB === -1) return 0;
+      if (rankA === -1) return 1;
+      if (rankB === -1) return -1;
+      return rankA - rankB;
+    });
+
+    // Ajustar cada ingrediente individualmente
+    for (const ing of orderedIngredients) {
+      const beforeMacros = calculateMacrosFromIngredients(current);
+      const beforeMaxError = calculateAccuracyMaxError(beforeMacros, targetMacros);
+      
+      const gaps = {
+        calories: targetMacros.calories - beforeMacros.calories,
+        protein: targetMacros.protein - beforeMacros.protein,
+        carbs: targetMacros.carbs - beforeMacros.carbs,
+        fat: targetMacros.fat - beforeMacros.fat,
+      };
+
+      // Calcular macros por gramo de ESTE ingrediente específico
       const macrosPerGram = {
         calories: (ing.calories || 0) / Math.max(ing.amount, 1),
         protein: (ing.protein || 0) / Math.max(ing.amount, 1),
@@ -964,55 +979,38 @@ function refineWithLeastSquares(
         macrosPerGram.carbs ** 2 +
         macrosPerGram.fat ** 2;
 
-      if (denominator === 0) return { ing, delta: 0 };
+      if (denominator === 0) continue;
 
+      // Delta óptimo con agresividad adaptativa
       let delta = (numerator / denominator) * adaptiveAggressiveness;
-      
-      // Priorizar ingredientes rankeados por estrategia
-      const rank = strategy.rankedIngredients.findIndex(r => r.id === ing.ingredientId);
-      if (rank >= 0 && rank < 3) {
-        delta *= 1.2; // 20% más agresivo en top 3 ingredientes
-      }
-      
-      return { ing, delta };
-    });
-    
-    // FASE 2: Aplicar ajustes simultáneos y verificar mejora global
-    const testCurrent = proposedAdjustments.map(({ ing, delta }) => {
+
+      const oldAmount = ing.amount;
       const ingredient = allIngredients?.find(i => i.id === ing.ingredientId);
       const minAmount = ingredient ? getSmartMinimumAmount(ingredient) : 5;
-      const maxAmount = ing.amount * 10; // Max 10x escalado
-      const newAmount = Math.max(minAmount, Math.min(maxAmount, ing.amount + delta));
+      const newAmount = Math.max(minAmount, Math.min(ing.amount * 5, ing.amount + delta)); // Max 5x
       
-      const macrosPerGram = {
-        calories: (ing.calories || 0) / Math.max(ing.amount, 1),
-        protein: (ing.protein || 0) / Math.max(ing.amount, 1),
-        carbs: (ing.carbs || 0) / Math.max(ing.amount, 1),
-        fat: (ing.fat || 0) / Math.max(ing.amount, 1),
-      };
-      
-      return {
-        ...ing,
-        amount: newAmount,
-        calories: macrosPerGram.calories * newAmount,
-        protein: macrosPerGram.protein * newAmount,
-        carbs: macrosPerGram.carbs * newAmount,
-        fat: macrosPerGram.fat * newAmount,
-      };
-    });
-    
-    // Verificar si los ajustes simultáneos mejoran
-    const testMacros = calculateMacrosFromIngredients(testCurrent);
-    const testAccuracy = calculateAccuracy(testMacros, targetMacros);
-    const testMaxError = calculateAccuracyMaxError(testMacros, targetMacros);
-    
-    const currentAccuracy = calculateAccuracy(currentMacros, targetMacros);
-    const currentMaxError = calculateAccuracyMaxError(currentMacros, targetMacros);
-    
-    // Aceptar si mejora (priorizar MAX error)
-    if (testMaxError > currentMaxError || (testMaxError >= currentMaxError - 0.5 && testAccuracy > currentAccuracy)) {
-      current = testCurrent;
-      improved = true;
+      // Aplicar cambio TEMPORAL y verificar si mejora
+      ing.amount = newAmount;
+      ing.calories = macrosPerGram.calories * newAmount;
+      ing.protein = macrosPerGram.protein * newAmount;
+      ing.carbs = macrosPerGram.carbs * newAmount;
+      ing.fat = macrosPerGram.fat * newAmount;
+
+      // Verificar si mejora usando MAX error
+      const afterMacros = calculateMacrosFromIngredients(current);
+      const afterMaxError = calculateAccuracyMaxError(afterMacros, targetMacros);
+
+      if (afterMaxError > beforeMaxError) {
+        // Mantener el cambio
+        improved = true;
+      } else {
+        // Revertir el cambio
+        ing.amount = oldAmount;
+        ing.calories = macrosPerGram.calories * oldAmount;
+        ing.protein = macrosPerGram.protein * oldAmount;
+        ing.carbs = macrosPerGram.carbs * oldAmount;
+        ing.fat = macrosPerGram.fat * oldAmount;
+      }
     }
 
     // Si ningún ingrediente mejoró, salir (estancamiento)
