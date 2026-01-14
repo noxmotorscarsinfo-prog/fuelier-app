@@ -118,7 +118,12 @@ export interface Meal {
   };
   
   // NUEVO: Para platos personalizados recalculables
-  customMealSettings?: CustomMealSettings; // Configuración de recálculo
+  customMealSettings?: CustomMealSettings;
+  
+  // NUEVO: Control de escalado automático
+  allowScaling?: boolean; // true = plato escalable (default), false = plato fijo (no escalar)
+  scalingType?: 'scalable' | 'fixed'; // Tipo de plato: escalable o fijo 
+  isFixedMeal?: boolean; // Runtime flag: true si el plato no fue escalado porque es fijo // Configuración de recálculo
 }
 
 export interface DailyLog {

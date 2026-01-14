@@ -5,7 +5,7 @@
  */
 
 import { Meal, User, DailyLog, MealType, MealIngredient } from '../types';
-import { Ingredient, getIngredientById } from '../../data/ingredientTypes';
+import { Ingredient, getIngredientById, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
 import { adaptMealWithAIEngine, MacroTargets } from './fuelierAIEngine';
 
 /**
@@ -125,13 +125,56 @@ export function scaleMealToTarget(
     };
   });
 
+  // 🔧 ESCALADO FINAL: Asegurar que los ingredientes escalen exactamente a los macros objetivo
+  // Calcular macros reales desde ingredientes escalados
+  const realMacrosFromScaledIngredients = calculateMacrosFromIngredients(scaledReferences, allIngredients);
+  
+  console.log('🔍 VERIFICACIÓN DE ESCALADO:');
+  console.log('   Target original:', targetMacros);
+  console.log('   AI Engine achievedMacros:', {
+    cal: result.achievedMacros.calories,
+    prot: result.achievedMacros.protein,
+    carbs: result.achievedMacros.carbs,
+    fat: result.achievedMacros.fat
+  });
+  console.log('   Macros reales desde ingredientes escalados:', realMacrosFromScaledIngredients);
+  
+  // Calcular diferencias
+  const calDiff = Math.abs(targetMacros.calories - realMacrosFromScaledIngredients.calories);
+  const protDiff = Math.abs(targetMacros.protein - realMacrosFromScaledIngredients.protein);
+  const carbsDiff = Math.abs(targetMacros.carbs - realMacrosFromScaledIngredients.carbs);
+  const fatDiff = Math.abs(targetMacros.fat - realMacrosFromScaledIngredients.fat);
+  
+  // Si hay diferencias significativas, aplicar factor de corrección final
+  let finalScaledReferences = scaledReferences;
+  let finalMacros = realMacrosFromScaledIngredients;
+  
+  if (calDiff > 5 || protDiff > 1 || carbsDiff > 1 || fatDiff > 1) {
+    console.log(`🔧 APLICANDO CORRECCIÓN FINAL - Diferencias: ${calDiff} cal, ${protDiff}g prot, ${carbsDiff}g carbs, ${fatDiff}g fat`);
+    
+    // Calcular factores de corrección para acercar al target original
+    const calorieFactor = realMacrosFromScaledIngredients.calories > 0 ? targetMacros.calories / realMacrosFromScaledIngredients.calories : 1;
+    
+    // Aplicar factor de corrección proporcional a todos los ingredientes
+    finalScaledReferences = scaledReferences.map(ref => ({
+      ...ref,
+      amountInGrams: Math.round(ref.amountInGrams * calorieFactor)
+    }));
+    
+    // Recalcular macros finales
+    finalMacros = calculateMacrosFromIngredients(finalScaledReferences, allIngredients);
+    
+    console.log('   ✅ Macros FINALES después de corrección:', finalMacros);
+  }
+
   return {
     ...meal,
-    ingredientReferences: scaledReferences,
-    calories: result.achievedMacros.calories,
-    protein: result.achievedMacros.protein,
-    carbs: result.achievedMacros.carbs,
-    fat: result.achievedMacros.fat,
+    ingredientReferences: finalScaledReferences,
+    // Usar los macros finales calculados que coinciden con los ingredientes escalados
+    calories: finalMacros.calories,
+    protein: finalMacros.protein,
+    carbs: finalMacros.carbs,
+    fat: finalMacros.fat,
   };
 }
 

@@ -306,6 +306,24 @@ export function scaleToExactTarget(
   console.log(`🔧 ESCALANDO: "${meal.name}"${meal.isCustom ? ' [PLATO PERSONALIZADO]' : ''}${meal.isGlobal ? ' [PLATO ADMIN]' : ''}`);
   console.log(`   Última comida: ${isLastMeal ? '✅ SÍ (AJUSTE PERFECTO AL 100%)' : '❌ NO'}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
+  // 🚨 NUEVA LÓGICA: Verificar si el plato permite escalado
+  if (meal.allowScaling === false || meal.scalingType === 'fixed') {
+    console.log('🔒 PLATO FIJO DETECTADO - NO se escalará');
+    console.log(`   allowScaling: ${meal.allowScaling}`);
+    console.log(`   scalingType: ${meal.scalingType}`);
+    console.log(`   Retornando plato con macros originales: ${meal.calories} kcal`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    
+    // Retornar el plato sin modificaciones, solo añadiendo metadata
+    return {
+      ...meal,
+      scaledForTarget: false, // Marca que NO fue escalado
+      proportionCompatibility: 100, // Siempre 100% compatible porque no se escala
+      isFixedMeal: true // Nueva propiedad para identificar platos fijos
+    };
+  }
+
   console.log('📊 Target:', targetMacros);
   console.log(`📦 Ingredientes disponibles: ${allIngredients.length}`);
   if (allIngredients.length > 0) {

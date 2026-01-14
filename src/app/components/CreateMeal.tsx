@@ -50,6 +50,9 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
   // ⭐ NUEVO: Estados para ingredientes de diferentes fuentes
   const [baseIngredients, setBaseIngredients] = useState<DBIngredient[]>([]); // Ingredientes globales de Supabase
   const [customIngredients, setCustomIngredients] = useState<DBIngredient[]>([]); // Ingredientes personalizados del usuario
+  
+  // NUEVO: Estado para tipo de escalado
+  const [scalingType, setScalingType] = useState<'scalable' | 'fixed'>('scalable');
 
   // ⭐ NUEVO: Cargar ingredientes globales y personalizados desde Supabase al montar
   useEffect(() => {
@@ -270,7 +273,10 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
       isCustom: true,
       ingredientReferences: ingredientReferences, // ⭐ NUEVO: Para escalado automático
       preparationSteps: preparationSteps.filter(step => step.trim()),
-      tips: tips.filter(tip => tip.trim()).length > 0 ? tips.filter(tip => tip.trim()) : undefined
+      tips: tips.filter(tip => tip.trim()).length > 0 ? tips.filter(tip => tip.trim()) : undefined,
+      // ✨ NUEVO: Sistema de escalado configurable
+      allowScaling: scalingType === 'scalable',
+      scalingType: scalingType
     };
 
     try {
@@ -725,6 +731,86 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
             </div>
           )}
         </div>
+
+        {/* 🚀 Tipo de Escalado - NUEVA SECCIÓN */}
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-indigo-200">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-indigo-600 p-2 rounded-lg">
+              <div className="w-4 h-4 sm:w-5 sm:h-5 text-white">⚙️</div>
+            </div>
+            <div>
+              <h2 className="text-base sm:text-xl font-bold text-indigo-900">Comportamiento del Plato</h2>
+              <p className="text-[10px] sm:text-xs text-indigo-700">Define cómo se comportará este plato al agregarlo a tu día</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            {/* Opción Escalable */}
+            <div 
+              className={`relative border-2 rounded-xl p-4 cursor-pointer transition-all ${
+                scalingType === 'scalable'
+                  ? 'border-indigo-500 bg-indigo-100 shadow-md'
+                  : 'border-neutral-200 bg-white hover:border-indigo-300 hover:shadow-sm'
+              }`}
+              onClick={() => setScalingType('scalable')}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  scalingType === 'scalable' ? 'border-indigo-500 bg-indigo-500' : 'border-neutral-300'
+                }`}>
+                  {scalingType === 'scalable' && <div className="w-2 h-2 rounded-full bg-white"></div>}
+                </div>
+                <div className="text-sm sm:text-base font-bold text-indigo-900">📊 Plato Escalable</div>
+              </div>
+              <p className="text-xs sm:text-sm text-indigo-700 leading-relaxed">
+                El plato se <strong>ajusta automáticamente</strong> para cumplir tus objetivos nutricionales diarios. 
+                Ideal para comidas principales como ensaladas, pollo con arroz, etc.
+              </p>
+            </div>
+
+            {/* Opción Fija */}
+            <div 
+              className={`relative border-2 rounded-xl p-4 cursor-pointer transition-all ${
+                scalingType === 'fixed'
+                  ? 'border-emerald-500 bg-emerald-100 shadow-md'
+                  : 'border-neutral-200 bg-white hover:border-emerald-300 hover:shadow-sm'
+              }`}
+              onClick={() => setScalingType('fixed')}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  scalingType === 'fixed' ? 'border-emerald-500 bg-emerald-500' : 'border-neutral-300'
+                }`}>
+                  {scalingType === 'fixed' && <div className="w-2 h-2 rounded-full bg-white"></div>}
+                </div>
+                <div className="text-sm sm:text-base font-bold text-emerald-900">🔒 Plato Fijo</div>
+              </div>
+              <p className="text-xs sm:text-sm text-emerald-700 leading-relaxed">
+                El plato se mantiene <strong>exactamente como lo creaste</strong>. 
+                Ideal para bebidas, snacks específicos, café con proteínas, etc.
+              </p>
+            </div>
+          </div>
+
+          {/* Indicador visual del comportamiento seleccionado */}
+          <div className={`mt-4 p-3 rounded-lg border-2 border-dashed ${
+            scalingType === 'scalable' 
+              ? 'bg-indigo-50 border-indigo-300 text-indigo-800' 
+              : 'bg-emerald-50 border-emerald-300 text-emerald-800'
+          }`}>
+            <div className="flex items-center gap-2 text-sm">
+              <div className="text-lg">
+                {scalingType === 'scalable' ? '🎯' : '📌'}
+              </div>
+              <div className="font-medium">
+                {scalingType === 'scalable' 
+                  ? `Este plato se ajustará automáticamente para optimizar tus macros (${calculatedMacros.calories} cal base)`
+                  : `Este plato siempre tendrá exactamente ${calculatedMacros.calories} calorías y ${calculatedMacros.totalGrams}g`
+                }
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 6️⃣ Botones de acción - STICKY BOTTOM */}
@@ -738,10 +824,19 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 sm:py-4 rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all font-semibold flex items-center justify-center gap-2 shadow-md text-sm sm:text-base active:scale-95"
+            className={`flex-1 py-3 sm:py-4 rounded-xl transition-all font-semibold flex items-center justify-center gap-2 shadow-md text-sm sm:text-base active:scale-95 ${
+              scalingType === 'scalable' 
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700'
+                : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700'
+            }`}
           >
             <Save className="w-4 h-4 sm:w-5 sm:h-5" />
-            Guardar Plato
+            <div className="flex flex-col items-center">
+              <span>Guardar {scalingType === 'scalable' ? 'Plato Escalable' : 'Plato Fijo'}</span>
+              <span className="text-xs opacity-75">
+                {scalingType === 'scalable' ? '📊 Se ajusta automáticamente' : '🔒 Valores exactos'}
+              </span>
+            </div>
           </button>
         </div>
       </div>
