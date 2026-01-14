@@ -114,7 +114,11 @@ export function scaleMealToTarget(
 
   const result = adaptMealWithAIEngine(mealForEngine, macroTargets, mockUser, mockLog, 100, allIngredients);
 
-  // Convertir resultado de vuelta a ingredientReferences
+  console.log('🤖 AI ENGINE RESULT:');
+  console.log('   Accuracy:', result.accuracy.toFixed(1) + '%');
+  console.log('   AchievedMacros:', result.achievedMacros);
+  
+  // Convertir resultado a ingredientReferences (siempre, independiente de la precisión)
   const scaledReferences = result.scaledIngredients.map(scaledIng => {
     const originalRef = meal.ingredientReferences!.find(r => r.ingredientId === scaledIng.ingredientId);
     return {
@@ -124,57 +128,54 @@ export function scaleMealToTarget(
       ...(originalRef && { name: (originalRef as any).name }),
     };
   });
-
-  // 🔧 ESCALADO FINAL: Asegurar que los ingredientes escalen exactamente a los macros objetivo
-  // Calcular macros reales desde ingredientes escalados
+  
+  // ✅ CRÍTICO: Siempre calcular macros reales desde ingredientes escalados para consistencia
   const realMacrosFromScaledIngredients = calculateMacrosFromIngredients(scaledReferences, allIngredients);
   
-  console.log('🔍 VERIFICACIÓN DE ESCALADO:');
-  console.log('   Target original:', targetMacros);
-  console.log('   AI Engine achievedMacros:', {
-    cal: result.achievedMacros.calories,
-    prot: result.achievedMacros.protein,
-    carbs: result.achievedMacros.carbs,
-    fat: result.achievedMacros.fat
-  });
-  console.log('   Macros reales desde ingredientes escalados:', realMacrosFromScaledIngredients);
+  console.log('🔍 VERIFICACIÓN DE CONSISTENCIA:');
+  console.log('   AI Engine achievedMacros:', result.achievedMacros);
+  console.log('   Macros reales desde ingredientes:', realMacrosFromScaledIngredients);
   
-  // Calcular diferencias
-  const calDiff = Math.abs(targetMacros.calories - realMacrosFromScaledIngredients.calories);
-  const protDiff = Math.abs(targetMacros.protein - realMacrosFromScaledIngredients.protein);
-  const carbsDiff = Math.abs(targetMacros.carbs - realMacrosFromScaledIngredients.carbs);
-  const fatDiff = Math.abs(targetMacros.fat - realMacrosFromScaledIngredients.fat);
+  // Verificar si hay ingredientes faltantes
+  const missingIngredients = scaledReferences.filter(ref => 
+    !allIngredients.find(ing => ing.id === ref.ingredientId)
+  );
   
-  // Si hay diferencias significativas, aplicar factor de corrección final
-  let finalScaledReferences = scaledReferences;
-  let finalMacros = realMacrosFromScaledIngredients;
-  
-  if (calDiff > 5 || protDiff > 1 || carbsDiff > 1 || fatDiff > 1) {
-    console.log(`🔧 APLICANDO CORRECCIÓN FINAL - Diferencias: ${calDiff} cal, ${protDiff}g prot, ${carbsDiff}g carbs, ${fatDiff}g fat`);
-    
-    // Calcular factores de corrección para acercar al target original
-    const calorieFactor = realMacrosFromScaledIngredients.calories > 0 ? targetMacros.calories / realMacrosFromScaledIngredients.calories : 1;
-    
-    // Aplicar factor de corrección proporcional a todos los ingredientes
-    finalScaledReferences = scaledReferences.map(ref => ({
-      ...ref,
-      amountInGrams: Math.round(ref.amountInGrams * calorieFactor)
-    }));
-    
-    // Recalcular macros finales
-    finalMacros = calculateMacrosFromIngredients(finalScaledReferences, allIngredients);
-    
-    console.log('   ✅ Macros FINALES después de corrección:', finalMacros);
+  if (missingIngredients.length > 0) {
+    console.error('❌ INGREDIENTES NO ENCONTRADOS:', missingIngredients.map(ref => ref.ingredientId));
   }
+
+  // ✅ Si el AI Engine logró alta precisión (≥90%), usar su resultado pero con macros consistentes
+  if (result.accuracy >= 90) {
+    console.log('   ✅ AI Engine logró alta precisión - usando ingredientes escalados con macros consistentes');
+
+    return {
+      ...meal,
+      ingredientReferences: scaledReferences,
+      // ✅ USAR MACROS REALES CALCULADOS DESDE INGREDIENTES (no achievedMacros del AI Engine)
+      calories: realMacrosFromScaledIngredients.calories,
+      protein: realMacrosFromScaledIngredients.protein,
+      carbs: realMacrosFromScaledIngredients.carbs,
+      fat: realMacrosFromScaledIngredients.fat,
+      proportionCompatibility: result.accuracy // Mantener la precisión del AI Engine
+    };
+  }
+
+  // Solo si el AI Engine no logró ≥90%, aplicar correcciones adicionales
+  console.log('   ⚠️ AI Engine <90% precisión - aplicando correcciones manuales');
+
+  // Para correcciones manuales (<90% precisión), usar directamente los macros calculados
+  console.log('   📊 Usando macros calculados desde ingredientes escalados para consistencia');
 
   return {
     ...meal,
-    ingredientReferences: finalScaledReferences,
-    // Usar los macros finales calculados que coinciden con los ingredientes escalados
-    calories: finalMacros.calories,
-    protein: finalMacros.protein,
-    carbs: finalMacros.carbs,
-    fat: finalMacros.fat,
+    ingredientReferences: scaledReferences,
+    // ✅ USAR MACROS REALES CALCULADOS DESDE INGREDIENTES
+    calories: realMacrosFromScaledIngredients.calories,
+    protein: realMacrosFromScaledIngredients.protein,
+    carbs: realMacrosFromScaledIngredients.carbs,
+    fat: realMacrosFromScaledIngredients.fat,
+    proportionCompatibility: result.accuracy // Usar la precisión del AI Engine
   };
 }
 

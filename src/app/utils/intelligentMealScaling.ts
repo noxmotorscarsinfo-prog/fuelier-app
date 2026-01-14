@@ -300,7 +300,10 @@ export function scaleToExactTarget(
   meal: Meal,
   targetMacros: { calories: number; protein: number; carbs: number; fat: number },
   isLastMeal: boolean = false,
-  allIngredients: Ingredient[] = []
+  allIngredients: Ingredient[] = [],
+  user?: User,
+  currentLog?: DailyLog,
+  mealType?: MealType
 ): Meal {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`🔧 ESCALANDO: "${meal.name}"${meal.isCustom ? ' [PLATO PERSONALIZADO]' : ''}${meal.isGlobal ? ' [PLATO ADMIN]' : ''}`);
@@ -374,7 +377,7 @@ export function scaleToExactTarget(
   }
   
   // 🚀 USAR ALGORITMO NUEVO: Escalado preciso con distorsión agresiva
-  return preciseScaleMealToTarget(meal, targetMacros, allIngredients);
+  return preciseScaleMealToTarget(meal, targetMacros, allIngredients, user, currentLog, mealType);
 }
 
 /**
@@ -467,7 +470,7 @@ export function rankMealsByFit(
     console.log(`\n📋 [${index + 1}/${meals.length}] Procesando: "${meal.name}"`);
     
     // Escalar el plato al target exacto con IA
-    const scaledMeal = scaleToExactTarget(meal, targetMacros, isLastMeal, allIngredients);
+    const scaledMeal = scaleToExactTarget(meal, targetMacros, isLastMeal, allIngredients, user, currentLog, mealType);
     
     // Calcular fit score (qué tan bien encaja)
     const fitScore = calculateFitScore(scaledMeal, targetMacros);
