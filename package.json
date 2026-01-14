@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "predeploy": "npm run sync-ingredients",
+    "sync-ingredients": "tsx scripts/sync-ingredients-auto.ts",
     "preview": "vite preview",
     "deploy:functions": "supabase functions deploy make-server-b0e879f0 --no-verify-jwt",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -98,6 +100,7 @@
     "msw": "^2.12.7",
     "tailwindcss": "4.1.12",
     "ts-jest": "^29.4.6",
+    "tsx": "^4.21.0",
     "vite": "6.3.5",
     "vitest": "^4.0.16",
     "vitest-fetch-mock": "^0.4.5"

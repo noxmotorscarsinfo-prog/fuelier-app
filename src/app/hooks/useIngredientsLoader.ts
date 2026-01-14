@@ -52,11 +52,14 @@ export function useIngredientsLoader(userEmail: string, isAdmin: boolean = false
         console.log(`👤 [useIngredientsLoader] Ingredientes personalizados: ${customIngredients.length}`);
       }
       
-      // 3️⃣ Decidir fuente de datos
+      // 3️⃣ VALIDACIÓN: Verificar que Supabase tiene los ingredientes del sistema
+      const expectedCount = INGREDIENTS_DATABASE.length; // 60 ingredientes del sistema
+      
       if (globalIngredients.length === 0) {
-        // ⚠️ Supabase vacío - usar fallback local
-        console.warn('⚠️ [useIngredientsLoader] Supabase vacío - usando INGREDIENTS_DATABASE local');
-        console.warn('   Esto puede indicar que la migración inicial no se ejecutó');
+        // ⚠️ Supabase vacío - CRÍTICO
+        console.error('❌ [useIngredientsLoader] CRÍTICO: Supabase vacío');
+        console.error('   → Ejecuta: npm run sync-ingredients');
+        console.error('   → O espera a que admin haga auto-sync');
         
         // 🔄 AUTO-SINCRONIZACIÓN: Si es admin, poblar Supabase automáticamente
         if (isAdmin) {
@@ -81,12 +84,22 @@ export function useIngredientsLoader(userEmail: string, isAdmin: boolean = false
           }
         }
         
-        // Si no es admin o la sincronización falló, usar local
+        // Si no es admin o la sincronización falló, usar local como FALLBACK
+        console.warn('⚠️ [useIngredientsLoader] Usando INGREDIENTS_DATABASE local como fallback');
         setIngredients([...INGREDIENTS_DATABASE, ...customIngredients]);
         setSource(customIngredients.length > 0 ? 'mixed' : 'local');
         
+      } else if (globalIngredients.length < expectedCount) {
+        // ⚠️ Supabase incompleto
+        console.warn(`⚠️ [useIngredientsLoader] Supabase tiene ${globalIngredients.length}/${expectedCount} ingredientes`);
+        console.warn('   → Posible desincronización - considera ejecutar: npm run sync-ingredients');
+        
+        // Usar Supabase pero advertir
+        setIngredients([...globalIngredients, ...customIngredients]);
+        setSource(customIngredients.length > 0 ? 'mixed' : 'supabase');
+        
       } else {
-        // ✅ Supabase tiene datos
+        // ✅ Supabase tiene datos completos
         setIngredients([...globalIngredients, ...customIngredients]);
         setSource(customIngredients.length > 0 ? 'mixed' : 'supabase');
         console.log(`✅ [useIngredientsLoader] Total ingredientes: ${globalIngredients.length + customIngredients.length}`);
