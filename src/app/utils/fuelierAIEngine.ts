@@ -590,7 +590,8 @@ function solveWithHybridApproach(
           targetMacros,
           { ...strategy, aggressiveness: 2.5 }, // Ultra agresivo
           relaxedTolerances,
-          Math.min(200, maxIterations * 5) // Muchas iteraciones
+          Math.min(200, maxIterations * 5), // Muchas iteraciones
+          allIngredients
         );
         
         const refinedMaxError = calculateAccuracyMaxError(refinedWithAdded.achievedMacros, targetMacros);
@@ -629,7 +630,8 @@ function solveWithHybridApproach(
           targetMacros,
           strategy,
           relaxedTolerances,
-          Math.min(100, maxIterations * 3)
+          Math.min(100, maxIterations * 3),
+          allIngredients
         );
         
         const refinedMaxError = calculateAccuracyMaxError(refinedWithAdded.achievedMacros, targetMacros);
@@ -648,7 +650,8 @@ function solveWithHybridApproach(
         targetMacros,
         strategy,
         relaxedTolerances,
-        Math.min(100, maxIterations * 3) // Muchas más iteraciones para casos difíciles
+        Math.min(100, maxIterations * 3), // Muchas más iteraciones para casos difíciles
+        allIngredients
       );
 
       const refinedMaxError = calculateAccuracyMaxError(refinedSolution.achievedMacros, targetMacros);
@@ -673,7 +676,8 @@ function solveWithHybridApproach(
             targetMacros,
             { ...strategy, aggressiveness: 2.5 },
             relaxedTolerances,
-            maxIterations * 6
+            maxIterations * 6,
+            allIngredients
           );
           
           const finalMaxError = calculateAccuracyMaxError(finalLsSolution.achievedMacros, targetMacros);
@@ -720,7 +724,8 @@ function solveWithHybridApproach(
           targetMacros,
           { ...strategy, aggressiveness: 2.5 }, // ULTRA agresivo para casos imposibles
           relaxedTolerances,
-          maxIterations * 6 // 6x iteraciones para casos extremos
+          maxIterations * 6, // 6x iteraciones para casos extremos
+          allIngredients
         );
 
         const finalMaxError = calculateAccuracyMaxError(lsSolution.achievedMacros, targetMacros);
@@ -865,7 +870,8 @@ function refineWithLeastSquares(
   targetMacros: MacroTargets,
   strategy: StrategyDecision,
   tolerances: PlateClassification['tolerances'],
-  maxIterations: number
+  maxIterations: number,
+  allIngredients: Ingredient[]
 ): HybridSolution {
   let current = [...ingredients];
   let bestSolution = [...current];
