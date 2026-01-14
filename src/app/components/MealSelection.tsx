@@ -498,15 +498,17 @@ export default function MealSelection({
     });
   }, [recommendedMeals, user.preferences]);
 
-  // 🚀 FILTRO CRÍTICO: Mostrar SOLO platos que alcancen ≥90% de ajuste de macros
-  // El AI Engine debe escalar correctamente con los 60 ingredientes de Supabase
+  // 🚀 FILTRO: Mostrar platos con buen ajuste de macros
+  // Ajustado a 85% para mostrar más opciones mientras optimizamos el AI Engine
+  const ACCURACY_THRESHOLD = 85;
+  
   const mealsWithGoodFit = useMemo(() => {
     const filtered = mealsFilteredByPreferences.filter(scored => {
       const accuracy = scored.scaledMeal?.proportionCompatibility || 0;
-      const meetsThreshold = accuracy >= 90;
+      const meetsThreshold = accuracy >= ACCURACY_THRESHOLD;
       
       if (!meetsThreshold) {
-        console.log(`🚫 Plato "${scored.meal.name}" filtrado por ajuste insuficiente: ${accuracy.toFixed(1)}% (necesita ≥90%)`);
+        console.log(`🚫 Plato "${scored.meal.name}" filtrado por ajuste insuficiente: ${accuracy.toFixed(1)}% (necesita ≥${ACCURACY_THRESHOLD}%)`);
       }
       
       return meetsThreshold;
@@ -514,11 +516,11 @@ export default function MealSelection({
     
     console.log(`\n📊 FILTRO DE AJUSTE DE MACROS:`);
     console.log(`   Total antes del filtro: ${mealsFilteredByPreferences.length} platos`);
-    console.log(`   Total después del filtro (≥90%): ${filtered.length} platos`);
+    console.log(`   Total después del filtro (≥${ACCURACY_THRESHOLD}%): ${filtered.length} platos`);
     console.log(`   Platos eliminados: ${mealsFilteredByPreferences.length - filtered.length}`);
     
     if (filtered.length === 0) {
-      console.warn(`⚠️ ADVERTENCIA: Ningún plato alcanza 90%+ de ajuste con el target actual`);
+      console.warn(`⚠️ ADVERTENCIA: Ningún plato alcanza ${ACCURACY_THRESHOLD}%+ de ajuste con el target actual`);
       console.warn(`   Target: ${intelligentTarget.calories}kcal | ${intelligentTarget.protein}P | ${intelligentTarget.carbs}C | ${intelligentTarget.fat}G`);
     }
     
