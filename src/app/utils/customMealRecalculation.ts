@@ -71,12 +71,33 @@ export function recalculateCustomMealForToday(
   const scaledIngredients = hybridSolution.scaledIngredients;
   const achievedMacros = hybridSolution.achievedMacros;
   
+  // 🔧 CONSISTENCIA: Calcular macros reales desde los ingredientes escalados finales
+  const realMacrosFromScaledIngredients = scaledIngredients.reduce(
+    (acc, ing) => ({
+      calories: acc.calories + (ing.calories || 0),
+      protein: acc.protein + (ing.protein || 0),
+      carbs: acc.carbs + (ing.carbs || 0),
+      fat: acc.fat + (ing.fat || 0)
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+  
+  console.log('🔍 VERIFICACIÓN DE CONSISTENCIA:');
+  console.log('   AI Engine achievedMacros:', {
+    cal: achievedMacros.calories,
+    prot: achievedMacros.protein,
+    carbs: achievedMacros.carbs,
+    fat: achievedMacros.fat
+  });
+  console.log('   Macros reales desde ingredientes:', realMacrosFromScaledIngredients);
+  
   const recalculatedMeal: Meal = {
     ...meal,
-    calories: achievedMacros.calories,
-    protein: achievedMacros.protein,
-    carbs: achievedMacros.carbs,
-    fat: achievedMacros.fat,
+    // ✅ Usar macros reales calculados desde ingredientes escalados
+    calories: Math.round(realMacrosFromScaledIngredients.calories),
+    protein: Math.round(realMacrosFromScaledIngredients.protein * 10) / 10,
+    carbs: Math.round(realMacrosFromScaledIngredients.carbs * 10) / 10,
+    fat: Math.round(realMacrosFromScaledIngredients.fat * 10) / 10,
     detailedIngredients: scaledIngredients,
     portionMultiplier: 1.0, // Reset multiplier after recalculation
   };
@@ -172,21 +193,57 @@ export function scaleCustomMealProportionally(
   
   console.log(`📏 Escalando plato proporcionalmente: factor ${scaleFactor.toFixed(2)}`);
   
+  // Escalar ingredientes detallados si existen
+  const scaledDetailedIngredients = meal.detailedIngredients?.map(ing => ({
+    ...ing,
+    amount: ing.amount * scaleFactor,
+    calories: ing.calories * scaleFactor,
+    protein: ing.protein * scaleFactor,
+    carbs: ing.carbs * scaleFactor,
+    fat: ing.fat * scaleFactor
+  }));
+  
+  // 🔧 CONSISTENCIA: Calcular macros reales desde ingredientes escalados
+  let finalMacros;
+  if (scaledDetailedIngredients && scaledDetailedIngredients.length > 0) {
+    // Calcular desde ingredientes escalados
+    const realMacros = scaledDetailedIngredients.reduce(
+      (acc, ing) => ({
+        calories: acc.calories + (ing.calories || 0),
+        protein: acc.protein + (ing.protein || 0),
+        carbs: acc.carbs + (ing.carbs || 0),
+        fat: acc.fat + (ing.fat || 0)
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+    
+    finalMacros = {
+      calories: Math.round(realMacros.calories),
+      protein: Math.round(realMacros.protein * 10) / 10,
+      carbs: Math.round(realMacros.carbs * 10) / 10,
+      fat: Math.round(realMacros.fat * 10) / 10
+    };
+    
+    console.log('✅ Macros calculados desde ingredientes escalados:', finalMacros);
+  } else {
+    // Fallback: escalado proporcional directo
+    finalMacros = {
+      calories: Math.round(meal.calories * scaleFactor),
+      protein: Math.round(meal.protein * scaleFactor * 10) / 10,
+      carbs: Math.round(meal.carbs * scaleFactor * 10) / 10,
+      fat: Math.round(meal.fat * scaleFactor * 10) / 10
+    };
+  }
+  
   const scaledMeal: Meal = {
     ...meal,
-    calories: meal.calories * scaleFactor,
-    protein: meal.protein * scaleFactor,
-    carbs: meal.carbs * scaleFactor,
-    fat: meal.fat * scaleFactor,
+    // ✅ Usar macros consistentes
+    calories: finalMacros.calories,
+    protein: finalMacros.protein,
+    carbs: finalMacros.carbs,
+    fat: finalMacros.fat,
     
-    detailedIngredients: meal.detailedIngredients?.map(ing => ({
-      ...ing,
-      amount: ing.amount * scaleFactor,
-      calories: ing.calories * scaleFactor,
-      protein: ing.protein * scaleFactor,
-      carbs: ing.carbs * scaleFactor,
-      fat: ing.fat * scaleFactor
-    })),
+    detailedIngredients: scaledDetailedIngredients,
     
     portionMultiplier: (meal.portionMultiplier || 1) * scaleFactor,
     
