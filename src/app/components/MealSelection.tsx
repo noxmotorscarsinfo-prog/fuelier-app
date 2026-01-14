@@ -499,6 +499,7 @@ export default function MealSelection({
   }, [recommendedMeals, user.preferences]);
 
   // 🚀 FILTRO CRÍTICO: Mostrar SOLO platos que alcancen ≥90% de ajuste de macros
+  // El AI Engine debe escalar correctamente con los 60 ingredientes de Supabase
   const mealsWithGoodFit = useMemo(() => {
     const filtered = mealsFilteredByPreferences.filter(scored => {
       const accuracy = scored.scaledMeal?.proportionCompatibility || 0;
