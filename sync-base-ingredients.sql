@@ -2,10 +2,10 @@
 -- Ejecutar en Supabase Dashboard → SQL Editor
 -- Esto sobrescribe los ingredientes base con los valores correctos de ingredientsDatabase.ts
 
--- PROTEÍNAS CARNE
+-- PROTEÍNAS
 INSERT INTO base_ingredients (id, name, category, calories, protein, carbs, fat) VALUES
-('pechuga-pollo', 'Pechuga de Pollo', 'proteina', 165, 31, 0, 3.6),
-('pechuga-pavo', 'Pechuga de Pavo', 'proteina', 135, 30, 0, 1),
+('pollo-pechuga', 'Pechuga de Pollo', 'proteina', 165, 31, 0, 3.6),
+('pavo-pechuga', 'Pechuga de Pavo', 'proteina', 135, 30, 0, 1),
 ('ternera-magra', 'Ternera Magra', 'proteina', 250, 26, 0, 15),
 ('salmon', 'Salmón', 'proteina', 208, 20, 0, 13),
 ('atun-natural', 'Atún Natural', 'proteina', 132, 28, 0, 0.6),
@@ -15,10 +15,7 @@ INSERT INTO base_ingredients (id, name, category, calories, protein, carbs, fat)
 ('dorada', 'Dorada', 'proteina', 96, 19.8, 0, 1.2),
 ('huevos', 'Huevos', 'proteina', 155, 13, 1.1, 11),
 ('clara-huevo', 'Clara de Huevo', 'proteina', 52, 11, 0.7, 0.2),
-('tofu', 'Tofu', 'proteina', 76, 8, 1.9, 4.8),
-('proteina-whey', 'Proteína Whey', 'proteina', 400, 80, 10, 5),
-('lentejas', 'Lentejas Cocidas', 'proteina', 116, 9, 20, 0.4),
-('garbanzos', 'Garbanzos Cocidos', 'proteina', 164, 8.9, 27, 2.6)
+('tofu', 'Tofu', 'proteina', 76, 8, 1.9, 4.8)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   category = EXCLUDED.category,
