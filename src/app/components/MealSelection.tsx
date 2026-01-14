@@ -123,14 +123,14 @@ export default function MealSelection({
       }
       
       setIsLoadingCustomMeals(true);
-      console.log('📥 Cargando custom meals desde Supabase...');
+      console.log('📥 Cargando custom meals desde Supabase... (refreshTrigger:', refreshTrigger, ')');
       const meals = await api.getCustomMeals(user.email);
       console.log(`✅ Cargados ${meals.length} custom meals desde Supabase`);
       setCustomMeals(meals);
       setIsLoadingCustomMeals(false);
     };
     loadCustomMeals();
-  }, [user.email, refreshTrigger]); // Añadido refreshTrigger como dependencia
+  }, [user.email, refreshTrigger ?? 0]); // Usar 0 como default si refreshTrigger es undefined
 
   // Función para obtener todas las comidas disponibles
   const getMealsData = (): Meal[] => {
@@ -205,6 +205,14 @@ export default function MealSelection({
   };
 
   const meals = getMealsData();
+  
+  console.log('🍽️ MEAL SELECTION DEBUG:', {
+    totalMeals: meals.length,
+    mealType,
+    customMealsCount: customMeals.length,
+    globalMealsCount: globalMeals.length,
+    ingredientsCount: ingredientsFromSupabase.length
+  });
   
   // NUEVO: Calcular macros restantes del día (lo que falta por comer)
   const remaining = useMemo(() => {

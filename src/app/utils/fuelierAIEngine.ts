@@ -283,12 +283,13 @@ function decideStrategy(
   const addableIngredients: StrategyDecision['addableIngredients'] = [];
   
   // Ingredientes añadibles disponibles con sus macros per 100g
+  // ⚠️ IDs deben coincidir con INGREDIENTS_DATABASE (ing_X)
   const strategicIngredients = [
-    { id: 'clara-huevo', name: 'Clara de Huevo', protein: 11, carbs: 0.7, fat: 0.2, calories: 52 },
-    { id: 'proteina-polvo', name: 'Proteína en Polvo', protein: 80, carbs: 5, fat: 2, calories: 370 },
-    { id: 'avena', name: 'Avena', protein: 13, carbs: 60, fat: 7, calories: 370 },
-    { id: 'platano', name: 'Plátano', protein: 1, carbs: 23, fat: 0.3, calories: 89 },
-    { id: 'almendra', name: 'Almendras', protein: 21, carbs: 22, fat: 50, calories: 575 },
+    { id: 'ing_16', name: 'Clara de Huevo', protein: 11, carbs: 0.7, fat: 0.2, calories: 52 },
+    { id: 'ing_61', name: 'Proteína Whey', protein: 83, carbs: 7, fat: 4, calories: 400 },
+    { id: 'ing_32', name: 'Avena', protein: 17, carbs: 66, fat: 7, calories: 389 },
+    { id: 'ing_37', name: 'Plátano', protein: 1.1, carbs: 23, fat: 0.3, calories: 89 },
+    { id: 'ing_55', name: 'Almendras', protein: 21, carbs: 22, fat: 50, calories: 579 },
   ];
   
   // Si faltan proteínas (>3g O <85% del target) - UMBRAL MUY BAJO
@@ -297,7 +298,7 @@ function decideStrategy(
     // Calcular gramos óptimos de clara de huevo (11g proteína per 100g)
     const claraGrams = Math.min(200, Math.max(20, (proteinGap / 0.11))); // Min 20g, Max 200g
     addableIngredients.push({
-      id: 'clara-huevo',
+      id: 'ing_16', // Clara de Huevo (INGREDIENTS_DATABASE)
       name: 'Clara de Huevo',
       suggestedGrams: Math.round(claraGrams),
       reason: `Añadir ${Math.round(claraGrams)}g clara (+${(claraGrams * 0.11).toFixed(1)}g proteína, mínima grasa)`,
@@ -307,10 +308,10 @@ function decideStrategy(
   // Si faltan carbos (>5g O <85% del target)
   if ((gaps.carbs > 5 || currentMacros.carbs < targetMacros.carbs * 0.85) && gaps.carbs > 0) {
     const carbGap = gaps.carbs;
-    // Calcular gramos óptimos de avena (60g carbos per 100g)
-    const avenaGrams = Math.min(60, Math.max(15, (carbGap / 0.6))); // Min 15g, Max 60g
+    // Calcular gramos óptimos de avena (66g carbos per 100g - actualizado)
+    const avenaGrams = Math.min(60, Math.max(15, (carbGap / 0.66))); // Min 15g, Max 60g
     addableIngredients.push({
-      id: 'avena',
+      id: 'ing_32', // Avena (INGREDIENTS_DATABASE)
       name: 'Avena',
       suggestedGrams: Math.round(avenaGrams),
       reason: `Añadir ${Math.round(avenaGrams)}g avena (+${(avenaGrams * 0.6).toFixed(1)}g carbos)`,
@@ -504,11 +505,13 @@ function addStrategicIngredients(
   const newIngredients = [...currentIngredients];
   
   // Macros per 100g de ingredientes estratégicos
+  // ⚠️ IDs deben coincidir con INGREDIENTS_DATABASE
   const ingredientMacros: Record<string, { protein: number; carbs: number; fat: number; calories: number }> = {
-    'clara-huevo': { protein: 11, carbs: 0.7, fat: 0.2, calories: 52 },
-    'proteina-polvo': { protein: 80, carbs: 5, fat: 2, calories: 370 },
-    'avena': { protein: 13, carbs: 60, fat: 7, calories: 370 },
-    'platano': { protein: 1, carbs: 23, fat: 0.3, calories: 89 },
+    'ing_16': { protein: 11, carbs: 0.7, fat: 0.2, calories: 52 },    // Clara de Huevo
+    'ing_61': { protein: 83, carbs: 7, fat: 4, calories: 400 },       // Proteína Whey
+    'ing_32': { protein: 17, carbs: 66, fat: 7, calories: 389 },      // Avena
+    'ing_37': { protein: 1.1, carbs: 23, fat: 0.3, calories: 89 },    // Plátano
+    'ing_55': { protein: 21, carbs: 22, fat: 50, calories: 579 },     // Almendras
   };
 
   addableIngredients.forEach((addable) => {
