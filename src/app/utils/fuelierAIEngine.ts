@@ -271,13 +271,13 @@ function decideStrategy(
     .sort((a, b) => b.rank - a.rank);
 
   // Agresividad basada en iteración y flexibilidad
-  // OPTIMIZADO: Agresividad inicial más alta para mejor convergencia
-  let aggressiveness = 1.3; // AUMENTADO: 1.0 → 1.3 para converger más rápido
-  if (context.flexibilityLevel === 'strict') aggressiveness = 1.5; // AUMENTADO: 1.3 → 1.5
-  else if (context.flexibilityLevel === 'flexible') aggressiveness = 1.0; // AUMENTADO: 0.8 → 1.0
+  // INCREMENTADA para escalar ingredientes existentes sin añadir externos
+  let aggressiveness = 1.2; // Aumentado de 0.75 a 1.2 para escalado más agresivo
+  if (context.flexibilityLevel === 'strict') aggressiveness = 1.5;
+  else if (context.flexibilityLevel === 'flexible') aggressiveness = 0.9;
   
-  // Aumentar agresividad con iteraciones progresivamente
-  aggressiveness = Math.min(2.5, aggressiveness + iteration * 0.1); // AUMENTADO límite: 2.0 → 2.5
+  // Aumentar agresividad con iteraciones (más agresivo)
+  aggressiveness = Math.min(2.0, aggressiveness + iteration * 0.1);
 
   // DESHABILITADO: No añadir ingredientes estratégicos externos
   // El AI Engine debe escalar SOLO los ingredientes existentes del plato
@@ -548,7 +548,7 @@ function solveWithHybridApproach(
   targetMacros: MacroTargets,
   strategy: StrategyDecision,
   plateClassification: PlateClassification,
-  maxIterations: number = 100, // AUMENTADO: 50 → 100 para mejor convergencia
+  maxIterations: number = 50,
   allIngredients: Ingredient[] = []
 ): HybridSolution {
   // FASE 1: Linear Programming con tolerancias progresivas
@@ -896,7 +896,6 @@ function refineWithLeastSquares(
   let bestMaxErrorAccuracy = 0; // Tracking MAX error también
   let iteration = 0;
   let stagnationCount = 0;
-  let consecutiveImprovements = 0; // Contar mejoras consecutivas
 
   for (iteration = 0; iteration < maxIterations; iteration++) {
     const currentMacros = calculateMacrosFromIngredients(current);
@@ -909,24 +908,16 @@ function refineWithLeastSquares(
       bestAccuracy = accuracy;
       bestSolution = [...current];
       stagnationCount = 0;
-      consecutiveImprovements++;
     } else {
       stagnationCount++;
-      consecutiveImprovements = 0;
     }
 
     if (maxErrorAccuracy >= 98) break; // Objetivo perfecto alcanzado
     
-    // Si llevamos 5 iteraciones estancados, aumentar agresividad dramáticamente
-    // OPTIMIZADO: 8 → 5 para reaccionar más rápido
-    if (stagnationCount >= 5) {
+    // Si llevamos 10 iteraciones estancados, aumentar agresividad dramáticamente
+    if (stagnationCount >= 10) {
       console.log(`⚡ Aumentando agresividad por estancamiento (${stagnationCount} iter)`);
-      strategy.aggressiveness = Math.min(3.0, strategy.aggressiveness * 1.6); // x1.6 más agresivo
-    }
-    
-    // Si tenemos momentum (3+ mejoras consecutivas), mantener agresividad alta
-    if (consecutiveImprovements >= 3 && maxErrorAccuracy < 95) {
-      strategy.aggressiveness = Math.min(2.5, strategy.aggressiveness * 1.2);
+      strategy.aggressiveness = Math.min(2.0, strategy.aggressiveness * 1.3);
     }
 
     // AJUSTE SECUENCIAL (REVERTIDO): Funciona mejor que simultáneo
@@ -940,7 +931,7 @@ function refineWithLeastSquares(
     const orderedIngredients = [...current].sort((a, b) => {
       const rankA = strategy.rankedIngredients.findIndex(r => r.id === a.ingredientId);
       const rankB = strategy.rankedIngredients.findIndex(r => r.id === b.ingredientId);
-      
+      7 + 0.6
       if (rankA === -1 && rankB === -1) return 0;
       if (rankA === -1) return 1;
       if (rankB === -1) return -1;
@@ -950,6 +941,7 @@ function refineWithLeastSquares(
     // Ajustar cada ingrediente individualmente
     for (const ing of orderedIngredients) {
       const beforeMacros = calculateMacrosFromIngredients(current);
+      const beforeAccuracy = calculateAccuracy(beforeMacros, targetMacros);
       const beforeMaxError = calculateAccuracyMaxError(beforeMacros, targetMacros);
       
       const gaps = {
@@ -997,11 +989,17 @@ function refineWithLeastSquares(
       ing.carbs = macrosPerGram.carbs * newAmount;
       ing.fat = macrosPerGram.fat * newAmount;
 
-      // Verificar si mejora usando MAX error
+      // Verificar si el cambio mejora (balance entre accuracy promedio y MAX error)
       const afterMacros = calculateMacrosFromIngredients(current);
+      const afterAccuracy = calculateAccuracy(afterMacros, targetMacros);
       const afterMaxError = calculateAccuracyMaxError(afterMacros, targetMacros);
 
-      if (afterMaxError > beforeMaxError) {
+      // Criterio combinado: mejorar accuracy promedio Y/O MAX error significativamente
+      const avgImprovement = afterAccuracy - beforeAccuracy;
+      const maxErrorImprovement = afterMaxError - beforeMaxError;
+      
+      // Aceptar si mejora promedio O si mejora MAX error sin empeorar mucho el promedio
+      if (avgImprovement > 0 || (maxErrorImprovement > 0.5 && avgImprovement > -1)) {
         // Mantener el cambio
         improved = true;
       } else {
