@@ -475,9 +475,14 @@ export function rankMealsByFit(
     // Calcular fit score (qué tan bien encaja)
     const fitScore = calculateFitScore(scaledMeal, targetMacros);
     
-    // Calcular error real
-    const errorPercent = calculateMacroError(scaledMeal, targetMacros);
-    const adjustmentPercent = 100 - (errorPercent * 100);
+    // 🎯 USAR DIRECTAMENTE proportionCompatibility del AI Engine (si existe)
+    // El AI Engine ya calculó la precisión correctamente, no necesitamos recalcularla
+    const aiEngineAccuracy = scaledMeal.proportionCompatibility || 0;
+    
+    // Si el AI Engine dio un accuracy, usarlo. Si no, calcular error tradicional
+    const adjustmentPercent = aiEngineAccuracy > 0 
+      ? aiEngineAccuracy 
+      : 100 - (calculateMacroError(scaledMeal, targetMacros) * 100);
     
     console.log(`   ✅ Ajuste: ${adjustmentPercent.toFixed(1)}% | Score: ${fitScore.toFixed(1)}`);
     
@@ -493,7 +498,7 @@ export function rankMealsByFit(
       meal,
       scaledMeal: {
         ...scaledMeal,
-        proportionCompatibility: adjustmentPercent // Para UI
+        proportionCompatibility: adjustmentPercent // Usar accuracy del AI Engine o calculado
       },
       fitScore
     };
