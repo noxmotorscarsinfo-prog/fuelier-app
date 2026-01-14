@@ -422,7 +422,10 @@ function assessConfidence(
   // Estimación de accuracy basada en confianza
   const estimatedAccuracy = Math.max(50, confidence - 10);
 
-  const feasible = confidence >= 85; // Mantener estándar alto
+  // ✅ OPTIMIZACIÓN: Bajar umbral para dar oportunidad al LP solver
+  // Antes: >= 85 (muy restrictivo, bloqueaba buenos platos)
+  // Ahora: >= 40 (solo bloquea casos extremos imposibles)
+  const feasible = confidence >= 40;
 
   if (!feasible) {
     reasons.unshift(`⚠️ PLATO NO VIABLE (confidence: ${confidence}%)`);
@@ -565,6 +568,8 @@ function solveWithHybridApproach(
 
     // Usar ingredientes originales o con añadidos si ya se intentó
     let workingIngredients = mealIngredients;
+    
+    console.log(`\n🔄 Probando LP con tolerancia ${multiplier}x (cal±${relaxedTolerances.calories.toFixed(1)}%, pro±${relaxedTolerances.protein.toFixed(1)}%)...`);
     
     try {
       const lpSolution = solveWithLP(workingIngredients, targetMacros, relaxedTolerances);
@@ -813,7 +818,7 @@ function solveWithLP(
   ingredientData.forEach((data, idx) => {
     const varName = `ing_${idx}`;
     const maxGrams = data.original.amount * 100;
-    const minGrams = getSmartMinimumAmount(data.ingredient);
+    const minGrams = getSmartMinimumAmount(data.original); // ✅ CORREGIDO: data.ingredient → data.original
     
     model.constraints[varName + '_bound'] = { 
       min: minGrams, 
@@ -836,25 +841,39 @@ function solveWithLP(
   model.constraints.carbs = { min: carbMin, max: carbMax };
   model.constraints.fat = { min: fatMin, max: fatMax };
 
+  // 🔍 DEBUG: Logging detallado del modelo LP
+  console.log('🔧 LP Solver - Configuración:');
+  console.log(`   Variables: ${Object.keys(model.variables).length}`);
+  console.log(`   Constraints: ${Object.keys(model.constraints).length}`);
+  console.log(`   Target: ${targetMacros.calories}cal | ${targetMacros.protein}P | ${targetMacros.carbs}C | ${targetMacros.fat}G`);
+  console.log(`   Tolerancias: cal±${tolerances.calories}% | pro±${tolerances.protein}% | carb±${tolerances.carbs}% | fat±${tolerances.fat}%`);
+
   // Resolver con javascript-lp-solver
   let result;
   try {
     result = solver.Solve(model);
+    console.log('✅ LP Solver ejecutado (verificando factibilidad...)');
   } catch (e) {
-    console.warn('❌ LP Solver falló:', e);
+    console.warn('❌ LP Solver lanzó excepción:', (e as Error).message);
     throw new Error('LP solver exception');
   }
 
   if (!result || result.feasible === false) {
-    console.warn('❌ LP Solver: solución no factible');
+    console.warn('❌ LP Solver: solución NO FACTIBLE');
+    console.warn('   Posibles causas:');
+    console.warn('   1. Constraints contradictorias (target imposible con ingredientes)');
+    console.warn('   2. Tolerancias muy estrechas');
+    console.warn('   3. Límites individuales incompatibles con macros totales');
     throw new Error('LP infeasible');
   }
+
+  console.log('✅ LP Solver encontró solución factible!');
 
   // Extraer solución
   const scaledIngredients = ingredientData.map((data, idx) => {
     const varName = `ing_${idx}`;
     const newAmount = result[varName] || data.original.amount;
-    const minAmount = getSmartMinimumAmount(data.ingredient);
+    const minAmount = getSmartMinimumAmount(data.original); // ✅ CORREGIDO: data.ingredient → data.original
 
     return {
       ...data.original,
@@ -868,13 +887,16 @@ function solveWithLP(
 
   const achievedMacros = calculateMacrosFromIngredients(scaledIngredients);
   const accuracy = calculateAccuracy(achievedMacros, targetMacros);
+  const maxErrorAccuracy = calculateAccuracyMaxError(achievedMacros, targetMacros);
 
-  console.log(`✅ LP Solver exitoso: ${accuracy.toFixed(1)}% accuracy`);
+  console.log(`✅ LP Solver EXITOSO: ${accuracy.toFixed(1)}% avg accuracy | ${maxErrorAccuracy.toFixed(1)}% max error`);
+  console.log(`   Obtenido: ${achievedMacros.calories.toFixed(0)}cal | ${achievedMacros.protein.toFixed(1)}P | ${achievedMacros.carbs.toFixed(1)}C | ${achievedMacros.fat.toFixed(1)}G`);
 
   return {
     scaledIngredients,
     achievedMacros,
     accuracy,
+    maxErrorAccuracy,
     method: 'lp',
     iterations: 1,
     reason: `LP solver alcanzó ${accuracy.toFixed(1)}% accuracy`,
@@ -1234,6 +1256,11 @@ export function adaptMealWithAIEngine(
   // Step 2: Confidence Filter
   const confidence = assessConfidence(meal, targetMacros, context, mealIngredients);
   
+  console.log(`🧠 Confidence Assessment: ${confidence.confidence}% (feasible: ${confidence.feasible})`);
+  if (confidence.reasons.length > 0) {
+    console.log(`   Razones: ${confidence.reasons.join(', ')}`);
+  }
+  
   if (!confidence.feasible) {
     console.warn(`⚠️ Plato "${meal.name}" no viable (confidence: ${confidence.confidence}%)`);
     console.warn('Razones:', confidence.reasons);
@@ -1260,8 +1287,14 @@ export function adaptMealWithAIEngine(
 
   let currentIngredients = [...mealIngredients];
 
+  console.log(`🚀 Iniciando Orchestration Loop (max ${Math.min(maxIterations, 250)} iteraciones)...`);
+
   for (let i = 0; i < Math.min(maxIterations, 250); i++) { // Aumentado a 250 para más margen
     memory.attemptNumber = i + 1;
+
+    if (i === 0) {
+      console.log(`📍 Iteración 1: Probando solvers...`);
+    }
 
     // Decidir estrategia
     const currentMacros = calculateMacrosFromIngredients(currentIngredients);
