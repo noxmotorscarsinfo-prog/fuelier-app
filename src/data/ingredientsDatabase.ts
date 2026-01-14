@@ -118,6 +118,15 @@ export const INGREDIENTS_DATABASE: Ingredient[] = [
     fatPer100g: 11
   },
   {
+    id: 'clara-huevo',
+    name: 'Clara de Huevo',
+    category: 'proteina',
+    caloriesPer100g: 52,
+    proteinPer100g: 11,
+    carbsPer100g: 0.7,
+    fatPer100g: 0.2
+  },
+  {
     id: 'tofu',
     name: 'Tofu',
     category: 'proteina',
