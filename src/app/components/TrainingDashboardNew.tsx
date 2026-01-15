@@ -695,6 +695,7 @@ export function TrainingDashboardNew({
                     const fullDate = weekFullDates[dayIndex];
                     const isCompleted = isDateCompleted(fullDate);
                     const completedWorkout = getWorkoutForDate(fullDate);
+                    const isRestDay = completedWorkout?.dayPlanIndex === -1; // Día de descanso automático
                     const dateNumber = weekDates[dayIndex];
                     const dayName = weekDays[dayIndex];
                     
