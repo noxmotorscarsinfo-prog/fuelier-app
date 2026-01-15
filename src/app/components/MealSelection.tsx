@@ -145,55 +145,49 @@ export default function MealSelection({
 
   // ✅ Cargar platos personalizados desde Supabase
   useEffect(() => {
+    console.log('🚨🚨🚨 [MealSelection] useEffect EJECUTÁNDOSE - INICIO');
+    console.log('🚨 [MealSelection] user.email:', user.email);
+    console.log('🚨 [MealSelection] refreshTrigger:', refreshTrigger);
+    
     const loadCustomMeals = async () => {
-      console.log('🚀 [MealSelection] useEffect ejecutándose...');
-      console.log('🚀 [MealSelection] user.email:', user.email);
+      console.log('🚨 [MealSelection] loadCustomMeals function called');
       
       if (!user.email) {
-        console.log('❌ [MealSelection] NO EMAIL - saliendo');
+        console.log('🚨 [MealSelection] NO EMAIL - return early');
         setIsLoadingCustomMeals(false);
         return;
       }
       
       setIsLoadingCustomMeals(true);
-      console.log('📥 [MealSelection] 🔥 CARGANDO CUSTOM MEALS DESDE SUPABASE 🔥');
-      console.log('📥 [MealSelection] refreshTrigger:', refreshTrigger);
-      
-      // 🐛 DEBUG: Log del email del usuario
-      console.log('🐛 [MealSelection] 🎯 User email:', user.email);
+      console.log('🚨🚨🚨 LOADING CUSTOM MEALS - ABOUT TO CALL API');
+      console.log('🚨 Email:', user.email);
       
       const meals = await api.getCustomMeals(user.email);
-      console.log(`✅ Cargados ${meals.length} custom meals desde Supabase`);
+      console.log('🚨🚨🚨 API RETURNED:', meals.length, 'meals');
       
-      // 🐛 DEBUG: Log detallado de los meals cargados
       if (meals.length > 0) {
-        console.log('🐛 [MealSelection] Custom meals cargados:');
+        console.log('🚨 MEALS FOUND:');
         meals.forEach((meal, i) => {
-          console.log(`   ${i + 1}. "${meal.name}" - Tipo: ${JSON.stringify(meal.type)}`);
-          // Buscar específicamente café
-          if (meal.name.toLowerCase().includes('café') || meal.name.toLowerCase().includes('cafe')) {
-            console.log(`   🎯 ¡CAFÉ ENCONTRADO! "${meal.name}"`);
-            console.log(`      - Tipo: ${JSON.stringify(meal.type)}`);
-            console.log(`      - Es array: ${Array.isArray(meal.type)}`);
-            console.log(`      - ID: ${meal.id}`);
-          }
+          console.log(`🚨 ${i + 1}. "${meal.name}"`);
         });
       } else {
-        console.log('🐛 [MealSelection] ⚠️ NO SE CARGARON CUSTOM MEALS');
+        console.log('🚨🚨🚨 NO MEALS RETURNED FROM API');
       }
       
       setCustomMeals(meals);
       setIsLoadingCustomMeals(false);
+      console.log('🚨 [MealSelection] Custom meals state updated');
     };
+    
     loadCustomMeals();
-  }, [user.email, refreshTrigger ?? 0]); // Usar 0 como default si refreshTrigger es undefined
+    console.log('🚨🚨🚨 [MealSelection] useEffect - FIN');
+  }, [user.email, refreshTrigger ?? 0]);
 
-  // Función para obtener todas las comidas disponibles
+  // Función para obtener todas las comidas disponibles  
   const getMealsData = (): Meal[] => {
-    // 🐛 DEBUG: Log para identificar problema del café con leche
+    console.log('🚨🚨🚨 [MealSelection] RENDER - customMeals.length:', customMeals.length);
     console.log('🐛 [MealSelection] getMealsData called');
     console.log('🐛 [MealSelection] mealType actual:', mealType);
-    console.log('🐛 [MealSelection] customMeals disponibles:', customMeals.length);
     
     if (customMeals.length > 0) {
       console.log('🐛 [MealSelection] Lista de custom meals:');
