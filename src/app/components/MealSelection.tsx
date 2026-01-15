@@ -666,17 +666,45 @@ export default function MealSelection({
     return filteredRecommendedMeals.filter(scored => scored.meal.isFavorite);
   }, [filteredRecommendedMeals]);
 
-  // Comidas custom del usuario - DIRECTAMENTE desde customMealsOfType (sin filtro de ajuste)
+  // Comidas custom del usuario - Combinar escalables (escalados) + fijos (originales)
   const userCustomMeals = useMemo(() => {
-    // Para la sección "Mis Platos", mostrar TODOS los platos personalizados del tipo
-    // sin importar su ajuste de macros
-    return customMealsOfType.map(meal => ({
-      meal: meal,
-      scaledMeal: meal, // Sin escalar en la vista "Mis Platos"
-      score: 75, // Score fijo
-      reasons: ['🔒 Tu plato personalizado']
-    }));
-  }, [customMealsOfType]);
+    const results: MealScore[] = [];
+    
+    customMealsOfType.forEach(meal => {
+      const isFixedMeal = meal.scalingType === 'fixed' || meal.allowScaling === false;
+      
+      if (isFixedMeal) {
+        // 🔒 PLATOS FIJOS: Usar cantidades originales
+        results.push({
+          meal: meal,
+          scaledMeal: meal, // Sin escalar - cantidades originales
+          score: 75,
+          reasons: ['🔒 Plato fijo - cantidades originales']
+        });
+      } else {
+        // 📊 PLATOS ESCALABLES: Buscar versión escalada desde recomendaciones
+        const scaledVersion = filteredRecommendedMeals.find(scored => 
+          scored.meal.id === meal.id && scored.meal.isCustom
+        );
+        
+        if (scaledVersion) {
+          // Usar la versión escalada por la IA
+          results.push(scaledVersion);
+        } else {
+          // Fallback: usar original si no se encontró escalado
+          results.push({
+            meal: meal,
+            scaledMeal: meal,
+            score: 65,
+            reasons: ['📊 Plato escalable - versión original (no optimizado)']
+          });
+        }
+      }
+    });
+    
+    console.log(`👨‍🍳 Mis Platos: ${results.length} platos personalizados preparados para ${mealType}`);
+    return results;
+  }, [customMealsOfType, filteredRecommendedMeals, mealType]);
 
   // Resto de comidas (después del top 3)
   const restOfMeals = useMemo(() => {
