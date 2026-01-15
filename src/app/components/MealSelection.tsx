@@ -666,10 +666,17 @@ export default function MealSelection({
     return filteredRecommendedMeals.filter(scored => scored.meal.isFavorite);
   }, [filteredRecommendedMeals]);
 
-  // Comidas custom del usuario
+  // Comidas custom del usuario - DIRECTAMENTE desde customMealsOfType (sin filtro de ajuste)
   const userCustomMeals = useMemo(() => {
-    return filteredRecommendedMeals.filter(scored => scored.meal.isCustom);
-  }, [filteredRecommendedMeals]);
+    // Para la sección "Mis Platos", mostrar TODOS los platos personalizados del tipo
+    // sin importar su ajuste de macros
+    return customMealsOfType.map(meal => ({
+      meal: meal,
+      scaledMeal: meal, // Sin escalar en la vista "Mis Platos"
+      score: 75, // Score fijo
+      reasons: ['🔒 Tu plato personalizado']
+    }));
+  }, [customMealsOfType]);
 
   // Resto de comidas (después del top 3)
   const restOfMeals = useMemo(() => {
