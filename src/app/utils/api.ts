@@ -115,6 +115,30 @@ export const signin = async (email: string, password: string): Promise<{ success
       };
     }
     
+    // 🔍 DEBUG: Analizar el token recibido
+    console.log(`🔑 [API] signin successful - analyzing token...`);
+    console.log(`🔑 [API] Token type:`, typeof data.access_token);
+    console.log(`🔑 [API] Token length:`, data.access_token ? data.access_token.length : 'NULL');
+    console.log(`🔑 [API] Token preview:`, data.access_token ? data.access_token.substring(0, 50) + '...' : 'NULL');
+    
+    // Try to decode JWT to check expiration
+    if (data.access_token) {
+      try {
+        const tokenParts = data.access_token.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]));
+          const now = Math.floor(Date.now() / 1000);
+          console.log(`🔑 [API] JWT issued at:`, new Date(payload.iat * 1000));
+          console.log(`🔑 [API] JWT expires at:`, new Date(payload.exp * 1000));
+          console.log(`🔑 [API] Current time:`, new Date());
+          console.log(`🔑 [API] JWT valid for:`, payload.exp - now, 'seconds');
+          console.log(`🔑 [API] JWT is:`, payload.exp > now ? '✅ VALID' : '❌ EXPIRED');
+        }
+      } catch (jwtError) {
+        console.log(`🔑 [API] ⚠️ Could not decode JWT:`, jwtError);
+      }
+    }
+    
     // Set auth token
     setAuthToken(data.access_token);
     
