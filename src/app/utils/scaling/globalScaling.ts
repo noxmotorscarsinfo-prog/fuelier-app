@@ -77,7 +77,7 @@ export function executeGlobalScaling(
   const scaleFactor = calculateScaleFactor(
     target,
     current,
-    strategy.priorityMacro
+    strategy.priorityMacro || 'calories'
   );
   
   // STEP 2: Scale ALL ingredients by same factor
@@ -119,12 +119,22 @@ export function executeGlobalScaling(
   return {
     scaledIngredients,
     achievedMacros,
-    targetMacros: target,
     accuracy,
-    preservation: preservationScore,
-    preservationScore, // Backward compatibility
     method: 'global_scaling',
-    auditTrail,
+    preservationScore,
+    reason: `Global scaling by factor ${scaleFactor.toFixed(3)}`,
+    deviations: {
+      calories: Math.abs((achievedMacros.calories - target.calories) / target.calories * 100),
+      protein: Math.abs((achievedMacros.protein - target.protein) / target.protein * 100),
+      carbs: Math.abs((achievedMacros.carbs - target.carbs) / target.carbs * 100),
+      fat: Math.abs((achievedMacros.fat - target.fat) / target.fat * 100),
+      maxError: Math.max(
+        Math.abs((achievedMacros.calories - target.calories) / target.calories * 100),
+        Math.abs((achievedMacros.protein - target.protein) / target.protein * 100),
+        Math.abs((achievedMacros.carbs - target.carbs) / target.carbs * 100),
+        Math.abs((achievedMacros.fat - target.fat) / target.fat * 100)
+      ),
+    },
   };
 }
 
@@ -192,10 +202,7 @@ function scaleAllIngredients(
   ];
   
   return allIngredients.map(ing => {
-    const originalAmount = ing.amount;
-    const scaledAmount = originalAmount * scaleFactor;
-    const change = scaledAmount - originalAmount;
-    const changePercentage = ((scaledAmount / originalAmount) - 1) * 100;
+    const scaledAmount = ing.amount * scaleFactor;
     
     // Scale macros proportionally
     const scaledCalories = ing.calories * scaleFactor;
@@ -206,16 +213,11 @@ function scaleAllIngredients(
     return {
       ingredientId: ing.ingredientId,
       ingredientName: ing.ingredientName || ing.name,
-      originalAmount,
-      scaledAmount,
-      change,
-      changePercentage,
+      amount: scaledAmount,
       calories: scaledCalories,
       protein: scaledProtein,
       carbs: scaledCarbs,
       fat: scaledFat,
-      wasAdjusted: Math.abs(change) > 0.1, // >0.1g change
-      adjustmentReason: `Global scaling (factor: ${scaleFactor.toFixed(3)})`,
     };
   });
 }
