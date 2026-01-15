@@ -90,8 +90,8 @@ console.log(`   Approach: ${decision1.approach}`);
 console.log(`   Priority macro: ${decision1.priorityMacro}`);
 console.log(`   Adjustable ingredients: [${decision1.adjustableIngredients.join(', ')}]`);
 console.log(`   Preservation level: ${(decision1.preservationLevel * 100).toFixed(0)}%`);
-console.log(`   Compatibility: ${(decision1.metadata.compatibilityScore * 100).toFixed(0)}%`);
-console.log(`   Reasoning: ${decision1.metadata.reasoning}`);
+console.log(`   Compatibility: ${(decision1.REMOVED_METADATA_compatibilityScore * 100).toFixed(0)}%`);
+console.log(`   Reasoning: ${decision1.REMOVED_METADATA_reasoning}`);
 console.log('');
 
 // Validations
@@ -107,11 +107,11 @@ if (decision1.approach === 'global_scaling') {
 }
 
 validations1++;
-if (decision1.metadata.compatibilityScore > 0.85) {
-  console.log(`   ✅ High compatibility (${(decision1.metadata.compatibilityScore * 100).toFixed(0)}%)`);
+if (decision1.REMOVED_METADATA_compatibilityScore > 0.85) {
+  console.log(`   ✅ High compatibility (${(decision1.REMOVED_METADATA_compatibilityScore * 100).toFixed(0)}%)`);
   validationsPassed1++;
 } else {
-  console.log(`   ⚠️  Compatibility not high (${(decision1.metadata.compatibilityScore * 100).toFixed(0)}%)`);
+  console.log(`   ⚠️  Compatibility not high (${(decision1.REMOVED_METADATA_compatibilityScore * 100).toFixed(0)}%)`);
 }
 
 validations1++;
@@ -244,8 +244,8 @@ console.log(`   Approach: ${decision2.approach}`);
 console.log(`   Priority macro: ${decision2.priorityMacro}`);
 console.log(`   Adjustable ingredients: [${decision2.adjustableIngredients.join(', ')}]`);
 console.log(`   Preservation level: ${(decision2.preservationLevel * 100).toFixed(0)}%`);
-console.log(`   Compatibility: ${(decision2.metadata.compatibilityScore * 100).toFixed(0)}%`);
-console.log(`   Reasoning: ${decision2.metadata.reasoning}`);
+console.log(`   Compatibility: ${(decision2.REMOVED_METADATA_compatibilityScore * 100).toFixed(0)}%`);
+console.log(`   Reasoning: ${decision2.REMOVED_METADATA_reasoning}`);
 console.log('');
 
 // Validations
@@ -261,11 +261,11 @@ if (decision2.approach === 'hierarchical_adjustment') {
 }
 
 validations2++;
-if (decision2.metadata.compatibilityScore >= 0.50 && decision2.metadata.compatibilityScore <= 0.85) {
-  console.log(`   ✅ Medium compatibility (${(decision2.metadata.compatibilityScore * 100).toFixed(0)}%)`);
+if (decision2.REMOVED_METADATA_compatibilityScore >= 0.50 && decision2.REMOVED_METADATA_compatibilityScore <= 0.85) {
+  console.log(`   ✅ Medium compatibility (${(decision2.REMOVED_METADATA_compatibilityScore * 100).toFixed(0)}%)`);
   validationsPassed2++;
 } else {
-  console.log(`   ⚠️  Compatibility: ${(decision2.metadata.compatibilityScore * 100).toFixed(0)}%`);
+  console.log(`   ⚠️  Compatibility: ${(decision2.REMOVED_METADATA_compatibilityScore * 100).toFixed(0)}%`);
 }
 
 validations2++;
@@ -375,8 +375,8 @@ console.log(`   Approach: ${decision3.approach}`);
 console.log(`   Priority macro: ${decision3.priorityMacro}`);
 console.log(`   Adjustable ingredients: [${decision3.adjustableIngredients.join(', ')}]`);
 console.log(`   Preservation level: ${(decision3.preservationLevel * 100).toFixed(0)}%`);
-console.log(`   Compatibility: ${(decision3.metadata.compatibilityScore * 100).toFixed(0)}%`);
-console.log(`   Reasoning: ${decision3.metadata.reasoning}`);
+console.log(`   Compatibility: ${(decision3.REMOVED_METADATA_compatibilityScore * 100).toFixed(0)}%`);
+console.log(`   Reasoning: ${decision3.REMOVED_METADATA_reasoning}`);
 console.log('');
 
 // Validations
@@ -392,7 +392,7 @@ if (decision3.approach === 'lp_optimization') {
 }
 
 validations3++;
-if (decision3.metadata.reasoning.includes('Last meal')) {
+if (decision3.REMOVED_METADATA_reasoning.includes('Last meal')) {
   console.log(`   ✅ Reasoning mentions last meal`);
   validationsPassed3++;
 } else {

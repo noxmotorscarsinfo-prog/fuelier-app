@@ -114,7 +114,7 @@ console.log(`   Preservation: ${(result1.preservationScore * 100).toFixed(0)}%`)
 console.log('');
 console.log('   Scaled ingredients:');
 result1.scaledIngredients.forEach(ing => {
-  console.log(`      • ${ing.ingredientName}: ${ing.originalAmount}g → ${ing.scaledAmount.toFixed(1)}g (${ing.changePercentage >= 0 ? '+' : ''}${ing.changePercentage.toFixed(1)}%)`);
+  console.log(`      • ${ing.ingredientName}: ${ing.amount.toFixed(1)}g (${ing.calories.toFixed(0)} kcal)`);
 });
 console.log('');
 
@@ -124,7 +124,7 @@ let validationsPassed1 = 0;
 
 validations1++;
 const expectedFactor1 = target1.calories / current1.calories; // 500/400 = 1.25
-const actualFactor1 = result1.scaledIngredients[0].scaledAmount / classification1.structural[0].amount;
+const actualFactor1 = result1.scaledIngredients[0].amount / classification1.structural[0].amount;
 if (Math.abs(actualFactor1 - expectedFactor1) < 0.01) {
   console.log(`   ✅ Correct scale factor (1.25x)`);
   validationsPassed1++;
@@ -142,9 +142,9 @@ if (result1.scaledIngredients.length === 3) {
 
 validations1++;
 // Check that ALL ingredients scaled by SAME factor (ratios preserved)
-const polloFactor = result1.scaledIngredients.find(i => i.ingredientId === 'pollo')!.scaledAmount / 100;
-const arrozFactor = result1.scaledIngredients.find(i => i.ingredientId === 'arroz')!.scaledAmount / 60;
-const aceiteFactor = result1.scaledIngredients.find(i => i.ingredientId === 'aceite')!.scaledAmount / 5;
+const polloFactor = result1.scaledIngredients.find(i => i.ingredientId === 'pollo')!.amount / 100;
+const arrozFactor = result1.scaledIngredients.find(i => i.ingredientId === 'arroz')!.amount / 60;
+const aceiteFactor = result1.scaledIngredients.find(i => i.ingredientId === 'aceite')!.amount / 5;
 if (Math.abs(polloFactor - arrozFactor) < 0.001 && Math.abs(arrozFactor - aceiteFactor) < 0.001) {
   console.log(`   ✅ All ingredients scaled by SAME factor (ratios preserved)`);
   validationsPassed1++;
@@ -227,7 +227,7 @@ console.log(`   Preservation: ${(result2.preservationScore * 100).toFixed(0)}%`)
 console.log('');
 console.log('   Scaled ingredients:');
 result2.scaledIngredients.forEach(ing => {
-  console.log(`      • ${ing.ingredientName}: ${ing.originalAmount}g → ${ing.scaledAmount.toFixed(1)}g (${ing.changePercentage >= 0 ? '+' : ''}${ing.changePercentage.toFixed(1)}%)`);
+  console.log(`      • ${ing.ingredientName}: ${ing.amount.toFixed(1)}g (${ing.calories.toFixed(0)} kcal)`);
 });
 console.log('');
 
@@ -237,7 +237,7 @@ let validationsPassed2 = 0;
 
 validations2++;
 const expectedFactor2 = target2.calories / current2.calories; // 300/400 = 0.75
-const actualFactor2 = result2.scaledIngredients[0].scaledAmount / classification2.structural[0].amount;
+const actualFactor2 = result2.scaledIngredients[0].amount / classification2.structural[0].amount;
 if (Math.abs(actualFactor2 - expectedFactor2) < 0.01) {
   console.log(`   ✅ Correct scale factor (0.75x)`);
   validationsPassed2++;
@@ -247,9 +247,9 @@ if (Math.abs(actualFactor2 - expectedFactor2) < 0.01) {
 
 validations2++;
 // Check that ALL ingredients scaled by SAME factor
-const polloFactor2 = result2.scaledIngredients.find(i => i.ingredientId === 'pollo')!.scaledAmount / 100;
-const arrozFactor2 = result2.scaledIngredients.find(i => i.ingredientId === 'arroz')!.scaledAmount / 60;
-const aceiteFactor2 = result2.scaledIngredients.find(i => i.ingredientId === 'aceite')!.scaledAmount / 5;
+const polloFactor2 = result2.scaledIngredients.find(i => i.ingredientId === 'pollo')!.amount / 100;
+const arrozFactor2 = result2.scaledIngredients.find(i => i.ingredientId === 'arroz')!.amount / 60;
+const aceiteFactor2 = result2.scaledIngredients.find(i => i.ingredientId === 'aceite')!.amount / 5;
 if (Math.abs(polloFactor2 - arrozFactor2) < 0.001 && Math.abs(arrozFactor2 - aceiteFactor2) < 0.001) {
   console.log(`   ✅ All ingredients scaled by SAME factor (ratios preserved)`);
   validationsPassed2++;

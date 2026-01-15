@@ -86,12 +86,12 @@ console.log(`   Method used: ${result1.method}`);
 console.log(`   Achieved: ${Math.round(result1.achievedMacros.calories)} kcal, ${result1.achievedMacros.protein.toFixed(1)}g P, ${result1.achievedMacros.carbs.toFixed(1)}g C, ${result1.achievedMacros.fat.toFixed(1)}g F`);
 console.log(`   Target:   ${target1.calories} kcal, ${target1.protein}g P, ${target1.carbs}g C, ${target1.fat}g F`);
 console.log(`   Accuracy: ${(result1.accuracy * 100).toFixed(1)}%`);
-console.log(`   Preservation: ${result1.preservation.toFixed(0)}%\n`);
+console.log(`   Preservation: ${result1.preservationScore.toFixed(0)}%\n`);
 
 if (result1.metadata) {
-  console.log(`   Strategy: ${result1.metadata.strategy.approach}`);
-  console.log(`   Compatibility: ${result1.metadata.strategy.compatibility}%`);
-  console.log(`   Reasoning: ${result1.metadata.strategy.reasoning}\n`);
+  console.log(`   Strategy: ${result1.REMOVED_METADATA_strategy.approach}`);
+  console.log(`   Compatibility: ${result1.REMOVED_METADATA_strategy.compatibility}%`);
+  console.log(`   Reasoning: ${result1.REMOVED_METADATA_strategy.reasoning}\n`);
 }
 
 // Validations
@@ -111,11 +111,11 @@ if (result1.accuracy > 0.80) {
   console.log(`   ❌ Low accuracy (${(result1.accuracy * 100).toFixed(1)}%)`);
 }
 
-if (result1.preservation >= 95) {
-  console.log(`   ✅ Excellent preservation (${result1.preservation.toFixed(0)}%)`);
+if (result1.preservationScore >= 95) {
+  console.log(`   ✅ Excellent preservation (${result1.preservationScore.toFixed(0)}%)`);
   validationsPassed1++;
 } else {
-  console.log(`   ⚠️  Preservation: ${result1.preservation.toFixed(0)}%`);
+  console.log(`   ⚠️  Preservation: ${result1.preservationScore.toFixed(0)}%`);
 }
 
 console.log(`\n   Result: ${validationsPassed1}/3 validations passed\n`);
@@ -155,11 +155,11 @@ console.log(`   Method used: ${result2.method}`);
 console.log(`   Achieved: ${Math.round(result2.achievedMacros.calories)} kcal, ${result2.achievedMacros.protein.toFixed(1)}g P, ${result2.achievedMacros.carbs.toFixed(1)}g C, ${result2.achievedMacros.fat.toFixed(1)}g F`);
 console.log(`   Target:   ${target2.calories} kcal, ${target2.protein}g P, ${target2.carbs}g C, ${target2.fat}g F`);
 console.log(`   Accuracy: ${(result2.accuracy * 100).toFixed(1)}%`);
-console.log(`   Preservation: ${result2.preservation.toFixed(0)}%\n`);
+console.log(`   Preservation: ${result2.preservationScore.toFixed(0)}%\n`);
 
 if (result2.metadata) {
-  console.log(`   Strategy: ${result2.metadata.strategy.approach}`);
-  console.log(`   Compatibility: ${result2.metadata.strategy.compatibility}%`);
+  console.log(`   Strategy: ${result2.REMOVED_METADATA_strategy.approach}`);
+  console.log(`   Compatibility: ${result2.REMOVED_METADATA_strategy.compatibility}%`);
 }
 
 // Validations
@@ -180,11 +180,11 @@ if (result2.accuracy > 0.70) {
   console.log(`   ❌ Low accuracy (${(result2.accuracy * 100).toFixed(1)}%)`);
 }
 
-if (result2.preservation >= 90) {
-  console.log(`   ✅ High preservation (${result2.preservation.toFixed(0)}%)`);
+if (result2.preservationScore >= 90) {
+  console.log(`   ✅ High preservation (${result2.preservationScore.toFixed(0)}%)`);
   validationsPassed2++;
 } else {
-  console.log(`   ⚠️  Preservation: ${result2.preservation.toFixed(0)}%`);
+  console.log(`   ⚠️  Preservation: ${result2.preservationScore.toFixed(0)}%`);
 }
 
 console.log(`\n   Result: ${validationsPassed2}/3 validations passed\n`);
@@ -224,11 +224,11 @@ console.log(`   Method used: ${result3.method}`);
 console.log(`   Achieved: ${Math.round(result3.achievedMacros.calories)} kcal, ${result3.achievedMacros.protein.toFixed(1)}g P, ${result3.achievedMacros.carbs.toFixed(1)}g C, ${result3.achievedMacros.fat.toFixed(1)}g F`);
 console.log(`   Target:   ${target3.calories} kcal, ${target3.protein}g P, ${target3.carbs}g C, ${target3.fat}g F`);
 console.log(`   Accuracy: ${(result3.accuracy * 100).toFixed(1)}%`);
-console.log(`   Preservation: ${result3.preservation.toFixed(0)}%\n`);
+console.log(`   Preservation: ${result3.preservationScore.toFixed(0)}%\n`);
 
 if (result3.metadata) {
-  console.log(`   Strategy: ${result3.metadata.strategy.approach}`);
-  console.log(`   Is last meal: ${result3.metadata.isLastMeal}`);
+  console.log(`   Strategy: ${result3.REMOVED_METADATA_strategy.approach}`);
+  console.log(`   Is last meal: ${result3.REMOVED_METADATA_isLastMeal}`);
 }
 
 // Validations

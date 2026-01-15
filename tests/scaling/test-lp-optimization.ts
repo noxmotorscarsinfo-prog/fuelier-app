@@ -126,7 +126,7 @@ console.log(`✅ LP optimization executed:`);
 console.log(`   Achieved: ${Math.round(result1.achievedMacros.calories)} kcal, ${result1.achievedMacros.protein.toFixed(1)}g P, ${result1.achievedMacros.carbs.toFixed(1)}g C, ${result1.achievedMacros.fat.toFixed(1)}g F`);
 console.log(`   Target:   ${target1.calories} kcal, ${target1.protein}g P, ${target1.carbs}g C, ${target1.fat}g F`);
 console.log(`   Accuracy: ${(result1.accuracy * 100).toFixed(1)}%`);
-console.log(`   Preservation: ${result1.preservation.toFixed(0)}%\n`);
+console.log(`   Preservation: ${result1.preservationScore.toFixed(0)}%\n`);
 
 console.log(`   Adjusted ingredients:`);
 for (const ing of result1.scaledIngredients) {
@@ -170,14 +170,14 @@ if (maxStructuralChange < 0.10) {
 }
 
 // 3. Reasonable preservation (~70%)
-if (result1.preservation > 60 && result1.preservation < 85) {
-  console.log(`   ✅ Reasonable preservation (${result1.preservation.toFixed(0)}%)`);
+if (result1.preservationScore > 60 && result1.preservationScore < 85) {
+  console.log(`   ✅ Reasonable preservation (${result1.preservationScore.toFixed(0)}%)`);
   validationsPassed1++;
-} else if (result1.preservation >= 85) {
-  console.log(`   ⚠️  High preservation (${result1.preservation.toFixed(0)}%), but accuracy prioritized`);
+} else if (result1.preservationScore >= 85) {
+  console.log(`   ⚠️  High preservation (${result1.preservationScore.toFixed(0)}%), but accuracy prioritized`);
   validationsPassed1++;
 } else {
-  console.log(`   ⚠️  Low preservation (${result1.preservation.toFixed(0)}%)`);
+  console.log(`   ⚠️  Low preservation (${result1.preservationScore.toFixed(0)}%)`);
 }
 
 // 4. Better than hierarchical (comparison)
@@ -223,7 +223,7 @@ console.log(`✅ LP optimization executed:`);
 console.log(`   Achieved: ${Math.round(result2.achievedMacros.calories)} kcal, ${result2.achievedMacros.protein.toFixed(1)}g P, ${result2.achievedMacros.carbs.toFixed(1)}g C, ${result2.achievedMacros.fat.toFixed(1)}g F`);
 console.log(`   Target:   ${target2.calories} kcal, ${target2.protein}g P, ${target2.carbs}g C, ${target2.fat}g F`);
 console.log(`   Accuracy: ${(result2.accuracy * 100).toFixed(1)}%`);
-console.log(`   Preservation: ${result2.preservation.toFixed(0)}%\n`);
+console.log(`   Preservation: ${result2.preservationScore.toFixed(0)}%\n`);
 
 console.log(`   Adjusted ingredients:`);
 for (const ing of result2.scaledIngredients) {
@@ -264,11 +264,11 @@ if (adjustedCount >= mockMeal.mealIngredients.length - 1) {
 }
 
 // 3. Preservation acceptable (50-80%)
-if (result2.preservation > 50 && result2.preservation < 85) {
-  console.log(`   ✅ Acceptable preservation (${result2.preservation.toFixed(0)}%)`);
+if (result2.preservationScore > 50 && result2.preservationScore < 85) {
+  console.log(`   ✅ Acceptable preservation (${result2.preservationScore.toFixed(0)}%)`);
   validationsPassed2++;
 } else {
-  console.log(`   ⚠️  Preservation: ${result2.preservation.toFixed(0)}%`);
+  console.log(`   ⚠️  Preservation: ${result2.preservationScore.toFixed(0)}%`);
 }
 
 console.log(`\n   Result: ${validationsPassed2}/3 validations passed\n`);

@@ -118,11 +118,11 @@ function validateResult(
   
   // Check preservation exists
   total++;
-  if (result.preservation !== undefined && !isNaN(result.preservation)) {
-    console.log(`   ✅ Valid preservation (${result.preservation.toFixed(0)}%)`);
+  if (result.preservationScore !== undefined && !isNaN(result.preservationScore)) {
+    console.log(`   ✅ Valid preservation (${result.preservationScore.toFixed(0)}%)`);
     validations++;
   } else {
-    console.log(`   ⚠️  Preservation: ${result.preservation}`);
+    console.log(`   ⚠️  Preservation: ${result.preservationScore}`);
   }
   
   return { passed: validations >= total - 1, validations, total };
@@ -170,7 +170,7 @@ console.log(`   Method: ${result1.method}`);
 console.log(`   Achieved: ${Math.round(result1.achievedMacros.calories)} kcal, ${result1.achievedMacros.protein.toFixed(1)}g P, ${result1.achievedMacros.carbs.toFixed(1)}g C, ${result1.achievedMacros.fat.toFixed(1)}g F`);
 console.log(`   Target:   ${breakfastTarget.calories} kcal, ${breakfastTarget.protein}g P, ${breakfastTarget.carbs}g C, ${breakfastTarget.fat}g F`);
 console.log(`   Accuracy: ${(result1.accuracy * 100).toFixed(1)}%`);
-console.log(`   Preservation: ${result1.preservation.toFixed(0)}%\n`);
+console.log(`   Preservation: ${result1.preservationScore.toFixed(0)}%\n`);
 
 const val1 = validateResult(result1, breakfastTarget, 'global_scaling', 0.80, 'breakfast');
 totalScenarios++;

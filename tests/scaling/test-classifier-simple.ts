@@ -124,10 +124,10 @@ function runTest() {
       const classification = classifyIngredients(meal, mockIngredients);
       
       console.log(`\n✅ Clasificación exitosa:`);
-      console.log(`   Total ingredientes: ${classification.metadata.totalIngredients}`);
-      console.log(`   Complejidad: ${classification.metadata.complexity}`);
-      console.log(`   Core ratio: ${classification.metadata.coreRatio.toFixed(1)}%`);
-      console.log(`   Macro dominante: ${classification.metadata.dominantMacro}`);
+      console.log(`   Total ingredientes: ${classification.REMOVED_METADATA_totalIngredients}`);
+      console.log(`   Complejidad: ${classification.REMOVED_METADATA_complexity}`);
+      console.log(`   Core ratio: ${classification.REMOVED_METADATA_coreRatio.toFixed(1)}%`);
+      console.log(`   Macro dominante: ${classification.REMOVED_METADATA_dominantMacro}`);
       
       console.log(`\n   STRUCTURAL (${classification.structural.length}):`);
       classification.structural.forEach(ing => {
@@ -176,7 +176,7 @@ function runTest() {
       const isAutoPromoted = classification.structural.some(i => 
         i.reason.includes('Promoted to structural')
       );
-      if (classification.metadata.coreRatio >= 30 || (isAutoPromoted && classification.metadata.totalIngredients <= 3)) {
+      if (classification.REMOVED_METADATA_coreRatio >= 30 || (isAutoPromoted && classification.REMOVED_METADATA_totalIngredients <= 3)) {
         console.log(`      ✅ Core ratio >30% (o auto-promovido)`);
         validationsPassed++;
       } else {
@@ -188,7 +188,7 @@ function runTest() {
       const sum = classification.structural.length + 
                   classification.flexiblePrimary.length + 
                   classification.flexibleSecondary.length;
-      if (sum === classification.metadata.totalIngredients) {
+      if (sum === classification.REMOVED_METADATA_totalIngredients) {
         console.log(`      ✅ Todos los ingredientes clasificados`);
         validationsPassed++;
       } else {
