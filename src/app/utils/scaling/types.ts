@@ -289,6 +289,7 @@ export interface DailyContext {
   userGoals: MacroTargets;
   flexibilityLevel: 'strict' | 'moderate' | 'flexible';
   mealsLeft: number;
+  isLastMeal?: boolean; // If true, prioritize accuracy over preservation
 }
 
 /**

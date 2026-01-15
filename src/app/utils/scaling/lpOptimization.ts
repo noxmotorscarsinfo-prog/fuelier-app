@@ -118,6 +118,7 @@ export function executeLPOptimization(
     targetMacros: target,
     accuracy,
     preservation,
+    preservationScore: preservation, // Backward compatibility
     method: 'lp_optimized',
     auditTrail: {
       approach: strategy.approach,

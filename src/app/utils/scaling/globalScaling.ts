@@ -119,8 +119,11 @@ export function executeGlobalScaling(
   return {
     scaledIngredients,
     achievedMacros,
+    targetMacros: target,
     accuracy,
-    preservationScore,
+    preservation: preservationScore,
+    preservationScore, // Backward compatibility
+    method: 'global_scaling',
     auditTrail,
   };
 }
