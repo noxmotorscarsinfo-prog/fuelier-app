@@ -433,19 +433,37 @@ export default function MealSelection({
     });
   }, [customMeals, mealType]);
 
+  // ✅ Separar platos personalizados por tipo de escalado
+  const { scalableCustomMeals, fixedCustomMeals } = useMemo(() => {
+    const scalable: Meal[] = [];
+    const fixed: Meal[] = [];
+    
+    customMealsOfType.forEach(meal => {
+      const isFixedMeal = meal.scalingType === 'fixed' || meal.allowScaling === false;
+      if (isFixedMeal) {
+        fixed.push(meal);
+      } else {
+        scalable.push(meal);
+      }
+    });
+    
+    console.log(`🔄 Platos personalizados: ${scalable.length} escalables + ${fixed.length} fijos para ${mealType}`);
+    return { scalableCustomMeals: scalable, fixedCustomMeals: fixed };
+  }, [customMealsOfType, mealType]);
+
   // 🎯 SISTEMA AUTOMÁTICO: Usar escalado inteligente con target calculado automáticamente
   const recommendedMeals = useMemo(() => {
     console.log('🎯 Calculando recomendaciones con escalado inteligente y preferencias');
     console.log('📊 Target automático calculado:', intelligentTarget);
     
-    // 🔥 COMBINAMOS platos base + platos personalizados (FILTRADOS POR TIPO)
-    const allAvailableMeals = [...mealsOfType, ...customMealsOfType];
-    console.log(`🔥 TOTAL DE PLATOS DISPONIBLES: ${allAvailableMeals.length} (${mealsOfType.length} base + ${customMealsOfType.length} personalizados para ${mealType})`);
+    // 🔥 COMBINAMOS platos base + platos personalizados ESCALABLES (los fijos van por separado)
+    const mealsToScale = [...mealsOfType, ...scalableCustomMeals];
+    console.log(`🔥 PLATOS PARA ESCALAR: ${mealsToScale.length} (${mealsOfType.length} base + ${scalableCustomMeals.length} personalizados escalables)`);
     
-    // Paso 1: Rankear comidas por mejor ajuste de macros
+    // Paso 1: Rankear comidas ESCALABLES por mejor ajuste de macros
     // ✅ Usar intelligentTarget (calculado automáticamente sin input manual)
     const rankedMeals = rankMealsByFit(
-      allAvailableMeals, // 🔥 AHORA INCLUYE PLATOS PERSONALIZADOS
+      mealsToScale, // 🔥 SOLO PLATOS ESCALABLES
       user, 
       currentLog, 
       mealType,
@@ -467,8 +485,8 @@ export default function MealSelection({
       mealType
     );
     
-    // Paso 3: Combinar scores y MANTENER scaledMeal
-    return scoredWithPreferences.map(scored => {
+    // Paso 3: Combinar scores escalados + AGREGAR platos fijos personalizados
+    const scaledMealsWithScores = scoredWithPreferences.map(scored => {
       // ✅ CLAVE: scored.meal ES el scaledMeal (porque se lo pasamos escalado)
       // Encontrar el ranked original para obtener el meal base
       const originalRanked = rankedMeals.find(r => r.scaledMeal.id === scored.meal.id);
@@ -487,8 +505,21 @@ export default function MealSelection({
           `Ajuste de macros: ${macroFitScore.toFixed(1)}%`
         ]
       };
-    }).sort((a, b) => b.score - a.score); // Re-ordenar por score combinado
-  }, [mealsOfType, customMealsOfType, user, currentLog, mealType, intelligentTarget, consumedMacros]);
+    });
+    
+    // 🔒 AGREGAR platos fijos personalizados (sin escalar)
+    const fixedMealsWithScores = fixedCustomMeals.map(meal => ({
+      meal: meal,
+      scaledMeal: meal, // Los platos fijos no se escalan
+      score: 75, // Score fijo moderado (aparecen pero no dominan las recomendaciones)
+      reasons: ['🔒 Plato fijo - mantiene cantidades originales']
+    }));
+    
+    console.log(`✅ Combinando ${scaledMealsWithScores.length} platos escalados + ${fixedMealsWithScores.length} platos fijos`);
+    
+    // Combinar y ordenar por score
+    return [...scaledMealsWithScores, ...fixedMealsWithScores].sort((a, b) => b.score - a.score);
+  }, [mealsOfType, scalableCustomMeals, fixedCustomMeals, user, currentLog, mealType, intelligentTarget, consumedMacros]);
 
   // ⭐ CRÍTICO: Filtrar por preferencias alimenticias del usuario (alergias, intolerancias, disgustos)
   const mealsFilteredByPreferences = useMemo(() => {
