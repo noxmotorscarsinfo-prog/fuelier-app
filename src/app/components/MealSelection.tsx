@@ -146,16 +146,21 @@ export default function MealSelection({
   // ✅ Cargar platos personalizados desde Supabase
   useEffect(() => {
     const loadCustomMeals = async () => {
+      console.log('🚀 [MealSelection] useEffect ejecutándose...');
+      console.log('🚀 [MealSelection] user.email:', user.email);
+      
       if (!user.email) {
+        console.log('❌ [MealSelection] NO EMAIL - saliendo');
         setIsLoadingCustomMeals(false);
         return;
       }
       
       setIsLoadingCustomMeals(true);
-      console.log('📥 Cargando custom meals desde Supabase... (refreshTrigger:', refreshTrigger, ')');
+      console.log('📥 [MealSelection] 🔥 CARGANDO CUSTOM MEALS DESDE SUPABASE 🔥');
+      console.log('📥 [MealSelection] refreshTrigger:', refreshTrigger);
       
       // 🐛 DEBUG: Log del email del usuario
-      console.log('🐛 [MealSelection] User email:', user.email);
+      console.log('🐛 [MealSelection] 🎯 User email:', user.email);
       
       const meals = await api.getCustomMeals(user.email);
       console.log(`✅ Cargados ${meals.length} custom meals desde Supabase`);

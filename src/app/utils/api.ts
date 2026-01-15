@@ -766,22 +766,39 @@ export const saveTrainingPlan = async (email: string, weekPlan: any[]): Promise<
 
 export const getCustomMeals = async (email: string): Promise<Meal[]> => {
   try {
-    console.log(`[API] Loading custom meals for ${email}`);
+    console.log(`🚀 [API] ============================================`);
+    console.log(`🚀 [API] CARGANDO CUSTOM MEALS PARA: ${email}`);
+    console.log(`🚀 [API] ============================================`);
     
     const response = await fetch(`${API_BASE_URL}/custom-meals/${encodeURIComponent(email)}`, {
       headers: getHeaders()
     });
     
+    console.log(`🚀 [API] Response status: ${response.status}`);
+    
     if (!response.ok) {
-      console.error('[API] Failed to load custom meals');
+      console.error(`🚀 [API] ❌ FAILED - Status: ${response.status}`);
       return [];
     }
     
     const data = await response.json();
-    console.log(`[API] Loaded ${data.length} custom meals from Supabase`);
+    console.log(`🚀 [API] ✅ SUCCESS - Loaded ${data.length} custom meals`);
+    
+    if (data.length > 0) {
+      console.log(`🚀 [API] Custom meals encontrados:`);
+      data.forEach((meal, i) => {
+        const isCafe = meal.name.toLowerCase().includes('café') || meal.name.toLowerCase().includes('cafe');
+        const prefix = isCafe ? '☕' : '  ';
+        console.log(`${prefix} ${i + 1}. "${meal.name}"`);
+      });
+    } else {
+      console.log(`🚀 [API] ⚠️ NO SE ENCONTRARON CUSTOM MEALS`);
+    }
+    
+    console.log(`🚀 [API] ============================================`);
     return data;
   } catch (error) {
-    console.error('[API] Error loading custom meals:', error);
+    console.error(`🚀 [API] 💥 ERROR loading custom meals:`, error);
     return [];
   }
 };
