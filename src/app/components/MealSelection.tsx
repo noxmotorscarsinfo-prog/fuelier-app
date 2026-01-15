@@ -145,33 +145,17 @@ export default function MealSelection({
 
   // ✅ Cargar platos personalizados desde Supabase
   useEffect(() => {
-    console.log('🚨🚨🚨 [MealSelection] useEffect EJECUTÁNDOSE - INICIO');
-    console.log('🚨 [MealSelection] user.email:', user.email);
-    console.log('🚨 [MealSelection] refreshTrigger:', refreshTrigger);
-    
     const loadCustomMeals = async () => {
-      console.log('🚨 [MealSelection] loadCustomMeals function called');
-      
       if (!user.email) {
-        console.log('🚨 [MealSelection] NO EMAIL - return early');
         setIsLoadingCustomMeals(false);
         return;
       }
       
       setIsLoadingCustomMeals(true);
-      console.log('🚨🚨🚨 LOADING CUSTOM MEALS - ABOUT TO CALL API');
-      console.log('🚨 Email:', user.email);
-      
       const meals = await api.getCustomMeals(user.email);
-      console.log('🚨🚨🚨 API RETURNED:', meals.length, 'meals');
       
       if (meals.length > 0) {
-        console.log('🚨 MEALS FOUND:');
-        meals.forEach((meal, i) => {
-          console.log(`🚨 ${i + 1}. "${meal.name}"`);
-        });
-      } else {
-        console.log('🚨🚨🚨 NO MEALS RETURNED FROM API');
+        console.log(`✅ Cargados ${meals.length} platos personalizados`);
       }
       
       setCustomMeals(meals);
@@ -180,23 +164,14 @@ export default function MealSelection({
     };
     
     loadCustomMeals();
-    console.log('🚨🚨🚨 [MealSelection] useEffect - FIN');
   }, [user.email, refreshTrigger ?? 0]);
 
   // Función para obtener todas las comidas disponibles  
   const getMealsData = (): Meal[] => {
-    console.log('🚨🚨🚨 [MealSelection] RENDER - customMeals.length:', customMeals.length);
-    console.log('🐛 [MealSelection] getMealsData called');
-    console.log('🐛 [MealSelection] mealType actual:', mealType);
+    console.log('� [MealSelection] Obteniendo meals - customMeals:', customMeals.length);
     
     if (customMeals.length > 0) {
-      console.log('🐛 [MealSelection] Lista de custom meals:');
-      customMeals.forEach((meal, i) => {
-        const isMatch = Array.isArray(meal.type) 
-          ? meal.type.includes(mealType) 
-          : meal.type === mealType;
-        console.log(`   ${i + 1}. "${meal.name}" - Tipo: ${JSON.stringify(meal.type)} - Coincide: ${isMatch ? '✅' : '❌'}`);
-      });
+      console.log('✅ Custom meals disponibles:', customMeals.length);
     }
     
     // CORREGIDO: Manejar meal.type como array o string
@@ -207,13 +182,7 @@ export default function MealSelection({
       return meal.type === mealType;
     });
     
-    console.log('🐛 [MealSelection] filteredCustomMeals después del filtro:', filteredCustomMeals.length);
-    if (filteredCustomMeals.length > 0) {
-      console.log('🐛 [MealSelection] Platos filtrados:');
-      filteredCustomMeals.forEach((meal, i) => {
-        console.log(`   ${i + 1}. "${meal.name}"`);
-      });
-    }
+    console.log('✅ Platos personalizados filtrados para', mealType, ':', filteredCustomMeals.length);
     
     // 🌍 100% SUPABASE: Solo usar platos de Supabase (base_meals + custom_meals)
     // NO usar ALL_MEALS_FROM_DB local - todo debe venir de la nube
@@ -459,10 +428,14 @@ export default function MealSelection({
     console.log('🎯 Calculando recomendaciones con escalado inteligente y preferencias');
     console.log('📊 Target automático calculado:', intelligentTarget);
     
+    // 🔥 COMBINAMOS platos base + platos personalizados
+    const allAvailableMeals = [...mealsOfType, ...customMeals];
+    console.log(`🔥 TOTAL DE PLATOS DISPONIBLES: ${allAvailableMeals.length} (${mealsOfType.length} base + ${customMeals.length} personalizados)`);
+    
     // Paso 1: Rankear comidas por mejor ajuste de macros
     // ✅ Usar intelligentTarget (calculado automáticamente sin input manual)
     const rankedMeals = rankMealsByFit(
-      mealsOfType, 
+      allAvailableMeals, // 🔥 AHORA INCLUYE PLATOS PERSONALIZADOS
       user, 
       currentLog, 
       mealType,
@@ -505,7 +478,7 @@ export default function MealSelection({
         ]
       };
     }).sort((a, b) => b.score - a.score); // Re-ordenar por score combinado
-  }, [mealsOfType, user, currentLog, mealType, intelligentTarget, consumedMacros]);
+  }, [mealsOfType, customMeals, user, currentLog, mealType, intelligentTarget, consumedMacros]);
 
   // ⭐ CRÍTICO: Filtrar por preferencias alimenticias del usuario (alergias, intolerancias, disgustos)
   const mealsFilteredByPreferences = useMemo(() => {
