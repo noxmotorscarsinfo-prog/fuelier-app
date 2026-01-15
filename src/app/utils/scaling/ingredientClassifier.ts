@@ -22,9 +22,10 @@
  * @date 2026-01-15
  */
 
-import { Meal, MealIngredient } from '@/types';
-import { Ingredient } from '../../../data/ingredientTypes';
-import {
+import type {
+  Meal,
+  MealIngredient,
+  Ingredient,
   IngredientClassification,
   ClassifiedIngredient,
   IngredientRole,
@@ -127,11 +128,32 @@ export function classifyIngredients(
     
     const reason = explainClassification(ing, category, role, totalCalories);
     
+    // Construir ClassifiedIngredient con TODAS las propiedades necesarias
     return {
-      ...ing,
+      // Identificación
+      id: ing.ingredientId,
+      ingredientId: ing.ingredientId,
+      name: ing.ingredientName,
+      ingredientName: ing.ingredientName,
+      
+      // Cantidad y valores
+      amount: ing.amount,
+      originalAmount: ing.amount,
+      calories: ing.calories,
+      protein: ing.protein,
+      carbs: ing.carbs,
+      fat: ing.fat,
+      
+      // Valores por gramo
+      caloriesPerGram: ing.amount > 0 ? ing.calories / ing.amount : 0,
+      proteinPerGram: ing.amount > 0 ? ing.protein / ing.amount : 0,
+      carbsPerGram: ing.amount > 0 ? ing.carbs / ing.amount : 0,
+      fatPerGram: ing.amount > 0 ? ing.fat / ing.amount : 0,
+      
+      // Clasificación
       role,
       reason,
-      originalAmount: ing.amount,
+      reasoning: reason,
       category,
     };
   });

@@ -15,12 +15,52 @@
  * @date 2026-01-15
  */
 
-// Use relative import to avoid path alias issues
-import type { MealIngredient, Meal } from '../../../types';
-import type { Ingredient } from '../../../data/ingredientTypes';
-
 // ============================================================================
 // CORE TYPES
+// ============================================================================
+
+/**
+ * Ingrediente con valores macro (extendido de DB)
+ */
+export interface Ingredient {
+  id: string;
+  name: string;
+  category: string;
+  caloriesPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+  // Aliases for backward compatibility
+  caloriesPerGram?: number;
+  proteinPerGram?: number;
+  carbsPerGram?: number;
+  fatPerGram?: number;
+}
+
+/**
+ * Ingrediente en comida con cantidad
+ */
+export interface MealIngredient {
+  ingredientId: string;
+  ingredientName: string;
+  amount: number; // gramos
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+/**
+ * Comida completa
+ */
+export interface Meal {
+  id: string;
+  name: string;
+  mealIngredients: MealIngredient[];
+}
+
+// ============================================================================
+// CLASSIFICATION TYPES
 // ============================================================================
 
 /**
@@ -44,9 +84,9 @@ export interface MacroValues extends MacroTargets {}
 export type IngredientRole = 'structural' | 'flexible_primary' | 'flexible_secondary';
 
 /**
- * Niveles de preservación de esencia
+ * Niveles de preservación de esencia (0-100)
  */
-export type PreservationLevel = 'maximum' | 'high' | 'medium' | 'low';
+export type PreservationLevel = number;
 
 /**
  * Métodos de escalado disponibles
@@ -74,12 +114,34 @@ export type DishComplexity = 'simple' | 'medium' | 'complex';
 
 /**
  * Ingrediente con su rol clasificado
+ * Incluye todas las propiedades necesarias para scaling
  */
-export interface ClassifiedIngredient extends MealIngredient {
+export interface ClassifiedIngredient {
+  // Identificación
+  id: string;
+  ingredientId: string; // Alias for backward compatibility
+  name: string;
+  ingredientName?: string; // Alias for backward compatibility
+  
+  // Cantidad y valores actuales
+  amount: number; // gramos
+  originalAmount: number; // Para calcular preservation
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  
+  // Valores por gramo (para cálculos)
+  caloriesPerGram: number;
+  proteinPerGram: number;
+  carbsPerGram: number;
+  fatPerGram: number;
+  
+  // Clasificación
   role: IngredientRole;
-  reason: string; // Por qué se clasificó así
-  originalAmount: number; // Cantidad base para calcular preservation
-  category?: string; // Categoría del ingrediente (proteina, carbohidrato, etc.)
+  reason: string; // Reasoning para la clasificación
+  reasoning?: string; // Alias for backward compatibility
+  category?: string; // proteina, carbohidrato, vegetal, grasa, etc.
 }
 
 /**
