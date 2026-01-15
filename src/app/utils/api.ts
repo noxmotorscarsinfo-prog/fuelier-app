@@ -239,8 +239,12 @@ export const getUser = async (email: string): Promise<User | null> => {
   try {
     console.log(`[API] 📥 Getting user: ${email}`);
     
+    // Use anon key for /user endpoint to avoid JWT validation issues
     const response = await fetch(`${API_BASE_URL}/user/${encodeURIComponent(email)}`, {
-      headers: getHeaders()
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${publicAnonKey}` // Use anon key instead of user token
+      }
     });
     
     console.log(`[API] Response status: ${response.status}`);
