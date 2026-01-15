@@ -137,13 +137,42 @@ async function getUserIdFromToken(c: any, supabase: any): Promise<string | null>
 
 // Helper para obtener ID de usuario por email (busca en tabla users)
 async function getUserIdByEmail(supabase: any, email: string): Promise<string | null> {
+  console.log(`[DEBUG] getUserIdByEmail("${email}") - Buscando en tabla users...`);
+  
   const { data, error } = await supabase
     .from('users')
     .select('id')
     .eq('email', email)
     .single();
   
-  if (error || !data) return null;
+  if (error) {
+    console.log(`[DEBUG] Error buscando email "${email}" en tabla users:`, error.message);
+    console.log(`[DEBUG] Código de error:`, error.code);
+    
+    // Si es PGRST116 (no encontrado), intentar buscar en otros lugares
+    if (error.code === 'PGRST116') {
+      console.log(`[DEBUG] Email "${email}" NO existe en tabla users`);
+      
+      // Debug: Listar algunos emails que SÍ existen
+      console.log(`[DEBUG] Verificando qué emails SÍ existen en la tabla users...`);
+      const { data: existingUsers, error: listError } = await supabase
+        .from('users')
+        .select('email')
+        .limit(10);
+        
+      if (!listError && existingUsers) {
+        console.log(`[DEBUG] Emails existentes en users:`, existingUsers.map(u => u.email));
+      }
+    }
+    return null;
+  }
+  
+  if (!data) {
+    console.log(`[DEBUG] No se encontró data para email "${email}"`);
+    return null;
+  }
+  
+  console.log(`[DEBUG] ✅ Email "${email}" encontrado con ID: ${data.id}`);
   return data.id;
 }
 
@@ -547,19 +576,40 @@ app.post(`${basePath}/daily-logs`, rateLimitMiddleware('write'), async (c) => {
 app.get(`${basePath}/custom-meals/:email`, async (c) => {
   try {
     const email = c.req.param("email");
+    console.log(`[DEBUG] GET /custom-meals/${email} - Iniciando consulta...`);
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     const userId = await getUserIdByEmail(supabase, email);
-    if (!userId) return c.json([]);
+    console.log(`[DEBUG] getUserIdByEmail("${email}") = ${userId || 'null'}`);
+    
+    if (!userId) {
+      console.log(`[DEBUG] Usuario no encontrado para email: ${email}`);
+      return c.json([]);
+    }
 
+    console.log(`[DEBUG] Consultando custom_meals para user_id: ${userId}`);
     const { data, error } = await supabase
       .from('custom_meals')
       .select('*')
       .eq('user_id', userId);
 
-    if (error) throw error;
+    if (error) {
+      console.error(`[DEBUG] Error en consulta custom_meals:`, error);
+      throw error;
+    }
+    
+    console.log(`[DEBUG] Encontrados ${data?.length || 0} platos personalizados`);
+    if (data && data.length > 0) {
+      console.log(`[DEBUG] Platos encontrados:`);
+      data.forEach((meal, i) => {
+        console.log(`[DEBUG]   ${i + 1}. "${meal.name}" (tipos: ${JSON.stringify(meal.meal_types)})`);
+      });
+    }
+    
     return c.json(data || []);
   } catch (error) {
+    console.error(`[DEBUG] Error general en GET /custom-meals:`, error);
     return c.json([], 200);
   }
 });
