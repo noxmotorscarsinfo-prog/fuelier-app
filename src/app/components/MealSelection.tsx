@@ -423,14 +423,24 @@ export default function MealSelection({
     return (calorieMatch + proteinMatch + carbsMatch + fatMatch) / 4;
   };
 
+  // ✅ Filtrar platos personalizados por el tipo de comida actual  
+  const customMealsOfType = useMemo(() => {
+    return customMeals.filter(meal => {
+      if (Array.isArray(meal.type)) {
+        return meal.type.includes(mealType);
+      }
+      return meal.type === mealType;
+    });
+  }, [customMeals, mealType]);
+
   // 🎯 SISTEMA AUTOMÁTICO: Usar escalado inteligente con target calculado automáticamente
   const recommendedMeals = useMemo(() => {
     console.log('🎯 Calculando recomendaciones con escalado inteligente y preferencias');
     console.log('📊 Target automático calculado:', intelligentTarget);
     
-    // 🔥 COMBINAMOS platos base + platos personalizados
-    const allAvailableMeals = [...mealsOfType, ...customMeals];
-    console.log(`🔥 TOTAL DE PLATOS DISPONIBLES: ${allAvailableMeals.length} (${mealsOfType.length} base + ${customMeals.length} personalizados)`);
+    // 🔥 COMBINAMOS platos base + platos personalizados (FILTRADOS POR TIPO)
+    const allAvailableMeals = [...mealsOfType, ...customMealsOfType];
+    console.log(`🔥 TOTAL DE PLATOS DISPONIBLES: ${allAvailableMeals.length} (${mealsOfType.length} base + ${customMealsOfType.length} personalizados para ${mealType})`);
     
     // Paso 1: Rankear comidas por mejor ajuste de macros
     // ✅ Usar intelligentTarget (calculado automáticamente sin input manual)
@@ -478,7 +488,7 @@ export default function MealSelection({
         ]
       };
     }).sort((a, b) => b.score - a.score); // Re-ordenar por score combinado
-  }, [mealsOfType, customMeals, user, currentLog, mealType, intelligentTarget, consumedMacros]);
+  }, [mealsOfType, customMealsOfType, user, currentLog, mealType, intelligentTarget, consumedMacros]);
 
   // ⭐ CRÍTICO: Filtrar por preferencias alimenticias del usuario (alergias, intolerancias, disgustos)
   const mealsFilteredByPreferences = useMemo(() => {
