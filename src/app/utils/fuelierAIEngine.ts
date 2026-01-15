@@ -85,6 +85,7 @@ type PlateType =
   | 'carb_focused'         // Alto en carbohidratos
   | 'balanced'             // Equilibrado
   | 'snack'                // Snack ligero
+  | 'small_portion'        // Porción pequeña (<400 kcal) - tolerancias amplias
   | 'dessert';             // Postre
 
 interface PlateClassification {
@@ -424,8 +425,13 @@ function assessConfidence(
 
   // ✅ OPTIMIZACIÓN: Bajar umbral para dar oportunidad al LP solver
   // Antes: >= 85 (muy restrictivo, bloqueaba buenos platos)
-  // Ahora: >= 40 (solo bloquea casos extremos imposibles)
-  const feasible = confidence >= 40;
+  // Ahora: >= 25 (solo bloquea casos extremadamente imposibles, 5x+ escalado)
+  // 🎯 ESPECIAL: >= 10 para snacks MUY pequeños (<300 kcal) con ingredientes limitados
+  // 🎯 ESPECIAL: >= 15 para snacks pequeños (300-400 kcal)
+  const isVerySmallSnack = (targetMacros.calories || 0) < 300;
+  const isSmallSnack = (targetMacros.calories || 0) < 400;
+  const confidenceThreshold = isVerySmallSnack ? 10 : (isSmallSnack ? 15 : 25);
+  const feasible = confidence >= confidenceThreshold;
 
   if (!feasible) {
     reasons.unshift(`⚠️ PLATO NO VIABLE (confidence: ${confidence}%)`);
@@ -451,6 +457,25 @@ function classifyPlate(meal: Meal, macros: MacroValues, mealIngredients: MealIng
 
   let type: PlateType = 'balanced';
   let tolerances = { calories: 3, protein: 5, carbs: 5, fat: 5 }; // Default
+
+  // ✅ MEJORA: Clasificación especial para porciones pequeñas (snacks)
+  // Targets <400 kcal necesitan tolerancias MÁS AMPLIAS porque el LP Solver
+  // tiene menos margen para ajustar ingredientes pequeños
+  
+  // 🎯 Snacks MUY pequeños (<300 kcal) - como frutas solas, requieren máxima flexibilidad
+  // PROBLEMA: Frutas tienen perfil alto carbos, bajo proteína/grasa → necesita tolerancias ULTRA amplias
+  if (totalCals < 300) {
+    type = 'small_portion';
+    tolerances = { calories: 15, protein: 25, carbs: 25, fat: 25 };
+    return { type, tolerances };
+  }
+  
+  // 🎯 Snacks pequeños (300-400 kcal) - como tostadas, tortitas
+  if (totalCals < 400) {
+    type = 'small_portion';
+    tolerances = { calories: 12, protein: 18, carbs: 20, fat: 20 };
+    return { type, tolerances };
+  }
 
   // Clasificación basada en perfil macro
   if (proteinPct > 35) {
@@ -1239,7 +1264,7 @@ export function adaptMealWithAIEngine(
   targetMacros: MacroTargets,
   user: User,
   dailyLog: DailyLog | null,
-  maxIterations: number = 100,
+  maxIterations: number = 150,
   allIngredients: Ingredient[] = []
 ): HybridSolution {
   // Extraer mealIngredients (pasados temporalmente desde el wrapper)

@@ -203,47 +203,86 @@ export function calculateIntelligentTarget(
     };
   }
   
-  // 4. Para TODAS las demás comidas → Usar distribución personalizada LIMITADA por remaining
-  console.log('🎯 Usando getMealGoals() - Respetando distribución personalizada del usuario');
+  // 4. Para TODAS las demás comidas → Usar COMPENSACIÓN PROGRESIVA INTELIGENTE
+  console.log('🎯 Aplicando compensación progresiva inteligente...');
+  
+  // 4.1. Obtener target base de la distribución personalizada
   const mealGoals = getMealGoals(user, mealType);
   console.log('📊 Target basado en distribución:', mealGoals);
   console.log('📊 Macros restantes disponibles:', remaining);
-  console.log('📊 Comparación:');
-  console.log(`   - Calorías: target=${mealGoals.calories} vs remaining=${remaining.calories}`);
-  console.log(`   - Proteína: target=${mealGoals.protein} vs remaining=${remaining.protein}`);
-  console.log(`   - Carbos: target=${mealGoals.carbs} vs remaining=${remaining.carbs}`);
-  console.log(`   - Grasas: target=${mealGoals.fat} vs remaining=${remaining.fat}`);
   
-  // ⭐ NUEVO: Limitar el target a los macros restantes disponibles
+  // 4.2. Calcular "déficit" o "exceso" de comidas anteriores
+  // Si consumed > expected → hay exceso → compensar reduciendo
+  // Si consumed < expected → hay déficit → compensar aumentando
+  const defaultOrder: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner'];
+  const mealOrder = user.mealStructure?.activeMeals || defaultOrder;
+  const currentIndex = mealOrder.indexOf(mealType);
+  
+  let expectedConsumed = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  for (let i = 0; i < currentIndex; i++) {
+    const prevMeal = mealOrder[i];
+    const prevGoals = getMealGoals(user, prevMeal);
+    expectedConsumed.calories += prevGoals.calories;
+    expectedConsumed.protein += prevGoals.protein;
+    expectedConsumed.carbs += prevGoals.carbs;
+    expectedConsumed.fat += prevGoals.fat;
+  }
+  
+  const deviation = {
+    calories: consumed.calories - expectedConsumed.calories,
+    protein: consumed.protein - expectedConsumed.protein,
+    carbs: consumed.carbs - expectedConsumed.carbs,
+    fat: consumed.fat - expectedConsumed.fat
+  };
+  
+  // 4.3. Aplicar compensación proporcional según número de comidas restantes
+  // Si hay desviación, distribuirla entre las comidas que quedan
+  const compensationFactor = 1.0 / mealsLeft; // Cada comida compensa su parte
+  
+  const compensatedTarget = {
+    calories: Math.round(mealGoals.calories - (deviation.calories * compensationFactor)),
+    protein: Math.round(mealGoals.protein - (deviation.protein * compensationFactor)),
+    carbs: Math.round(mealGoals.carbs - (deviation.carbs * compensationFactor)),
+    fat: Math.round(mealGoals.fat - (deviation.fat * compensationFactor))
+  };
+  
+  console.log('📊 Compensación aplicada:');
+  console.log(`   Expected consumido: ${expectedConsumed.calories}kcal | ${expectedConsumed.protein}P | ${expectedConsumed.carbs}C | ${expectedConsumed.fat}G`);
+  console.log(`   Real consumido: ${consumed.calories}kcal | ${consumed.protein}P | ${consumed.carbs}C | ${consumed.fat}G`);
+  console.log(`   Desviación: ${deviation.calories > 0 ? '+' : ''}${deviation.calories}kcal | ${deviation.protein > 0 ? '+' : ''}${deviation.protein}P | ${deviation.carbs > 0 ? '+' : ''}${deviation.carbs}C | ${deviation.fat > 0 ? '+' : ''}${deviation.fat}G`);
+  console.log(`   Factor compensación: ${(compensationFactor * 100).toFixed(0)}% (${mealsLeft} comidas restantes)`);
+  console.log(`   Target compensado: ${compensatedTarget.calories}kcal | ${compensatedTarget.protein}P | ${compensatedTarget.carbs}C | ${compensatedTarget.fat}G`);
+  
+  // 4.4. Limitar el target compensado a los macros restantes disponibles
   // Esto garantiza que NUNCA nos pasemos de los objetivos totales
-  const limitedTarget = {
-    calories: Math.min(mealGoals.calories, remaining.calories),
-    protein: Math.min(mealGoals.protein, remaining.protein),
-    carbs: Math.min(mealGoals.carbs, remaining.carbs),
-    fat: Math.min(mealGoals.fat, remaining.fat)
+  const finalTarget = {
+    calories: Math.max(0, Math.min(compensatedTarget.calories, remaining.calories)),
+    protein: Math.max(0, Math.min(compensatedTarget.protein, remaining.protein)),
+    carbs: Math.max(0, Math.min(compensatedTarget.carbs, remaining.carbs)),
+    fat: Math.max(0, Math.min(compensatedTarget.fat, remaining.fat))
   };
   
   // Verificar si tuvimos que limitar algún macro
   const wasLimited = 
-    limitedTarget.calories < mealGoals.calories ||
-    limitedTarget.protein < mealGoals.protein ||
-    limitedTarget.carbs < mealGoals.carbs ||
-    limitedTarget.fat < mealGoals.fat;
+    finalTarget.calories < compensatedTarget.calories ||
+    finalTarget.protein < compensatedTarget.protein ||
+    finalTarget.carbs < compensatedTarget.carbs ||
+    finalTarget.fat < compensatedTarget.fat;
   
   if (wasLimited) {
     console.log('⚠️ TARGET LIMITADO - Ajustado para no exceder macros restantes:');
-    console.log('   Original:', mealGoals);
-    console.log('   Limitado:', limitedTarget);
+    console.log('   Compensado:', compensatedTarget);
+    console.log('   Final:', finalTarget);
     console.log('   Restante:', remaining);
   } else {
-    console.log('✅ Target dentro de límites - No se necesita ajuste');
+    console.log('✅ Target final dentro de límites');
   }
   
   return {
-    calories: limitedTarget.calories,
-    protein: limitedTarget.protein,
-    carbs: limitedTarget.carbs,
-    fat: limitedTarget.fat,
+    calories: finalTarget.calories,
+    protein: finalTarget.protein,
+    carbs: finalTarget.carbs,
+    fat: finalTarget.fat,
     isLastMeal: false,
     mealsLeft
   };

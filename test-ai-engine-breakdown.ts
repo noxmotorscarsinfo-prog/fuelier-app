@@ -32,11 +32,11 @@ const mockUser: User = {
 };
 
 const emptyLog: DailyLog = {
-  id: 'test-log',
-  userId: 'test-user',
   date: '2026-01-14',
-  meals: {},
-  totalMacros: { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  breakfast: null,
+  lunch: null,
+  snack: null,
+  dinner: null
 };
 
 const mealType: MealType = 'breakfast';
@@ -100,18 +100,36 @@ async function runExhaustiveTest() {
     console.log('─────────────────────────────────────────────────────────');
     
     try {
-      // Convertir ingredientes a formato esperado por el AI Engine
-      const mealIngredients = (meal.ingredientReferences || []).map(ref => ({
-        ingredientId: ref.ingredientId,
-        ingredientName: ref.ingredientId, // Temporal
-        quantity: ref.quantity
-      }));
+      // Convertir ingredientReferences a mealIngredients con macros calculados
+      const mealIngredients = (meal.ingredientReferences || []).map(ref => {
+        const ingredient = supabaseIngredients.find(i => i.id === ref.ingredientId);
+        if (!ingredient) {
+          console.log(`⚠️ Ingrediente no encontrado: ${ref.ingredientId}`);
+          return null;
+        }
+
+        const ratio = ref.amountInGrams / 100;
+        return {
+          ingredientId: ingredient.id,
+          ingredientName: ingredient.name,
+          amount: ref.amountInGrams,
+          calories: ingredient.calories * ratio,
+          protein: ingredient.protein * ratio,
+          carbs: ingredient.carbs * ratio,
+          fat: ingredient.fat * ratio
+        };
+      }).filter(Boolean);
+      
+      if (mealIngredients.length === 0) {
+        throw new Error('No se pudieron convertir ingredientes');
+      }
       
       // AGREGAR mealIngredients al meal (necesario para AI Engine)
       const mealForEngine = {
         ...meal,
-        mealIngredients
+        ingredients: meal.ingredients // Mantener ingredientes como strings
       };
+      (mealForEngine as any).mealIngredients = mealIngredients;
       
       // Ejecutar AI Engine
       const result = adaptMealWithAIEngine(
