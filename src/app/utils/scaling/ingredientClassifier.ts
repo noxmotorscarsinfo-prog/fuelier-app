@@ -134,7 +134,7 @@ export function classifyIngredients(
       id: ing.ingredientId,
       ingredientId: ing.ingredientId,
       name: ing.ingredientName,
-      ingredientName: ing.ingredientName || ing.name,
+      ingredientName: ing.ingredientName,
       
       // Cantidad y valores
       amount: ing.amount,

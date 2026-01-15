@@ -142,14 +142,12 @@ export function decideStrategy(
     priorityMacro,
     adjustableIngredients,
     preservationLevel,
-    metadata: {
-      reasoning,
-      compatibilityScore: compatibility.overall,
-      gaps,
-      relativeGaps,
-      hasStructuralConstraints: compatibility.hasStructuralConstraints,
-      flexibilityRatio: compatibility.flexibilityRatio,
-    },
+    reason: reasoning,
+    priority: priorityMacro,
+    context: {
+      ...context,
+      compatibilityScore: compatibility.overall
+    } as any,
   };
 }
 

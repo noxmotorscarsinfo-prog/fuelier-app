@@ -16,12 +16,13 @@
  * @date 2026-01-15
  */
 
-import type { Meal } from '@/types';
+import type { Meal } from '../../types';
 import type { Ingredient } from '../../../data/ingredientTypes';
 import type {
   MacroTargets,
   MacroValues,
   ScalingResult,
+  DailyContext,
 } from './types';
 
 import { classifyIngredients } from './ingredientClassifier';
@@ -56,7 +57,7 @@ export function executeScaling(
 ): ScalingResult {
   
   // STEP 1: Classify ingredients
-  const classification = classifyIngredients(meal, allIngredients);
+  const classification = classifyIngredients(meal as any, allIngredients);
   
   // STEP 2: Calculate current macros
   const mealIngredients = (meal as any).mealIngredients;
@@ -140,7 +141,16 @@ export function previewScaling(
   estimatedPreservation: number;
   reasoning: string;
 } {
-  const classification = classifyIngredients(meal, allIngredients);
+  const classification = classifyIngredients(meal as any, allIngredients);
+  const context: DailyContext = {
+    isLastMeal,
+    mealsLeft: isLastMeal ? 0 : 1,
+    timeOfDay: 'lunch',
+    percentageOfDay: 0.5,
+    remainingMacros: target,
+    userGoals: target,
+    flexibilityLevel: 'moderate'
+  };
   
   const mealIngredients = (meal as any).mealIngredients;
   const current: MacroValues = {
@@ -150,7 +160,7 @@ export function previewScaling(
     fat: mealIngredients.reduce((sum: number, ing: any) => sum + ing.fat, 0),
   };
   
-  const strategy = decideStrategy(target, current, classification, isLastMeal);
+  const strategy = decideStrategy(target, current, classification, context);
   
   // Estimate based on approach
   let estimatedAccuracy = 0;
@@ -175,6 +185,6 @@ export function previewScaling(
     wouldUseApproach: strategy.approach,
     estimatedAccuracy,
     estimatedPreservation,
-    reasoning: strategy.reasoning,
+    reasoning: strategy.reason,
   };
 }

@@ -583,7 +583,7 @@ export const INGREDIENTS_DATABASE: Ingredient[] = [
   {
     id: 'plato-generico',
     name: 'Plato Genérico',
-    category: 'otro',
+    category: 'condimento' as any, // 'otro' not in type
     caloriesPer100g: 0,
     proteinPer100g: 0,
     carbsPer100g: 0,

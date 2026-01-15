@@ -115,26 +115,21 @@ export function executeLPOptimization(
   return {
     scaledIngredients,
     achievedMacros,
-    targetMacros: target,
     accuracy,
-    preservation,
-    preservationScore: preservation, // Backward compatibility
+    preservationScore: preservation,
     method: 'lp_optimized',
-    auditTrail: {
-      approach: strategy.approach,
-      iterations: [
-        {
-          method: 'lp_optimization',
-          steps,
-          achievedMacros,
-          accuracy,
-          reasoning: `LP optimization: ${steps.length} ingredients adjusted`,
-        }
-      ],
-      finalAccuracy: accuracy,
-      finalPreservation: preservation,
-      executionTimeMs: endTime - startTime,
-      warnings: [],
+    reason: `LP optimization completed in ${endTime - startTime}ms`,
+    deviations: {
+      calories: Math.abs((achievedMacros.calories - target.calories) / target.calories * 100),
+      protein: Math.abs((achievedMacros.protein - target.protein) / target.protein * 100),
+      carbs: Math.abs((achievedMacros.carbs - target.carbs) / target.carbs * 100),
+      fat: Math.abs((achievedMacros.fat - target.fat) / target.fat * 100),
+      maxError: Math.max(
+        Math.abs((achievedMacros.calories - target.calories) / target.calories * 100),
+        Math.abs((achievedMacros.protein - target.protein) / target.protein * 100),
+        Math.abs((achievedMacros.carbs - target.carbs) / target.carbs * 100),
+        Math.abs((achievedMacros.fat - target.fat) / target.fat * 100)
+      )
     },
   };
 }
@@ -493,10 +488,9 @@ function buildAdjustmentSteps(
       ingredientId: v.ingredientId,
       ingredientName: v.ingredientName,
       originalAmount: v.originalAmount,
-      adjustedAmount: newAmount,
+      newAmount: newAmount,
       change,
       reason: `LP optimization: ${change > 0 ? '+' : ''}${((change / v.originalAmount) * 100).toFixed(1)}%`,
-      priority: 1,
     });
   }
   
@@ -563,17 +557,16 @@ function buildFallbackResult(
   return {
     scaledIngredients,
     achievedMacros: current,
-    targetMacros: target,
     accuracy: calculateAccuracy(target, current),
-    preservation: 100,
+    preservationScore: 100,
     method: 'lp_optimized',
-    auditTrail: {
-      approach: 'lp_optimization',
-      iterations: [],
-      finalAccuracy: calculateAccuracy(target, current),
-      finalPreservation: 100,
-      executionTimeMs: Date.now() - startTime,
-      warnings: ['LP solver failed, using original amounts'],
+    reason: 'No scaling needed - already at target',
+    deviations: {
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      maxError: 0
     },
   };
 }
