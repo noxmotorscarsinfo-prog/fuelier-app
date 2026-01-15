@@ -469,22 +469,51 @@ export function rankMealsByFit(
   const rankedMeals = meals.map((meal, index) => {
     console.log(`\n📋 [${index + 1}/${meals.length}] Procesando: "${meal.name}"`);
     
-    // Escalar el plato al target exacto con IA
-    const scaledMeal = scaleToExactTarget(meal, targetMacros, isLastMeal, allIngredients, user, currentLog, mealType);
+    // 🔒 ESPECIAL: Los platos FIJOS no deben escalarse
+    const isFixedMeal = meal.scalingType === 'fixed' || meal.allowScaling === false;
+    
+    let scaledMeal: Meal;
+    
+    if (isFixedMeal) {
+      console.log(`   🔒 PLATO FIJO - Manteniendo cantidades originales (no escalado)`);
+      scaledMeal = {
+        ...meal,
+        proportionCompatibility: 100 // Los platos fijos siempre tienen 100% de "compatibilidad"
+      };
+    } else {
+      console.log(`   📊 PLATO ESCALABLE - Aplicando escalado inteligente con IA`);
+      // Escalar el plato al target exacto con IA
+      scaledMeal = scaleToExactTarget(meal, targetMacros, isLastMeal, allIngredients, user, currentLog, mealType);
+    }
     
     // Calcular fit score (qué tan bien encaja)
-    const fitScore = calculateFitScore(scaledMeal, targetMacros);
+    let fitScore: number;
+    
+    if (isFixedMeal) {
+      // Para platos fijos, el fitScore se basa en qué tan cerca están de ser una porción razonable
+      // No se evalúa contra el target, sino que se considera su valor nutricional propio
+      const calorieRatio = meal.calories / (targetMacros.calories * 0.5); // 50% del target como referencia
+      fitScore = Math.max(0, Math.min(100, 100 - Math.abs(calorieRatio - 1) * 50));
+      console.log(`   🔒 FitScore para plato fijo: ${fitScore.toFixed(1)} (basado en proporción razonable)`);
+    } else {
+      fitScore = calculateFitScore(scaledMeal, targetMacros);
+    }
     
     // 🎯 USAR DIRECTAMENTE proportionCompatibility del AI Engine (si existe)
-    // El AI Engine ya calculó la precisión correctamente, no necesitamos recalcularla
-    const aiEngineAccuracy = scaledMeal.proportionCompatibility || 0;
+    let adjustmentPercent: number;
     
-    // Si el AI Engine dio un accuracy, usarlo. Si no, calcular error tradicional
-    const adjustmentPercent = aiEngineAccuracy > 0 
-      ? aiEngineAccuracy 
-      : 100 - (calculateMacroError(scaledMeal, targetMacros) * 100);
-    
-    console.log(`   ✅ Ajuste: ${adjustmentPercent.toFixed(1)}% | Score: ${fitScore.toFixed(1)}`);
+    if (isFixedMeal) {
+      // Los platos fijos siempre tienen 100% de compatibilidad con su propósito
+      adjustmentPercent = 100;
+      console.log(`   🔒 Plato fijo - Ajuste: 100% (mantiene cantidades originales)`);
+    } else {
+      // Para platos escalables, usar el accuracy del AI Engine o calcular error tradicional
+      const aiEngineAccuracy = scaledMeal.proportionCompatibility || 0;
+      adjustmentPercent = aiEngineAccuracy > 0 
+        ? aiEngineAccuracy 
+        : 100 - (calculateMacroError(scaledMeal, targetMacros) * 100);
+      console.log(`   ✅ Ajuste: ${adjustmentPercent.toFixed(1)}% | Score: ${fitScore.toFixed(1)}`);
+    }
     
     if (adjustmentPercent >= 98) {
       console.log(`   ⭐ EXCELENTE - Ajuste perfecto (≥98%)`);

@@ -153,8 +153,30 @@ export default function MealSelection({
       
       setIsLoadingCustomMeals(true);
       console.log('📥 Cargando custom meals desde Supabase... (refreshTrigger:', refreshTrigger, ')');
+      
+      // 🐛 DEBUG: Log del email del usuario
+      console.log('🐛 [MealSelection] User email:', user.email);
+      
       const meals = await api.getCustomMeals(user.email);
       console.log(`✅ Cargados ${meals.length} custom meals desde Supabase`);
+      
+      // 🐛 DEBUG: Log detallado de los meals cargados
+      if (meals.length > 0) {
+        console.log('🐛 [MealSelection] Custom meals cargados:');
+        meals.forEach((meal, i) => {
+          console.log(`   ${i + 1}. "${meal.name}" - Tipo: ${JSON.stringify(meal.type)}`);
+          // Buscar específicamente café
+          if (meal.name.toLowerCase().includes('café') || meal.name.toLowerCase().includes('cafe')) {
+            console.log(`   🎯 ¡CAFÉ ENCONTRADO! "${meal.name}"`);
+            console.log(`      - Tipo: ${JSON.stringify(meal.type)}`);
+            console.log(`      - Es array: ${Array.isArray(meal.type)}`);
+            console.log(`      - ID: ${meal.id}`);
+          }
+        });
+      } else {
+        console.log('🐛 [MealSelection] ⚠️ NO SE CARGARON CUSTOM MEALS');
+      }
+      
       setCustomMeals(meals);
       setIsLoadingCustomMeals(false);
     };
@@ -163,6 +185,21 @@ export default function MealSelection({
 
   // Función para obtener todas las comidas disponibles
   const getMealsData = (): Meal[] => {
+    // 🐛 DEBUG: Log para identificar problema del café con leche
+    console.log('🐛 [MealSelection] getMealsData called');
+    console.log('🐛 [MealSelection] mealType actual:', mealType);
+    console.log('🐛 [MealSelection] customMeals disponibles:', customMeals.length);
+    
+    if (customMeals.length > 0) {
+      console.log('🐛 [MealSelection] Lista de custom meals:');
+      customMeals.forEach((meal, i) => {
+        const isMatch = Array.isArray(meal.type) 
+          ? meal.type.includes(mealType) 
+          : meal.type === mealType;
+        console.log(`   ${i + 1}. "${meal.name}" - Tipo: ${JSON.stringify(meal.type)} - Coincide: ${isMatch ? '✅' : '❌'}`);
+      });
+    }
+    
     // CORREGIDO: Manejar meal.type como array o string
     const filteredCustomMeals = customMeals.filter(meal => {
       if (Array.isArray(meal.type)) {
@@ -170,6 +207,14 @@ export default function MealSelection({
       }
       return meal.type === mealType;
     });
+    
+    console.log('🐛 [MealSelection] filteredCustomMeals después del filtro:', filteredCustomMeals.length);
+    if (filteredCustomMeals.length > 0) {
+      console.log('🐛 [MealSelection] Platos filtrados:');
+      filteredCustomMeals.forEach((meal, i) => {
+        console.log(`   ${i + 1}. "${meal.name}"`);
+      });
+    }
     
     // 🌍 100% SUPABASE: Solo usar platos de Supabase (base_meals + custom_meals)
     // NO usar ALL_MEALS_FROM_DB local - todo debe venir de la nube
@@ -527,10 +572,24 @@ export default function MealSelection({
   const mealsWithGoodFit = useMemo(() => {
     const filtered = mealsFilteredByPreferences.filter(scored => {
       const accuracy = scored.scaledMeal?.proportionCompatibility || 0;
-      const meetsThreshold = accuracy >= ACCURACY_THRESHOLD;
+      
+      // 🔒 ESPECIAL: Los platos FIJOS no deben ser filtrados por ajuste de macros
+      // Estos platos fueron creados por el usuario con cantidades específicas y no deben escalarse
+      const isFixedMeal = scored.meal.scalingType === 'fixed' || scored.meal.allowScaling === false;
+      
+      if (isFixedMeal) {
+        console.log(`🔒 Plato FIJO "${scored.meal.name}" incluido automáticamente (no se filtra por ajuste de macros)`);
+        return true; // SIEMPRE incluir platos fijos
+      }
+      
+      // Para platos escalables: aplicar threshold según si es personalizado o no
+      const threshold = scored.meal.isCustom ? 60 : ACCURACY_THRESHOLD;
+      const meetsThreshold = accuracy >= threshold;
       
       if (!meetsThreshold) {
-        console.log(`🚫 Plato "${scored.meal.name}" filtrado por ajuste insuficiente: ${accuracy.toFixed(1)}% (necesita ≥${ACCURACY_THRESHOLD}%)`);
+        console.log(`🚫 Plato "${scored.meal.name}" ${scored.meal.isCustom ? '(PERSONALIZADO)' : ''} filtrado por ajuste insuficiente: ${accuracy.toFixed(1)}% (necesita ≥${threshold}%)`);
+      } else if (scored.meal.isCustom) {
+        console.log(`✅ Plato PERSONALIZADO "${scored.meal.name}" incluido con ${accuracy.toFixed(1)}% de ajuste (threshold especial: ${threshold}%)`);
       }
       
       return meetsThreshold;
@@ -538,11 +597,24 @@ export default function MealSelection({
     
     console.log(`\n📊 FILTRO DE AJUSTE DE MACROS:`);
     console.log(`   Total antes del filtro: ${mealsFilteredByPreferences.length} platos`);
-    console.log(`   Total después del filtro (≥${ACCURACY_THRESHOLD}%): ${filtered.length} platos`);
+    console.log(`   Total después del filtro: ${filtered.length} platos`);
     console.log(`   Platos eliminados: ${mealsFilteredByPreferences.length - filtered.length}`);
     
+    // Separar estadísticas para diferentes tipos de platos
+    const fixedMealsBeforeFilter = mealsFilteredByPreferences.filter(s => s.meal.scalingType === 'fixed' || s.meal.allowScaling === false).length;
+    const fixedMealsAfterFilter = filtered.filter(s => s.meal.scalingType === 'fixed' || s.meal.allowScaling === false).length;
+    const customMealsBeforeFilter = mealsFilteredByPreferences.filter(s => s.meal.isCustom).length;
+    const customMealsAfterFilter = filtered.filter(s => s.meal.isCustom).length;
+    
+    if (fixedMealsBeforeFilter > 0) {
+      console.log(`   🔒 Platos FIJOS: ${fixedMealsAfterFilter}/${fixedMealsBeforeFilter} incluidos (sin filtro - siempre incluidos)`);
+    }
+    if (customMealsBeforeFilter > 0) {
+      console.log(`   📊 Platos personalizados: ${customMealsAfterFilter}/${customMealsBeforeFilter} incluidos (threshold especial: 60%)`);
+    }
+    
     if (filtered.length === 0) {
-      console.warn(`⚠️ ADVERTENCIA: Ningún plato alcanza ${ACCURACY_THRESHOLD}%+ de ajuste con el target actual`);
+      console.warn(`⚠️ ADVERTENCIA: Ningún plato alcanza los thresholds de ajuste`);
       console.warn(`   Target: ${intelligentTarget.calories}kcal | ${intelligentTarget.protein}P | ${intelligentTarget.carbs}C | ${intelligentTarget.fat}G`);
     }
     
