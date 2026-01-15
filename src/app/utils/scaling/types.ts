@@ -51,6 +51,31 @@ export interface MealIngredient {
 }
 
 /**
+ * Ingrediente escalado (resultado)
+ */
+export interface ScaledIngredient {
+  ingredientId: string;
+  ingredientName: string;
+  amount: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+/**
+ * Paso de ajuste (para tracking)
+ */
+export interface AdjustmentStep {
+  ingredientId: string;
+  ingredientName: string;
+  originalAmount: number;
+  newAmount: number;
+  change: number;
+  reason: string;
+}
+
+/**
  * Comida completa
  */
 export interface Meal {
@@ -213,6 +238,18 @@ export interface StrategyDecision {
     percentageOfDay: number;
     isLastMeal: boolean;
   };
+  
+  /** Macro prioritario (legacy - para compatibilidad) */
+  priorityMacro?: 'calories' | 'protein' | 'carbs' | 'fat';
+  
+  /** Confianza en la decisión (0-100) */
+  confidence?: number;
+  
+  /** Accuracy esperado */
+  expectedAccuracy?: number;
+  
+  /** Consideraciones adicionales */
+  considerations?: string[];
 }
 
 // ============================================================================
@@ -238,9 +275,6 @@ export interface ScalingResult {
   /** Preservation score (0-100) */
   preservationScore: number;
   
-  /** Número de iteraciones (si aplica) */
-  iterations: number;
-  
   /** Razón del resultado */
   reason: string;
   
@@ -252,6 +286,15 @@ export interface ScalingResult {
     fat: number;
     maxError: number; // Mayor error absoluto
   };
+  
+  /** Número de iteraciones (si aplica) */
+  iterations?: number;
+  
+  /** Pasos de ajuste (opcional) */
+  steps?: AdjustmentStep[];
+  
+  /** Targets usados (opcional) */
+  targetMacros?: MacroTargets;
 }
 
 // ============================================================================
@@ -448,12 +491,5 @@ export interface PreservationAnalysis {
 }
 
 // ============================================================================
-// EXPORTS
+// NOTE: All types are already exported above
 // ============================================================================
-
-export type {
-  // Re-export from other modules
-  MealIngredient,
-  Meal,
-  Ingredient,
-};

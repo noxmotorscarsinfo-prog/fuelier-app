@@ -157,7 +157,7 @@ function buildLPVariables(classification: IngredientClassification): LPVariable[
     
     variables.push({
       ingredientId: ing.ingredientId,
-      ingredientName: ing.ingredientName,
+      ingredientName: ing.ingredientName || ing.name,
       originalAmount: ing.amount,
       minAmount,
       maxAmount,
@@ -175,7 +175,7 @@ function buildLPVariables(classification: IngredientClassification): LPVariable[
     
     variables.push({
       ingredientId: ing.ingredientId,
-      ingredientName: ing.ingredientName,
+      ingredientName: ing.ingredientName || ing.name,
       originalAmount: ing.amount,
       minAmount,
       maxAmount,
@@ -193,7 +193,7 @@ function buildLPVariables(classification: IngredientClassification): LPVariable[
     
     variables.push({
       ingredientId: ing.ingredientId,
-      ingredientName: ing.ingredientName,
+      ingredientName: ing.ingredientName || ing.name,
       originalAmount: ing.amount,
       minAmount,
       maxAmount,
@@ -528,7 +528,7 @@ function buildScaledIngredients(
     
     scaledIngredients.push({
       ingredientId: ing.ingredientId,
-      ingredientName: ing.ingredientName,
+      ingredientName: ing.ingredientName || ing.name,
       amount: newAmount,
       calories: ing.calories * scaleFactor,
       protein: ing.protein * scaleFactor,
@@ -551,7 +551,7 @@ function buildFallbackResult(
   for (const ing of [...classification.structural, ...classification.flexiblePrimary, ...classification.flexibleSecondary]) {
     scaledIngredients.push({
       ingredientId: ing.ingredientId,
-      ingredientName: ing.ingredientName,
+      ingredientName: ing.ingredientName || ing.name,
       amount: ing.amount,
       calories: ing.calories,
       protein: ing.protein,

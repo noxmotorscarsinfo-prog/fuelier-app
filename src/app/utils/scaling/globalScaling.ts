@@ -205,7 +205,7 @@ function scaleAllIngredients(
     
     return {
       ingredientId: ing.ingredientId,
-      ingredientName: ing.ingredientName,
+      ingredientName: ing.ingredientName || ing.name,
       originalAmount,
       scaledAmount,
       change,

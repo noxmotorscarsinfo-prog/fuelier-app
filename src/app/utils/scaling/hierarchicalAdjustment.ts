@@ -41,24 +41,20 @@ import type {
   StrategyDecision,
   ScalingResult,
   ScaledIngredient,
+  MealIngredient,
+  AdjustmentStep as BaseAdjustmentStep,
 } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
-interface AdjustmentStep {
-  ingredientId: string;
-  ingredientName: string;
-  originalAmount: number;
-  adjustedAmount: number;
-  change: number;
-  reason: string;
+interface HierarchicalStep extends BaseAdjustmentStep {
   priority: number; // 1=flexible primary, 2=flexible secondary, 3=structural
 }
 
 interface IterationResult {
-  steps: AdjustmentStep[];
+  steps: HierarchicalStep[];
   achievedMacros: MacroValues;
   accuracy: number;
   remainingGaps: MacroValues;
@@ -92,7 +88,7 @@ export function executeHierarchicalAdjustment(
   let currentMacros = { ...current };
   
   // STEP 2: Adjust flexible ingredients (combine primary + secondary, sort by efficiency)
-  const flexibleAdjustment = adjustFlexiblesOptimally(
+  const flexibleAdjustment: IterationResult = adjustFlexiblesOptimally(
     target,
     currentMacros,
     classification,
@@ -114,10 +110,11 @@ export function executeHierarchicalAdjustment(
   // }
   
   // STEP 4: Build final scaled ingredients
+  const allSteps: HierarchicalStep[] = flexibleAdjustment.steps;
   const scaledIngredients = buildScaledIngredients(
     classification,
     currentAmounts,
-    [...flexibleAdjustment.steps, ...(structuralAdjustment?.steps || [])]
+    allSteps
   );
   
   // STEP 6: Calculate final metrics
@@ -149,12 +146,31 @@ export function executeHierarchicalAdjustment(
   return {
     scaledIngredients,
     achievedMacros,
-    targetMacros: target,
     accuracy,
-    preservation: preservationScore,
-    preservationScore, // Backward compatibility
     method: 'hierarchical',
-    auditTrail,
+    preservationScore,
+    reason: `Hierarchical adjustment: ${attempts.length} iterations`,
+    deviations: {
+      calories: Math.abs((achievedMacros.calories - target.calories) / target.calories) * 100,
+      protein: Math.abs((achievedMacros.protein - target.protein) / target.protein) * 100,
+      carbs: Math.abs((achievedMacros.carbs - target.carbs) / target.carbs) * 100,
+      fat: Math.abs((achievedMacros.fat - target.fat) / target.fat) * 100,
+      maxError: Math.max(
+        Math.abs((achievedMacros.calories - target.calories) / target.calories) * 100,
+        Math.abs((achievedMacros.protein - target.protein) / target.protein) * 100,
+        Math.abs((achievedMacros.carbs - target.carbs) / target.carbs) * 100,
+        Math.abs((achievedMacros.fat - target.fat) / target.fat) * 100
+      ),
+    },
+    targetMacros: target,
+    steps: allSteps.map(step => ({
+      ingredientId: step.ingredientId,
+      ingredientName: step.ingredientName,
+      originalAmount: step.originalAmount,
+      newAmount: step.newAmount,
+      change: step.change,
+      reason: step.reason,
+    })),
   };
 }
 
@@ -191,7 +207,7 @@ function adjustFlexiblesOptimally(
   currentAmounts: Map<string, number>
 ): IterationResult {
   
-  const steps: AdjustmentStep[] = [];
+  const steps: HierarchicalStep[] = [];
   
   // Build map of all ingredients for easy lookup
   const allIngredientsMap = new Map<string, any>();
@@ -234,7 +250,7 @@ function adjustFlexiblesOptimally(
     if (totalGap < 0.05) break; // < 5% total error
     
     // Find best single adjustment
-    let bestIngredient: typeof allFlexibles[0] | null = null;
+    let bestCandidateId: string | null = null;
     let bestAdjustedAmount = 0;
     let bestGapReduction = 0;
     
@@ -283,27 +299,28 @@ function adjustFlexiblesOptimally(
         
         if (gapReduction > bestGapReduction) {
           bestGapReduction = gapReduction;
-          bestIngredient = ing;
+          bestCandidateId = flexInfo.ingredientId;
           bestAdjustedAmount = candidateAmount;
         }
       }
     }
     
     // Apply best adjustment found
-    if (bestIngredient && bestGapReduction > 0.001) {
-      const flexInfo = allFlexibles.find(f => f.ingredientId === bestIngredient!.ingredientId)!;
+    if (bestCandidateId && bestGapReduction > 0.001) {
+      const bestIngredient = allIngredientsMap.get(bestCandidateId)!;
+      const flexInfo = allFlexibles.find(f => f.ingredientId === bestCandidateId)!;
       
       steps.push({
         ingredientId: bestIngredient.ingredientId,
-        ingredientName: bestIngredient.ingredientName,
+        ingredientName: bestIngredient.ingredientName || bestIngredient.name,
         originalAmount: bestIngredient.amount,
-        adjustedAmount: bestAdjustedAmount,
+        newAmount: bestAdjustedAmount,
         change: bestAdjustedAmount - bestIngredient.amount,
         reason: `Flexible P${flexInfo.priority}: Total gap reduction ${(bestGapReduction * 100).toFixed(1)}%`,
         priority: flexInfo.priority,
       });
       
-      currentAmounts.set(bestIngredient.ingredientId, bestAdjustedAmount);
+      currentAmounts.set(bestCandidateId, bestAdjustedAmount);
     } else {
       // No improvement found, stop
       break;
@@ -339,7 +356,7 @@ function adjustFlexiblePrimary(
   currentAmounts: Map<string, number>
 ): IterationResult {
   
-  const steps: AdjustmentStep[] = [];
+  const steps: HierarchicalStep[] = [];
   
   // Calculate gaps
   let gaps = {
@@ -349,8 +366,8 @@ function adjustFlexiblePrimary(
     fat: target.fat - current.fat,
   };
   
-  const priorityMacro = strategy.priorityMacro;
-  let priorityGap = gaps[priorityMacro];
+  const priorityMacro = strategy.priorityMacro || 'calories';
+  let priorityGap = gaps[priorityMacro as keyof typeof gaps];
   
   // Sort flexible primary by efficiency (macro per gram) - best contributors first
   const sortedFlexiblePrimary = [...classification.flexiblePrimary].sort((a, b) => {
@@ -385,9 +402,9 @@ function adjustFlexiblePrimary(
     
     steps.push({
       ingredientId: ing.ingredientId,
-      ingredientName: ing.ingredientName,
+      ingredientName: ing.ingredientName || ing.name,
       originalAmount,
-      adjustedAmount,
+      newAmount: adjustedAmount,
       change: adjustedAmount - originalAmount,
       reason: `Priority 1: Adjust ${priorityMacro} (gap: ${priorityGap.toFixed(1)})`,
       priority: 1,
@@ -429,7 +446,7 @@ function adjustFlexibleSecondary(
   currentAmounts: Map<string, number>
 ): IterationResult {
   
-  const steps: AdjustmentStep[] = [];
+  const steps: HierarchicalStep[] = [];
   
   // Calculate remaining gaps after primary adjustment
   let gaps = {
@@ -439,8 +456,8 @@ function adjustFlexibleSecondary(
     fat: target.fat - current.fat,
   };
   
-  const priorityMacro = strategy.priorityMacro;
-  let priorityGap = gaps[priorityMacro];
+  const priorityMacro = strategy.priorityMacro || 'calories';
+  let priorityGap = gaps[priorityMacro as keyof typeof gaps];
   
   // Sort flexible secondary by efficiency - best contributors first
   const sortedFlexibleSecondary = [...classification.flexibleSecondary].sort((a, b) => {
@@ -473,9 +490,9 @@ function adjustFlexibleSecondary(
     
     steps.push({
       ingredientId: ing.ingredientId,
-      ingredientName: ing.ingredientName,
+      ingredientName: ing.ingredientName || ing.name,
       originalAmount,
-      adjustedAmount,
+      newAmount: adjustedAmount,
       change: adjustedAmount - originalAmount,
       reason: `Priority 2: Fine-tune ${priorityMacro} (gap: ${priorityGap.toFixed(1)})`,
       priority: 2,
@@ -515,7 +532,7 @@ function adjustStructuralMinimal(
   currentAmounts: Map<string, number>
 ): IterationResult {
   
-  const steps: AdjustmentStep[] = [];
+  const steps: HierarchicalStep[] = [];
   
   const gaps = {
     calories: target.calories - current.calories,
@@ -524,8 +541,8 @@ function adjustStructuralMinimal(
     fat: target.fat - current.fat,
   };
   
-  const priorityMacro = strategy.priorityMacro;
-  const priorityGap = gaps[priorityMacro];
+  const priorityMacro = strategy.priorityMacro || 'calories';
+  const priorityGap = gaps[priorityMacro as keyof typeof gaps];
   
   // Only adjust structural if really needed
   for (const ing of classification.structural) {
@@ -549,9 +566,9 @@ function adjustStructuralMinimal(
     if (Math.abs(actualChange) > 1) {
       steps.push({
         ingredientId: ing.ingredientId,
-        ingredientName: ing.ingredientName,
+        ingredientName: ing.ingredientName || ing.name,
         originalAmount,
-        adjustedAmount,
+        newAmount: adjustedAmount,
         change: adjustedAmount - originalAmount,
         reason: `Priority 3: Minimal structural (gap: ${priorityGap.toFixed(1)})`,
         priority: 3,
@@ -560,7 +577,7 @@ function adjustStructuralMinimal(
       currentAmounts.set(ing.ingredientId, adjustedAmount);
       
       const macroChange = actualChange * macroPerGram;
-      gaps[priorityMacro] -= macroChange;
+      gaps[priorityMacro as keyof typeof gaps] -= macroChange;
     }
   }
   
@@ -601,11 +618,11 @@ function getMacroPerGram(
 
 function applyAdjustments(
   amounts: Map<string, number>,
-  steps: AdjustmentStep[]
+  steps: HierarchicalStep[]
 ): Map<string, number> {
   const newAmounts = new Map(amounts);
   steps.forEach(step => {
-    newAmounts.set(step.ingredientId, step.adjustedAmount);
+    newAmounts.set(step.ingredientId, step.newAmount);
   });
   return newAmounts;
 }
@@ -661,11 +678,12 @@ function calculatePreservation(
   let structuralPreservation = 1.0;
   
   for (const structural of classification.structural) {
+    const original = structural.amount;
     const scaled = scaledIngredients.find(s => s.ingredientId === structural.ingredientId);
     if (!scaled) continue;
     
-    const changePercent = Math.abs(scaled.changePercentage) / 100;
-    const penalty = Math.min(changePercent * 2, 1.0); // Double penalty for structural changes
+    const changePercent = Math.abs((scaled.amount - original) / original) * 100;
+    const penalty = Math.min(changePercent / 100 * 2, 1.0); // Double penalty for structural changes
     structuralPreservation -= penalty * 0.2; // Each structural change reduces by up to 20%
   }
   
@@ -678,8 +696,8 @@ function calculatePreservation(
 function buildScaledIngredients(
   classification: IngredientClassification,
   amounts: Map<string, number>,
-  steps: AdjustmentStep[]
-): ScaledIngredient[] {
+  steps: HierarchicalStep[]
+): MealIngredient[] {
   
   const allIngredients = [
     ...classification.structural,
@@ -690,26 +708,16 @@ function buildScaledIngredients(
   return allIngredients.map(ing => {
     const originalAmount = ing.amount;
     const scaledAmount = amounts.get(ing.ingredientId) || originalAmount;
-    const change = scaledAmount - originalAmount;
-    const changePercentage = ((scaledAmount / originalAmount) - 1) * 100;
-    
     const scale = scaledAmount / originalAmount;
-    
-    const step = steps.find(s => s.ingredientId === ing.ingredientId);
     
     return {
       ingredientId: ing.ingredientId,
-      ingredientName: ing.ingredientName,
-      originalAmount,
-      scaledAmount,
-      change,
-      changePercentage,
+      ingredientName: ing.ingredientName || ing.name,
+      amount: scaledAmount,
       calories: ing.calories * scale,
       protein: ing.protein * scale,
       carbs: ing.carbs * scale,
       fat: ing.fat * scale,
-      wasAdjusted: Math.abs(change) > 0.1,
-      adjustmentReason: step?.reason || 'No adjustment',
     };
   });
 }
