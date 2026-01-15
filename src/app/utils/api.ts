@@ -8,11 +8,18 @@ const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-
 let accessToken: string | null = null;
 
 export const setAuthToken = (token: string | null) => {
+  console.log(`🔑 [API] setAuthToken called with: ${token ? 'VALID_TOKEN' : 'NULL'}`);
+  if (token) {
+    console.log(`🔑 [API] Token preview: ${token.substring(0, 20)}...`);
+  }
+  
   accessToken = token;
   if (token) {
     localStorage.setItem('fuelier_auth_token', token);
+    console.log(`🔑 [API] ✅ Token saved to localStorage`);
   } else {
     localStorage.removeItem('fuelier_auth_token');
+    console.log(`🔑 [API] ❌ Token removed from localStorage`);
   }
 };
 
@@ -24,15 +31,27 @@ export const getAuthToken = (): string | null => {
 
 const getHeaders = () => {
   const token = getAuthToken();
+  
+  // 🔍 DEBUG: Log detallado del token
+  console.log(`🔑 [API] getHeaders() called:`);
+  console.log(`🔑 [API] Token exists: ${token ? 'YES' : 'NO'}`);
+  if (token) {
+    console.log(`🔑 [API] Token preview: ${token.substring(0, 20)}...`);
+  }
+  
   // Token es opcional para algunos endpoints públicos (global-meals, global-ingredients)
   // Solo mostrar warning en nivel debug
   if (!token && process.env.NODE_ENV === 'development') {
     console.debug("[API] Using Anon Key (no user token)");
   }
-  return {
+  
+  const finalHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token || publicAnonKey}`
   };
+  
+  console.log(`🔑 [API] Final Authorization header: Bearer ${(token || publicAnonKey).substring(0, 20)}...`);
+  return finalHeaders;
 };
 
 const headers = {

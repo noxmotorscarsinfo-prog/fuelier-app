@@ -361,11 +361,30 @@ app.post(`${authBasePath}/signout`, async (c) => {
 app.get(`${basePath}/user/:email`, async (c) => {
   try {
     const email = c.req.param("email");
+    console.log(`[DEBUG] GET /user/${email} - Iniciando consulta...`);
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
+    console.log(`[DEBUG] Consultando tabla 'users' para email: ${email}`);
     const { data, error } = await supabase.from('users').select('*').eq('email', email).single();
     
-    if (error || !data) return c.json({ error: "User not found" }, 404);
+    if (error) {
+      console.log(`[DEBUG] Error en consulta users:`, error.code, error.message);
+      if (error.code === 'PGRST116') {
+        console.log(`[DEBUG] Usuario NO encontrado (PGRST116): ${email}`);
+        return c.json({ error: "User not found" }, 404);
+      } else {
+        console.log(`[DEBUG] Error inesperado:`, error);
+        return c.json({ error: "Database error", details: error.message }, 500);
+      }
+    }
+    
+    if (!data) {
+      console.log(`[DEBUG] Data es null para email: ${email}`);
+      return c.json({ error: "User not found" }, 404);
+    }
+    
+    console.log(`[DEBUG] ✅ Usuario encontrado: ${email} -> ID: ${data.id}`);
     const user = {
       id: data.id, // CRÍTICO: Incluir el ID del usuario.
       email: data.email,
