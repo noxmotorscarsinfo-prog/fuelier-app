@@ -15,8 +15,9 @@
  * @date 2026-01-15
  */
 
-import { MealIngredient, Meal } from '@/types';
-import { Ingredient } from '../../../data/ingredientTypes';
+// Use relative import to avoid path alias issues
+import type { MealIngredient, Meal } from '../../../types';
+import type { Ingredient } from '../../../data/ingredientTypes';
 
 // ============================================================================
 // CORE TYPES
@@ -107,6 +108,9 @@ export interface IngredientClassification {
     
     /** Total de ingredientes */
     totalIngredients: number;
+    
+    /** Total de calorías */
+    totalCalories: number;
     
     /** Distribución por rol */
     distribution: {

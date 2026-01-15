@@ -42,8 +42,10 @@ import type {
   MealIngredient,
   DailyContext,
   Ingredient,
-  ScalingApproach,
 } from './types';
+
+// ScalingApproach is defined inline in StrategyDecision
+type ScalingApproach = 'global_scaling' | 'hierarchical_adjustment' | 'lp_optimization';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES FOR INTERNAL USE
@@ -216,12 +218,22 @@ function calculateCompatibility(
   
   // FACTOR 2: Flexibility ratio (how much can we adjust?)
   const flexiblePrimaryCalories = classification.flexiblePrimary.reduce(
-    (sum, ing) => sum + ing.calories, 0
+    (sum, ing) => sum + (ing.amount * ing.caloriesPerGram), 0
   );
   const flexibleSecondaryCalories = classification.flexibleSecondary.reduce(
-    (sum, ing) => sum + ing.calories, 0
+    (sum, ing) => sum + (ing.amount * ing.caloriesPerGram), 0
   );
-  const totalCalories = classification.metadata.totalCalories;
+  
+  // Calculate total calories from all ingredients
+  const allIngredients = [
+    ...classification.structural,
+    ...classification.flexiblePrimary,
+    ...classification.flexibleSecondary
+  ];
+  const totalCalories = allIngredients.reduce(
+    (sum, ing) => sum + (ing.amount * ing.caloriesPerGram), 0
+  ) || 1; // Avoid division by zero
+  
   const flexibilityRatio = (flexiblePrimaryCalories + flexibleSecondaryCalories) / totalCalories;
   
   if (flexibilityRatio < 0.15) {
@@ -346,9 +358,9 @@ function identifyAdjustableIngredients(
   if (approach === 'global_scaling') {
     // Global scaling adjusts ALL ingredients proportionally
     return [
-      ...classification.structural.map(ing => ing.ingredientId),
-      ...classification.flexiblePrimary.map(ing => ing.ingredientId),
-      ...classification.flexibleSecondary.map(ing => ing.ingredientId),
+      ...classification.structural.map(ing => ing.id),
+      ...classification.flexiblePrimary.map(ing => ing.id),
+      ...classification.flexibleSecondary.map(ing => ing.id),
     ];
   }
   
@@ -356,17 +368,17 @@ function identifyAdjustableIngredients(
     // Hierarchical: Flexibles only (structural locked)
     // Order matters: primary first, secondary later
     return [
-      ...classification.flexiblePrimary.map(ing => ing.ingredientId),
-      ...classification.flexibleSecondary.map(ing => ing.ingredientId),
+      ...classification.flexiblePrimary.map(ing => ing.id),
+      ...classification.flexibleSecondary.map(ing => ing.id),
     ];
   }
   
   if (approach === 'lp_optimization') {
     // LP: All ingredients (optimizer will respect structural constraints)
     return [
-      ...classification.structural.map(ing => ing.ingredientId),
-      ...classification.flexiblePrimary.map(ing => ing.ingredientId),
-      ...classification.flexibleSecondary.map(ing => ing.ingredientId),
+      ...classification.structural.map(ing => ing.id),
+      ...classification.flexiblePrimary.map(ing => ing.id),
+      ...classification.flexibleSecondary.map(ing => ing.id),
     ];
   }
   

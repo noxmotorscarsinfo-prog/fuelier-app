@@ -384,7 +384,12 @@ function calculateMetadata(
   const totalIngredients = structural.length + flexiblePrimary.length + flexibleSecondary.length;
   
   // Core ratio: % de calorías que es structural
-  const structuralCalories = structural.reduce((sum, ing) => sum + (ing.calories || 0), 0);
+  const structuralCalories = structural.reduce((sum, ing) => sum + (ing.amount * ing.caloriesPerGram), 0);
+  
+  // Calculate total calories from all ingredients
+  const allIngredients = [...structural, ...flexiblePrimary, ...flexibleSecondary];
+  const totalCalories = allIngredients.reduce((sum, ing) => sum + (ing.amount * ing.caloriesPerGram), 0);
+  
   const coreRatio = (structuralCalories / Math.max(totalMacros.calories, 1)) * 100;
   
   // Dominant macro
@@ -412,6 +417,7 @@ function calculateMetadata(
     dominantMacro,
     complexity,
     totalIngredients,
+    totalCalories,
     distribution: {
       structural: structural.length,
       flexiblePrimary: flexiblePrimary.length,

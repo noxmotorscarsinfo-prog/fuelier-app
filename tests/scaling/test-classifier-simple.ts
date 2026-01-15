@@ -199,8 +199,8 @@ function runTest() {
       if (meal.name === 'Pollo con Arroz Integral') {
         // Pollo y Arroz deben ser structural
         validationsTotal++;
-        const hasPolloStructural = classification.structural.some(i => i.ingredientId === 'pollo');
-        const hasArrozStructural = classification.structural.some(i => i.ingredientId === 'arroz');
+        const hasPolloStructural = classification.structural.some(i => i.id === 'pollo');
+        const hasArrozStructural = classification.structural.some(i => i.id === 'arroz');
         if (hasPolloStructural && hasArrozStructural) {
           console.log(`      ✅ Pollo y Arroz son structural`);
           validationsPassed++;
@@ -220,7 +220,7 @@ function runTest() {
         
         // Brócoli debe ser flexible primary
         validationsTotal++;
-        const brocoliIsPrimary = classification.flexiblePrimary.some(i => i.ingredientId === 'brocoli');
+        const brocoliIsPrimary = classification.flexiblePrimary.some(i => i.id === 'brocoli');
         if (brocoliIsPrimary) {
           console.log(`      ✅ Brócoli es flexible primary`);
           validationsPassed++;
