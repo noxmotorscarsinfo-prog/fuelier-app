@@ -129,9 +129,14 @@ export default function MyCustomMeals({
           </button>
           <h1 className="text-2xl">Mis Platos Creados</h1>
         </div>
-        <p className="text-purple-100 text-sm ml-12">
-          {customMeals.length} {customMeals.length === 1 ? 'plato personalizado' : 'platos personalizados'}
-        </p>
+        <div className="ml-12">
+          <p className="text-purple-100 text-sm">
+            {customMeals.length} {customMeals.length === 1 ? 'plato personalizado' : 'platos personalizados'}
+          </p>
+          <p className="text-purple-200/80 text-xs mt-1">
+            📊 Escalable: Se ajusta automáticamente • 🔒 Fijo: Siempre igual
+          </p>
+        </div>
       </div>
 
       <div className="px-6 py-6 space-y-6">
@@ -170,9 +175,21 @@ export default function MyCustomMeals({
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <h4 className="font-medium text-lg text-neutral-800 mb-1">
-                            {meal.name}
-                          </h4>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium text-lg text-neutral-800">
+                              {meal.name}
+                            </h4>
+                            {/* ✨ NUEVO: Etiqueta de escalado */}
+                            {(meal as any).scalingType && (
+                              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                (meal as any).scalingType === 'scalable' 
+                                  ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                                  : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                              }`}>
+                                {(meal as any).scalingType === 'scalable' ? '📊 Escalable' : '🔒 Fijo'}
+                              </div>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2">
                             <span className="inline-block bg-purple-100 text-purple-700 px-2 py-1 rounded-lg text-xs">
                               Personalizado

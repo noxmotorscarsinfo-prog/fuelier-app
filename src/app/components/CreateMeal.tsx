@@ -288,6 +288,19 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
       
       if (success) {
         console.log('✅ Plato guardado en Supabase:', newMeal);
+        
+        // ✨ Mostrar mensaje de éxito más claro
+        alert(`✅ ¡Plato creado exitosamente!
+
+📊 "${newMeal.name}"
+
+🎯 Tipo: ${scalingType === 'scalable' ? '📊 Escalable - Se ajustará automáticamente' : '🔒 Fijo - Siempre igual'}
+
+${newMeal.calories} calorías | ${newMeal.protein}g proteína
+${newMeal.carbs}g carbohidratos | ${newMeal.fat}g grasas
+
+💾 Ya está disponible en "Mis Platos Creados"`);
+        
         onSave(newMeal); // ⭐ Pasar el meal creado
         // ❌ NO llamar a onBack() aquí - el callback onSave se encarga de la navegación
       } else {
