@@ -449,7 +449,7 @@ app.post(`${authBasePath}/signout`, async (c) => {
 // USER ROUTES (Table: users)
 // ==========================================
 
-app.get(`${basePath}/user/:email`, authMiddleware, async (c) => {
+app.get(`${basePath}/user/:email`, async (c) => {
   try {
     const email = c.req.param("email");
     console.log(`[DEBUG] GET /user/${email} - Iniciando consulta...`);

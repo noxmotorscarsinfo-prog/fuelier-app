@@ -87,6 +87,7 @@ const refreshToken = async (): Promise<string | null> => {
       
       if (refreshError || !refreshData?.session?.access_token) {
         console.error(`🔄 [API] Token refresh failed:`, refreshError?.message);
+        console.log(`🔄 [API] 📋 User needs to login again - clearing stored token`);
         setAuthToken(null);
         return null;
       }
@@ -103,9 +104,12 @@ const refreshToken = async (): Promise<string | null> => {
       return session.access_token;
     }
     
+    console.log(`🔄 [API] ℹ️ Current token is still valid`);
     return session.access_token;
   } catch (error) {
     console.error(`🔄 [API] Token refresh error:`, error);
+    console.log(`🔄 [API] 📋 Clearing token due to refresh error`);
+    setAuthToken(null);
     return null;
   }
 };
