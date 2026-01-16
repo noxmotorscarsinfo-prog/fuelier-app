@@ -182,16 +182,26 @@ export default function MyCustomMeals({
                             <h4 className="font-medium text-lg text-neutral-800">
                               {meal.name}
                             </h4>
-                            {/* ✨ NUEVO: Etiqueta de escalado */}
-                            {(meal as any).scalingType && (
-                              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                (meal as any).scalingType === 'scalable' 
-                                  ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
-                                  : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                              }`}>
-                                {(meal as any).scalingType === 'scalable' ? '📊 Escalable' : '🔒 Fijo'}
-                              </div>
-                            )}
+                            {/* ✨ Etiqueta de escalado con fallback */}
+                            {(() => {
+                              // 🔧 FALLBACK: Asumir escalable si no hay campo
+                              const scalingType = (meal as any).scalingType || 'scalable';
+                              const isScalable = (meal as any).is_scalable !== undefined ? (meal as any).is_scalable : true;
+                              const allowScaling = (meal as any).allowScaling !== undefined ? (meal as any).allowScaling : true;
+                              
+                              const isFixedMeal = scalingType === 'fixed' || !allowScaling || !isScalable;
+                              const displayType = isFixedMeal ? 'fixed' : 'scalable';
+                              
+                              return (
+                                <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  displayType === 'scalable' 
+                                    ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                                    : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                }`}>
+                                  {displayType === 'scalable' ? '📊 Escalable' : '🔒 Fijo'}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="inline-block bg-purple-100 text-purple-700 px-2 py-1 rounded-lg text-xs">

@@ -103,15 +103,16 @@ app.use("/*", cors({
 const healthHandler = (c: any) => {
   return c.json({ 
     status: "ok", 
-    version: "sql-architecture-v3-complete", 
+    version: "sql-architecture-v4-auth-fixed", 
     timestamp: new Date().toISOString(),
     endpoints: [
       "POST /user",
       "POST /daily-logs",
       "POST /saved-diets",
       "POST /custom-meals",
-      "GET /global-meals", // Added
-      "GET /custom-ingredients" // Added
+      "DELETE /custom-meals/{id}", // Added DELETE endpoint
+      "GET /global-meals",
+      "GET /custom-ingredients"
     ]
   });
 };
@@ -119,18 +120,75 @@ const healthHandler = (c: any) => {
 app.get("/health", healthHandler);
 app.get("/make-server-b0e879f0/health", healthHandler);
 
+// Test endpoint sin middleware
+app.get("/make-server-b0e879f0/test", (c) => {
+  return c.json({ status: "working", message: "Test endpoint without auth" });
+});
+
+// Test endpoint para generar token de prueba (temporal)
+app.post("/make-server-b0e879f0/test-login", async (c) => {
+  try {
+    const { email, password } = await c.req.json();
+    
+    if (!email || !password) {
+      return c.json({ error: "Email and password required" }, 400);
+    }
+    
+    // Usar cliente con anon key para hacer login
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey);
+    const { data, error } = await userSupabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    
+    if (error || !data.session) {
+      console.log('Login error:', error?.message);
+      return c.json({ error: error?.message || "Login failed" }, 401);
+    }
+    
+    return c.json({
+      message: "Login successful",
+      access_token: data.session.access_token,
+      user: {
+        id: data.user?.id,
+        email: data.user?.email
+      },
+      expires_at: data.session.expires_at
+    });
+  } catch (error) {
+    console.error('Test login error:', error);
+    return c.json({ error: "Login failed", details: String(error) }, 500);
+  }
+});
+
 // Helper para extraer user ID del JWT token de Supabase Auth
-async function getUserIdFromToken(c: any, supabase: any): Promise<string | null> {
+async function getUserIdFromToken(c: any): Promise<string | null> {
   try {
     const authHeader = c.req.header('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
     
     const token = authHeader.replace('Bearer ', '');
-    const { data, error } = await supabase.auth.getUser(token);
     
-    if (error || !data?.user) return null;
+    // Crear cliente con el token del usuario para validación
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    });
+    
+    const { data, error } = await userSupabase.auth.getUser();
+    
+    if (error || !data?.user) {
+      console.log(`[AUTH] Token validation failed: ${error?.message || 'No user data'}`);
+      return null;
+    }
+    
+    console.log(`[AUTH] Token validated successfully for user: ${data.user.id}`);
     return data.user.id;
-  } catch {
+  } catch (error) {
+    console.log(`[AUTH] Exception during token validation: ${error}`);
     return null;
   }
 }
@@ -178,6 +236,39 @@ async function getUserIdByEmail(supabase: any, email: string): Promise<string | 
 
 const basePath = "/make-server-b0e879f0";
 const authBasePath = `${basePath}/auth`;
+
+// ==========================================
+// AUTHENTICATION MIDDLEWARE
+// ==========================================
+
+// Middleware para verificar autenticación
+async function authMiddleware(c: any, next: any) {
+  try {
+    // Skip auth check for health endpoints
+    const path = c.req.path;
+    console.log(`[AUTH] Checking path: ${path}`);
+    
+    if (path === '/health' || path === '/make-server-b0e879f0/health' || path.includes('/health')) {
+      console.log(`[AUTH] Skipping auth for health endpoint: ${path}`);
+      await next();
+      return;
+    }
+    
+    const userId = await getUserIdFromToken(c);
+    if (!userId) {
+      console.log(`[AUTH] Authentication failed for path: ${path}`);
+      return c.json({ error: 'Authentication required', message: 'Invalid or missing token' }, 401);
+    }
+    
+    // Store user ID in context for later use
+    c.set('userId', userId);
+    console.log(`[AUTH] Authenticated user: ${userId} for path: ${path}`);
+    await next();
+  } catch (error) {
+    console.error(`[AUTH] Authentication error: ${error}`);
+    return c.json({ error: 'Authentication failed', message: 'Token validation error' }, 401);
+  }
+}
 
 // ==========================================
 // AUTHENTICATION ROUTES (con rate limiting estricto)
@@ -358,7 +449,7 @@ app.post(`${authBasePath}/signout`, async (c) => {
 // USER ROUTES (Table: users)
 // ==========================================
 
-app.get(`${basePath}/user/:email`, async (c) => {
+app.get(`${basePath}/user/:email`, authMiddleware, async (c) => {
   try {
     const email = c.req.param("email");
     console.log(`[DEBUG] GET /user/${email} - Iniciando consulta...`);
@@ -431,7 +522,7 @@ app.get(`${basePath}/user/:email`, async (c) => {
   }
 });
 
-app.post(`${basePath}/user`, rateLimitMiddleware('write'), async (c) => {
+app.post(`${basePath}/user`, rateLimitMiddleware('write'), authMiddleware, async (c) => {
   try {
     const user = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -442,7 +533,7 @@ app.post(`${basePath}/user`, rateLimitMiddleware('write'), async (c) => {
     // 3. ID buscado en la tabla users por email (para usuarios existentes)
     let userId = user.id;
     if (!userId) {
-      userId = await getUserIdFromToken(c, supabase);
+      userId = await getUserIdFromToken(c);
       console.log(`[POST /user] ID from JWT token: ${userId}`);
     }
     if (!userId) {
@@ -511,7 +602,7 @@ app.post(`${basePath}/user`, rateLimitMiddleware('write'), async (c) => {
 // DAILY LOGS ROUTES
 // ==========================================
 
-app.get(`${basePath}/daily-logs/:email`, async (c) => {
+app.get(`${basePath}/daily-logs/:email`, authMiddleware, async (c) => {
   try {
     const email = c.req.param("email");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -546,7 +637,7 @@ app.get(`${basePath}/daily-logs/:email`, async (c) => {
   }
 });
 
-app.post(`${basePath}/daily-logs`, rateLimitMiddleware('write'), async (c) => {
+app.post(`${basePath}/daily-logs`, rateLimitMiddleware('write'), authMiddleware, async (c) => {
   try {
     const { email, logs } = await c.req.json();
     console.log(`[SERVER] POST /daily-logs for ${email}`);
@@ -592,7 +683,7 @@ app.post(`${basePath}/daily-logs`, rateLimitMiddleware('write'), async (c) => {
 // CUSTOM MEALS ROUTES
 // ==========================================
 
-app.get(`${basePath}/custom-meals/:email`, async (c) => {
+app.get(`${basePath}/custom-meals/:email`, authMiddleware, async (c) => {
   try {
     const email = c.req.param("email");
     console.log(`[DEBUG] GET /custom-meals/${email} - Iniciando consulta...`);
@@ -633,7 +724,7 @@ app.get(`${basePath}/custom-meals/:email`, async (c) => {
   }
 });
 
-app.post(`${basePath}/custom-meals`, rateLimitMiddleware('write'), async (c) => {
+app.post(`${basePath}/custom-meals`, rateLimitMiddleware('write'), authMiddleware, async (c) => {
   try {
     const { email, meals } = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -693,11 +784,43 @@ app.post(`${basePath}/custom-meals`, rateLimitMiddleware('write'), async (c) => 
   }
 });
 
+// DELETE endpoint para eliminar custom meals
+app.delete(`${basePath}/custom-meals/:id`, authMiddleware, async (c) => {
+  try {
+    const mealId = c.req.param("id");
+    console.log(`[DELETE /custom-meals] Deleting meal with ID: ${mealId}`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data, error } = await supabase
+      .from('custom_meals')
+      .delete()
+      .eq('id', mealId)
+      .select();
+
+    if (error) {
+      console.error(`[DELETE /custom-meals] Supabase error:`, error);
+      return c.json({ error: error.message, code: error.code }, 500);
+    }
+
+    if (!data || data.length === 0) {
+      console.log(`[DELETE /custom-meals] No meal found with ID: ${mealId}`);
+      return c.json({ error: 'Custom meal not found' }, 404);
+    }
+
+    console.log(`[DELETE /custom-meals] Successfully deleted meal: ${mealId}`);
+    return c.json({ success: true, deleted: data[0] });
+  } catch (error) {
+    console.error('[DELETE /custom-meals] Error:', error);
+    return c.json({ error: "Failed to delete custom meal", details: String(error) }, 500);
+  }
+});
+
 // ==========================================
 // SAVED DIETS
 // ==========================================
 
-app.get(`${basePath}/saved-diets/:email`, async (c) => {
+app.get(`${basePath}/saved-diets/:email`, authMiddleware, async (c) => {
   try {
     const email = c.req.param("email");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -708,7 +831,7 @@ app.get(`${basePath}/saved-diets/:email`, async (c) => {
   } catch (error) { return c.json([], 200); }
 });
 
-app.post(`${basePath}/saved-diets`, rateLimitMiddleware('write'), async (c) => {
+app.post(`${basePath}/saved-diets`, rateLimitMiddleware('write'), authMiddleware, async (c) => {
   try {
     const { email, diets } = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -732,7 +855,7 @@ app.post(`${basePath}/saved-diets`, rateLimitMiddleware('write'), async (c) => {
 // FAVORITE MEALS
 // ==========================================
 
-app.get(`${basePath}/favorite-meals/:email`, async (c) => {
+app.get(`${basePath}/favorite-meals/:email`, authMiddleware, async (c) => {
   try {
     const email = c.req.param("email");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -741,7 +864,7 @@ app.get(`${basePath}/favorite-meals/:email`, async (c) => {
   } catch (error) { return c.json([], 200); }
 });
 
-app.post(`${basePath}/favorite-meals`, rateLimitMiddleware('write'), async (c) => {
+app.post(`${basePath}/favorite-meals`, rateLimitMiddleware('write'), authMiddleware, async (c) => {
   try {
     const { email, favorites } = await c.req.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -754,7 +877,7 @@ app.post(`${basePath}/favorite-meals`, rateLimitMiddleware('write'), async (c) =
 // TRAINING PLAN
 // ==========================================
 
-app.get(`${basePath}/training-plan/:email`, async (c) => {
+app.get(`${basePath}/training-plan/:email`, authMiddleware, async (c) => {
   try {
     const email = c.req.param("email");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -936,7 +1059,7 @@ app.delete(`${basePath}/global-meals/:id`, async (c) => {
   }
 });
 
-app.get(`${basePath}/global-ingredients`, async (c) => {
+app.get(`${basePath}/global-ingredients`, authMiddleware, async (c) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data, error } = await supabase
@@ -1010,7 +1133,7 @@ app.post(`${basePath}/global-ingredients`, rateLimitMiddleware('write'), async (
 });
 
 // Custom Ingredients
-app.get(`${basePath}/custom-ingredients/:email`, async (c) => {
+app.get(`${basePath}/custom-ingredients/:email`, authMiddleware, async (c) => {
   try {
     const email = c.req.param("email");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);

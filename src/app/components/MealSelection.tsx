@@ -439,7 +439,12 @@ export default function MealSelection({
     const fixed: Meal[] = [];
     
     customMealsOfType.forEach(meal => {
-      const isFixedMeal = meal.scalingType === 'fixed' || meal.allowScaling === false;
+      // 🔧 FALLBACK: Si no hay campos de escalado en BD, asumir escalable por defecto
+      const scalingType = meal.scalingType || 'scalable'; // Default: escalable
+      const allowScaling = meal.allowScaling !== undefined ? meal.allowScaling : true; // Default: true
+      const isScalable = meal.is_scalable !== undefined ? meal.is_scalable : true; // Default: true (campo BD)
+      
+      const isFixedMeal = scalingType === 'fixed' || allowScaling === false || isScalable === false;
       if (isFixedMeal) {
         fixed.push(meal);
       } else {

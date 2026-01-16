@@ -159,6 +159,14 @@ export default function App() {
       return;
     }
     
+    // ✅ Inicializar sistema de autenticación con renovación automática
+    console.log('🔄 App mounted - Initializing auth system...');
+    api.initializeAuth().then(() => {
+      console.log('🔄 Auth system initialized');
+    }).catch((error) => {
+      console.error('❌ Failed to initialize auth system:', error);
+    });
+    
     // ✅ SOLO SUPABASE - No usar localStorage
     console.log('🔄 App mounted - User must login to load from Supabase');
     setIsLoading(false);

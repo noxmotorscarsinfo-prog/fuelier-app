@@ -4,8 +4,9 @@ import { Ingredient } from '../../data/ingredientTypes'; // Tipo correcto con ca
 
 const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-b0e879f0`;
 
-// Auth manager
+// Auth manager mejorado con integración Supabase
 let accessToken: string | null = null;
+let tokenCheckInterval: NodeJS.Timeout | null = null;
 
 export const setAuthToken = (token: string | null) => {
   console.log(`🔑 [API] setAuthToken called with: ${token ? 'VALID_TOKEN' : 'NULL'}`);
@@ -16,10 +17,96 @@ export const setAuthToken = (token: string | null) => {
   accessToken = token;
   if (token) {
     localStorage.setItem('fuelier_auth_token', token);
+    localStorage.setItem('fuelier_auth_timestamp', Date.now().toString());
     console.log(`🔑 [API] ✅ Token saved to localStorage`);
+    
+    // Iniciar monitor de token
+    startTokenMonitor();
   } else {
     localStorage.removeItem('fuelier_auth_token');
+    localStorage.removeItem('fuelier_auth_timestamp');
     console.log(`🔑 [API] ❌ Token removed from localStorage`);
+    
+    // Detener monitor
+    stopTokenMonitor();
+  }
+};
+
+// Monitor de token que verifica expiración cada 5 minutos
+const startTokenMonitor = () => {
+  if (tokenCheckInterval) return; // Ya está ejecutándose
+  
+  tokenCheckInterval = setInterval(async () => {
+    const token = getAuthToken();
+    if (token && isTokenExpired(token)) {
+      console.log(`🔄 [API] Token monitor: Token expired, refreshing...`);
+      await refreshToken();
+    }
+  }, 5 * 60 * 1000); // Cada 5 minutos
+};
+
+const stopTokenMonitor = () => {
+  if (tokenCheckInterval) {
+    clearInterval(tokenCheckInterval);
+    tokenCheckInterval = null;
+  }
+};
+
+// Función para verificar si un token está expirado
+const isTokenExpired = (token: string): boolean => {
+  try {
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) return true;
+    
+    const payload = JSON.parse(atob(tokenParts[1]));
+    const now = Math.floor(Date.now() / 1000);
+    const bufferTime = 300; // 5 minutos de buffer antes de expiración
+    
+    return (payload.exp - bufferTime) <= now;
+  } catch {
+    return true;
+  }
+};
+
+// Función para renovar token usando el cliente de Supabase
+const refreshToken = async (): Promise<string | null> => {
+  try {
+    console.log(`🔄 [API] Attempting token refresh via Supabase...`);
+    
+    // Importar dinámicamente para evitar ciclos
+    const { supabase } = await import('../../utils/supabaseClient');
+    
+    // Obtener sesión actual
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error || !session?.access_token) {
+      console.log(`🔄 [API] No valid session found, attempting refresh...`);
+      
+      // Intentar refresh
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshData?.session?.access_token) {
+        console.error(`🔄 [API] Token refresh failed:`, refreshError?.message);
+        setAuthToken(null);
+        return null;
+      }
+      
+      console.log(`🔄 [API] ✅ Token refreshed successfully via refresh`);
+      setAuthToken(refreshData.session.access_token);
+      return refreshData.session.access_token;
+    }
+    
+    // Verificar si el token actual es diferente al almacenado
+    if (session.access_token !== accessToken) {
+      console.log(`🔄 [API] ✅ Found updated token in Supabase session`);
+      setAuthToken(session.access_token);
+      return session.access_token;
+    }
+    
+    return session.access_token;
+  } catch (error) {
+    console.error(`🔄 [API] Token refresh error:`, error);
+    return null;
   }
 };
 
@@ -27,6 +114,25 @@ export const getAuthToken = (): string | null => {
   if (accessToken) return accessToken;
   accessToken = localStorage.getItem('fuelier_auth_token');
   return accessToken;
+};
+
+// Función mejorada que verifica expiración y renueva si es necesario
+export const getValidAuthToken = async (): Promise<string | null> => {
+  let token = getAuthToken();
+  
+  if (!token) {
+    console.log(`🔑 [API] No token available`);
+    return null;
+  }
+  
+  // Verificar si el token está expirado
+  if (isTokenExpired(token)) {
+    console.log(`🔑 [API] ⚠️ Token expired, attempting refresh...`);
+    const newToken = await refreshToken();
+    return newToken;
+  }
+  
+  return token;
 };
 
 const getHeaders = () => {
@@ -57,6 +163,32 @@ const getHeaders = () => {
 const headers = {
   'Content-Type': 'application/json',
   'Authorization': `Bearer ${publicAnonKey}`
+};
+
+// Función para inicializar el sistema de autenticación
+export const initializeAuth = async () => {
+  try {
+    console.log(`🔄 [API] Initializing auth system...`);
+    
+    // Verificar si hay token en localStorage
+    const storedToken = localStorage.getItem('fuelier_auth_token');
+    if (storedToken) {
+      console.log(`🔄 [API] Found stored token, checking validity...`);
+      
+      if (isTokenExpired(storedToken)) {
+        console.log(`🔄 [API] Stored token is expired, attempting refresh...`);
+        await refreshToken();
+      } else {
+        console.log(`🔄 [API] Stored token is valid, setting up...`);
+        accessToken = storedToken;
+        startTokenMonitor();
+      }
+    } else {
+      console.log(`🔄 [API] No stored token found`);
+    }
+  } catch (error) {
+    console.error(`🔄 [API] Error initializing auth:`, error);
+  }
 };
 
 // ===== AUTHENTICATION API =====
