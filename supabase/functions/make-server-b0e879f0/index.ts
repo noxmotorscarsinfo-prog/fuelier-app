@@ -228,7 +228,18 @@ async function getUserIdFromToken(c: any): Promise<string | null> {
       
       // ✅ SOLUCIÓN MEJORADA: Validar con Supabase Auth para soportar ambos algoritmos
       // Usar ANON KEY en lugar de SERVICE ROLE KEY para validar el token del usuario
+      console.log(`[AUTH] Creating Supabase client with Anon Key...`);
+      console.log(`[AUTH] supabaseUrl: ${supabaseUrl ? 'EXISTS' : 'MISSING'}`);
+      console.log(`[AUTH] supabaseAnonKey: ${supabaseAnonKey ? 'EXISTS (' + supabaseAnonKey.substring(0, 20) + '...)' : 'MISSING'}`);
+      
+      if (!supabaseAnonKey) {
+        console.log('[AUTH] ❌ CRÍTICO: SUPABASE_ANON_KEY no está disponible');
+        console.log('[AUTH] ❌ Las variables de entorno no están configuradas correctamente');
+        return null;
+      }
+      
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      console.log(`[AUTH] Supabase client created, calling getUser()...`);
       const { data: authData, error: authError } = await supabase.auth.getUser(token);
       
       if (authError || !authData.user) {
