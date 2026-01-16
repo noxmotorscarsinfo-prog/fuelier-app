@@ -28,7 +28,8 @@ app.get("/make-server-b0e879f0/health", (c) => {
       "POST /user",
       "POST /daily-logs",
       "POST /saved-diets",
-      "POST /custom-meals"
+      "POST /custom-meals",
+      "DELETE /custom-meals/{id}"
     ]
   });
 });
@@ -463,6 +464,31 @@ app.post("/make-server-b0e879f0/custom-meals", async (c) => {
     return c.json({ success: true });
   } catch (error) {
     return c.json({ error: "Failed to save custom meals" }, 500);
+  }
+});
+
+app.delete("/make-server-b0e879f0/custom-meals/:id", async (c) => {
+  try {
+    const mealId = c.req.param("id");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    console.log(`🗑️ [DELETE] Eliminando custom meal con ID: ${mealId}`);
+
+    const { error } = await supabase
+      .from('custom_meals')
+      .delete()
+      .eq('id', mealId);
+
+    if (error) {
+      console.error('❌ [DELETE] Error eliminando custom meal:', error);
+      throw error;
+    }
+
+    console.log(`✅ [DELETE] Custom meal eliminado exitosamente: ${mealId}`);
+    return c.json({ success: true, message: "Custom meal deleted successfully" });
+  } catch (error) {
+    console.error('💥 [DELETE] Error en endpoint:', error);
+    return c.json({ error: "Failed to delete custom meal" }, 500);
   }
 });
 

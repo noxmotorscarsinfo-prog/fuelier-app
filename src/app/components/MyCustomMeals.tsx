@@ -73,14 +73,17 @@ export default function MyCustomMeals({
 
   const handleDelete = async (mealId: string) => {
     if (confirm('¿Estás seguro de que quieres eliminar este plato?')) {
-      // ✅ Eliminar de Supabase
-      const updatedMeals = customMeals.filter(m => m.id !== mealId);
-      const success = await api.saveCustomMeals(userEmail, updatedMeals);
+      console.log(`🗑️ [UI] Iniciando eliminación del plato: ${mealId}`);
+      
+      // ✅ NUEVO: Usar DELETE específico en lugar de saveCustomMeals
+      const success = await api.deleteCustomMeal(mealId);
       
       if (success) {
-        console.log('✅ Plato eliminado de Supabase');
-        setCustomMeals(updatedMeals);
+        console.log('✅ [UI] Plato eliminado exitosamente de Supabase');
+        // Actualizar estado local solo después de confirmación del servidor
+        setCustomMeals(prevMeals => prevMeals.filter(m => m.id !== mealId));
       } else {
+        console.error('❌ [UI] Error eliminando plato');
         alert('Error al eliminar el plato. Por favor, intenta de nuevo.');
       }
     }

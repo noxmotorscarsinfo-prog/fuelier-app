@@ -873,6 +873,30 @@ export const saveCustomMeals = async (email: string, meals: Meal[]): Promise<boo
   }
 };
 
+export const deleteCustomMeal = async (mealId: string): Promise<boolean> => {
+  try {
+    console.log(`🗑️ [API] Eliminando custom meal con ID: ${mealId}`);
+    
+    const response = await fetch(`${API_BASE_URL}/custom-meals/${encodeURIComponent(mealId)}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error(`❌ [API] Error ${response.status}:`, errorData);
+      throw new Error(errorData.error || 'Failed to delete custom meal');
+    }
+    
+    const result = await response.json();
+    console.log(`✅ [API] Custom meal eliminado exitosamente:`, result);
+    return true;
+  } catch (error) {
+    console.error('💥 [API] Error deleting custom meal:', error);
+    return false;
+  }
+};
+
 // ===== CUSTOM EXERCISES API (100% Supabase) =====
 
 export const getCustomExercises = async (email: string): Promise<any[]> => {
