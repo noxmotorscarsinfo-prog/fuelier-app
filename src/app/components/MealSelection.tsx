@@ -691,18 +691,19 @@ export default function MealSelection({
           // Usar la versión escalada por la IA
           results.push(scaledVersion);
         } else {
-          // Fallback: usar original si no se encontró escalado
+          // ✅ NUEVO FALLBACK: Incluir SIEMPRE, incluso si no está escalado
           results.push({
             meal: meal,
             scaledMeal: meal,
             score: 65,
-            reasons: ['📊 Plato escalable - versión original (no optimizado)']
+            reasons: ['👨‍🍳 Tu plato personalizado (versión original)']
           });
         }
       }
     });
     
     console.log(`👨‍🍳 Mis Platos: ${results.length} platos personalizados preparados para ${mealType}`);
+    console.log(`   📊 De ${customMealsOfType.length} platos disponibles, mostrando ${results.length} (100% garantizado)`);
     return results;
   }, [customMealsOfType, filteredRecommendedMeals, mealType]);
 
