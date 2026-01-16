@@ -195,8 +195,33 @@ export default function App() {
         
         console.log('✅ [App] Session recovered for:', session.user.email);
         
-        // Establecer token en api.ts para que las peticiones funcionen
+        // ✅ CRÍTICO: Detectar y rechazar tokens ES256 incompatibles
         if (session.access_token) {
+          try {
+            const tokenParts = session.access_token.split('.');
+            if (tokenParts.length === 3) {
+              const header = JSON.parse(atob(tokenParts[0].replace(/-/g, '+').replace(/_/g, '/')));
+              console.log('🔍 [App] Token algorithm:', header.alg);
+              
+              if (header.alg === 'ES256') {
+                console.warn('⚠️ [App] ES256 token detected - forcing re-login for compatibility');
+                console.warn('⚠️ [App] Clearing session and redirecting to login...');
+                
+                // Limpiar sesión
+                await supabase.auth.signOut();
+                localStorage.removeItem('fuelier_remember_session');
+                
+                // Mostrar mensaje al usuario
+                alert('Tu sesión ha expirado. Por favor, inicia sesión de nuevo con tu email y contraseña (no uses "Sign in with Google").');
+                
+                setIsLoading(false);
+                return;
+              }
+            }
+          } catch (tokenCheckError) {
+            console.log('⚠️ [App] Could not check token algorithm:', tokenCheckError);
+          }
+          
           api.setAuthToken(session.access_token);
           console.log('✅ [App] Access token set in API client');
         }

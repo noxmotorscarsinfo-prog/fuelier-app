@@ -333,17 +333,30 @@ async function authMiddleware(c: any, next: any) {
     
     const userId = await getUserIdFromToken(c);
     if (!userId) {
-      console.log(`[AUTH] Authentication failed for path: ${path}`);
-      return c.json({ error: 'Authentication required', message: 'Invalid or missing token' }, 401);
+      console.log(`[AUTH] ❌ Authentication failed for path: ${path}`);
+      console.log(`[AUTH] ❌ Possible causes:`);
+      console.log(`[AUTH] ❌ 1. Token expired - please log in again`);
+      console.log(`[AUTH] ❌ 2. ES256 token (OAuth) incompatible - clear localStorage and use email/password`);
+      console.log(`[AUTH] ❌ 3. Invalid token format`);
+      
+      return c.json({ 
+        error: 'Authentication required', 
+        message: 'Invalid or expired token. Please log out and log in again with email/password.',
+        code: 'INVALID_TOKEN'
+      }, 401);
     }
     
     // Store user ID in context for later use
     c.set('userId', userId);
-    console.log(`[AUTH] Authenticated user: ${userId} for path: ${path}`);
+    console.log(`[AUTH] ✅ Authenticated user: ${userId} for path: ${path}`);
     await next();
   } catch (error) {
-    console.error(`[AUTH] Authentication error: ${error}`);
-    return c.json({ error: 'Authentication failed', message: 'Token validation error' }, 401);
+    console.error(`[AUTH] ❌ Authentication error: ${error}`);
+    return c.json({ 
+      error: 'Authentication failed', 
+      message: 'Token validation error. Please log out and log in again.',
+      code: 'AUTH_ERROR'
+    }, 401);
   }
 }
 
