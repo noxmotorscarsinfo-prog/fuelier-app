@@ -288,8 +288,14 @@ export const signin = async (email: string, password: string): Promise<{ success
     console.log(`🔑 [API] Token length: ${token.length}`);
     console.log(`🔑 [API] Token preview: ${token.substring(0, 50)}...`);
     
-    // Decodificar el JWT para ver su contenido
+    // Decodificar el JWT para ver su contenido (solo logging)
     try {
+      const tokenParts = token.split('.');
+      if (tokenParts.length === 3) {
+        const header = JSON.parse(atob(tokenParts[0].replace(/-/g, '+').replace(/_/g, '/')));
+        console.log(`🔑 [API] Token algorithm: ${header.alg}`);
+      }
+      
       const payload = JSON.parse(atob(token.split('.')[1]));
       const issuedAt = new Date(payload.iat * 1000);
       const expiresAt = new Date(payload.exp * 1000);

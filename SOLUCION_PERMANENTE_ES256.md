@@ -19,7 +19,8 @@
 ### 1. Frontend - Auto-Detección (App.tsx)
 
 **Qué hace**:
-- Detecta automáticamente tokens ES256 al iniciar la app
+-
+ Detecta automáticamente tokens ES256 al iniciar la app
 - Fuerza logout y muestra mensaje al usuario
 - Limpia localStorage automáticamente
 - Previene futuros problemas con OAuth providers
