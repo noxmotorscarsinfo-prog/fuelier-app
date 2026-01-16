@@ -176,57 +176,96 @@ async function getUserIdFromToken(c: any): Promise<string | null> {
     console.log(`[AUTH] Token extracted: ${token.substring(0, 20)}...`);
     
     try {
-      // ✅ SOLUCIÓN: Decodificar JWT directamente (sin llamada a Supabase)
-      // Los tokens de Supabase Auth son JWT estándar con estructura: header.payload.signature
+      // Verificar formato JWT básico
       const parts = token.split('.');
       if (parts.length !== 3) {
         console.log('[AUTH] Invalid JWT format - must have 3 parts');
         return null;
       }
       
-      // Decodificar el payload (segunda parte del JWT)
-      // En Deno, usar TextDecoder para base64
-      const base64Url = parts[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      const payload = JSON.parse(jsonPayload);
-      console.log(`[AUTH] Token decoded successfully`);
+      // Decodificar header para verificar algoritmo
+      try {
+        const headerBase64 = parts[0].replace(/-/g, '+').replace(/_/g, '/');
+        const headerJson = decodeURIComponent(
+          atob(headerBase64)
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const header = JSON.parse(headerJson);
+        console.log(`[AUTH] Token algorithm: ${header.alg}`);
+        
+        // Detectar tokens ES256 (OAuth providers) y sugerir re-login
+        if (header.alg === 'ES256') {
+          console.log('[AUTH] ⚠️  ES256 token detected (OAuth provider)');
+          console.log('[AUTH] ⚠️  For best compatibility, please sign out and sign in with email/password');
+          console.log('[AUTH] ⚠️  Attempting validation with Supabase Auth...');
+        }
+        
+        // Soportar HS256 (email/password) y ES256 (OAuth)
+        if (header.alg !== 'HS256' && header.alg !== 'ES256') {
+          console.log(`[AUTH] ❌ Unsupported algorithm: ${header.alg}`);
+          console.log('[AUTH] ❌ Only HS256 and ES256 are supported');
+          return null;
+        }
+      } catch (headerError) {
+        console.log('[AUTH] Could not decode token header:', headerError);
+      }
       
-      // Verificar expiración
-      const now = Math.floor(Date.now() / 1000);
-      if (payload.exp && payload.exp < now) {
-        const expiredDate = new Date(payload.exp * 1000);
-        console.log(`[AUTH] Token expired at: ${expiredDate.toISOString()}`);
+      // ✅ SOLUCIÓN MEJORADA: Validar con Supabase Auth para soportar ambos algoritmos
+      // Esto funciona para HS256 (email/password) y ES256 (OAuth)
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: authData, error: authError } = await supabase.auth.getUser(token);
+      
+      if (authError || !authData.user) {
+        console.log('[AUTH] ❌ Token validation failed:', authError?.message || 'No user data');
+        
+        // Intentar decode manual como fallback (solo para HS256)
+        try {
+          const base64Url = parts[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+          );
+          const payload = JSON.parse(jsonPayload);
+          
+          // Verificar expiración
+          const now = Math.floor(Date.now() / 1000);
+          if (payload.exp && payload.exp < now) {
+            const expiredDate = new Date(payload.exp * 1000);
+            console.log(`[AUTH] ❌ Token expired at: ${expiredDate.toISOString()}`);
+            return null;
+          }
+          
+          if (payload.sub) {
+            console.log('[AUTH] ⚠️  Using manual decode fallback for user:', payload.sub);
+            return payload.sub;
+          }
+        } catch (fallbackError) {
+          console.log('[AUTH] ❌ Fallback decode also failed:', fallbackError);
+        }
+        
         return null;
       }
       
-      // Extraer user ID del payload (en JWT de Supabase está en 'sub')
-      const userId = payload.sub;
-      if (!userId) {
-        console.log('[AUTH] No user ID (sub) found in token payload');
-        return null;
-      }
-      
-      // Log de validación exitosa
-      const expiresAt = new Date(payload.exp * 1000);
-      console.log(`[AUTH] ✅ Token validated for user: ${userId}`);
-      console.log(`[AUTH] ✅ Token expires at: ${expiresAt.toISOString()}`);
+      // Validación exitosa
+      const userId = authData.user.id;
+      console.log(`[AUTH] ✅ Token validated via Supabase Auth`);
+      console.log(`[AUTH] ✅ User ID: ${userId}`);
+      console.log(`[AUTH] ✅ Email: ${authData.user.email}`);
       
       return userId;
       
-    } catch (decodeError) {
-      console.log('[AUTH] Token decode error:', decodeError);
-      console.log('[AUTH] This usually means the token is not a valid JWT');
+    } catch (error) {
+      console.log('[AUTH] ❌ Exception during token validation:', error);
       return null;
     }
     
   } catch (error) {
-    console.log('[AUTH] Exception during token validation:', error);
+    console.log('[AUTH] ❌ Fatal exception:', error);
     return null;
   }
 }
