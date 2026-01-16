@@ -213,8 +213,8 @@ async function getUserIdFromToken(c: any): Promise<string | null> {
       }
       
       // ✅ SOLUCIÓN MEJORADA: Validar con Supabase Auth para soportar ambos algoritmos
-      // Esto funciona para HS256 (email/password) y ES256 (OAuth)
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      // Usar ANON KEY en lugar de SERVICE ROLE KEY para validar el token del usuario
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
       const { data: authData, error: authError } = await supabase.auth.getUser(token);
       
       if (authError || !authData.user) {
