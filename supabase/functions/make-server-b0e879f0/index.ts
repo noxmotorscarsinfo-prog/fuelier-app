@@ -185,7 +185,16 @@ async function getUserIdFromToken(c: any): Promise<string | null> {
       }
       
       // Decodificar el payload (segunda parte del JWT)
-      const payload = JSON.parse(atob(parts[1]));
+      // En Deno, usar TextDecoder para base64
+      const base64Url = parts[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const payload = JSON.parse(jsonPayload);
       console.log(`[AUTH] Token decoded successfully`);
       
       // Verificar expiración
