@@ -1,7 +1,29 @@
 # 🧪 REPORTE DE TESTS PROFESIONALES - FUELIER APP
-**Fecha**: 12 Enero 2026  
-**Versión**: Backend v1.5 + Frontend v2.1  
+**Fecha**: 16 Enero 2026 (Actualizado)  
+**Versión**: Backend v1.6 + Frontend v2.1  
 **Tester**: GitHub Copilot (Automatizado)
+
+---
+
+## 🚨 ACTUALIZACIÓN CRÍTICA - 16 ENERO 2026
+
+### ❌ PROBLEMA DETECTADO EN PRODUCCIÓN
+**Error**: Todos los endpoints retornan 401 para el usuario `joaniphone2002@gmail.com`
+
+**Causa Raíz**: Token JWT con algoritmo **ES256** (OAuth) en lugar de **HS256** (email/password)
+
+**Solución Implementada**:
+- ✅ Backend actualizado para soportar ambos algoritmos (ES256 + HS256)
+- ✅ Validación mejorada usando `supabase.auth.getUser()` 
+- ✅ Logging detallado del tipo de token
+- ✅ Edge Function desplegado con fix
+
+**Acción Requerida del Usuario**:
+1. Limpiar localStorage (Application → Clear site data)
+2. Hacer login de nuevo con email/password
+3. Verificar que funciona correctamente
+
+Ver: [SOLUCION_RAPIDA_ERROR_401.md](SOLUCION_RAPIDA_ERROR_401.md) para instrucciones paso a paso.
 
 ---
 
