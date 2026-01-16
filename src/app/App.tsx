@@ -159,17 +159,72 @@ export default function App() {
       return;
     }
     
-    // ✅ Inicializar sistema de autenticación con renovación automática
-    console.log('🔄 App mounted - Initializing auth system...');
-    api.initializeAuth().then(() => {
-      console.log('🔄 Auth system initialized');
-    }).catch((error) => {
-      console.error('❌ Failed to initialize auth system:', error);
-    });
+    const recoverSession = async () => {
+      try {
+        console.log('🔄 [App] Checking for existing session...');
+        
+        // ✅ Inicializar sistema de autenticación con renovación automática
+        await api.initializeAuth();
+        console.log('🔄 [App] Auth system initialized');
+        
+        // Verificar si el usuario quiere recordar sesión
+        const rememberSession = localStorage.getItem('fuelier_remember_session');
+        console.log(`🔄 [App] Remember session preference: ${rememberSession}`);
+        
+        if (rememberSession !== 'true') {
+          console.log('🔄 [App] User does not want to remember session');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Intentar recuperar sesión de Supabase
+        const { supabase } = await import('../utils/supabaseClient');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.log('🔄 [App] Error getting session:', error.message);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (!session?.user) {
+          console.log('🔄 [App] No active session found');
+          setIsLoading(false);
+          return;
+        }
+        
+        console.log('✅ [App] Session recovered for:', session.user.email);
+        
+        // Establecer token en api.ts para que las peticiones funcionen
+        if (session.access_token) {
+          api.setAuthToken(session.access_token);
+          console.log('✅ [App] Access token set in API client');
+        }
+        
+        // Cargar datos del usuario desde base de datos
+        const userData = await api.getUser(session.user.email!);
+        
+        if (userData) {
+          console.log('✅ [App] User data loaded from database');
+          setUser(userData);
+          setCurrentScreen('dashboard');
+        } else {
+          console.log('⚠️ [App] User authenticated but no profile found - starting onboarding');
+          setTempData({ 
+            email: session.user.email!, 
+            name: session.user.user_metadata?.name || 'Usuario' 
+          });
+          setCurrentScreen('onboarding-sex');
+        }
+        
+      } catch (error) {
+        console.error('❌ [App] Error recovering session:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
     
-    // ✅ SOLO SUPABASE - No usar localStorage
-    console.log('🔄 App mounted - User must login to load from Supabase');
-    setIsLoading(false);
+    recoverSession();
   }, []);
 
   // Load data from Supabase when user changes

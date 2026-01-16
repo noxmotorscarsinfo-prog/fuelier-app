@@ -235,53 +235,91 @@ export const signup = async (email: string, password: string, name: string): Pro
 
 export const signin = async (email: string, password: string): Promise<{ success: boolean; error?: string; code?: string; access_token?: string; user?: any }> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/signin`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ email, password })
-    });
+    console.log(`🔑 [API] Attempting signin for: ${email}`);
     
-    const data = await response.json();
+    // ✅ CRÍTICO: Usar Supabase Auth directamente para que la sesión persista
+    const { supabase } = await import('../../utils/supabaseClient');
     
-    if (!response.ok) {
-      return { 
-        success: false, 
-        error: data.error || 'Failed to sign in',
-        code: data.code // Incluir el código de error para diagnóstico específico
-      };
-    }
-    
-    // 🔍 DEBUG: Analizar el token recibido
-    console.log(`🔑 [API] signin successful - analyzing token...`);
-    console.log(`🔑 [API] Token type:`, typeof data.access_token);
-    console.log(`🔑 [API] Token length:`, data.access_token ? data.access_token.length : 'NULL');
-    console.log(`🔑 [API] Token preview:`, data.access_token ? data.access_token.substring(0, 50) + '...' : 'NULL');
-    
-    // Try to decode JWT to check expiration
-    if (data.access_token) {
-      try {
-        const tokenParts = data.access_token.split('.');
-        if (tokenParts.length === 3) {
-          const payload = JSON.parse(atob(tokenParts[1]));
-          const now = Math.floor(Date.now() / 1000);
-          console.log(`🔑 [API] JWT issued at:`, new Date(payload.iat * 1000));
-          console.log(`🔑 [API] JWT expires at:`, new Date(payload.exp * 1000));
-          console.log(`🔑 [API] Current time:`, new Date());
-          console.log(`🔑 [API] JWT valid for:`, payload.exp - now, 'seconds');
-          console.log(`🔑 [API] JWT is:`, payload.exp > now ? '✅ VALID' : '❌ EXPIRED');
-        }
-      } catch (jwtError) {
-        console.log(`🔑 [API] ⚠️ Could not decode JWT:`, jwtError);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: {
+        // ✅ CRÍTICO: Mantener sesión persistente entre recargas
+        persistSession: true
       }
+    });
+
+    if (error) {
+      console.log(`🔑 [API] Signin failed: ${error.message}`);
+      
+      // Mapear errores específicos usando el Edge Function para diagnóstico
+      if (error.message.includes('Invalid login credentials')) {
+        // Consultar al Edge Function para diagnóstico detallado
+        try {
+          const diagResponse = await fetch(`${API_BASE_URL}/auth/signin`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ email, password })
+          });
+          const diagData = await diagResponse.json();
+          
+          if (diagData.code === 'user_not_found') {
+            return { success: false, error: 'Usuario no encontrado', code: 'user_not_found' };
+          } else if (diagData.code === 'wrong_password') {
+            return { success: false, error: 'Contraseña incorrecta', code: 'wrong_password' };
+          }
+        } catch (diagError) {
+          console.log('🔑 [API] Could not get detailed diagnosis:', diagError);
+        }
+      }
+      
+      return { success: false, error: error.message };
     }
+
+    if (!data.session?.access_token) {
+      console.log(`🔑 [API] No access token in response`);
+      return { success: false, error: 'No se pudo obtener el token de acceso' };
+    }
+
+    // Analizar el token para debugging
+    const token = data.session.access_token;
+    console.log(`🔑 [API] signin successful - analyzing token...`);
+    console.log(`🔑 [API] Token type: ${typeof token}`);
+    console.log(`🔑 [API] Token length: ${token.length}`);
+    console.log(`🔑 [API] Token preview: ${token.substring(0, 50)}...`);
     
-    // Set auth token
-    setAuthToken(data.access_token);
-    
-    return { success: true, access_token: data.access_token, user: data.user };
-  } catch (error) {
-    console.error('Error in signin:', error);
-    return { success: false, error: 'Failed to sign in' };
+    // Decodificar el JWT para ver su contenido
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const issuedAt = new Date(payload.iat * 1000);
+      const expiresAt = new Date(payload.exp * 1000);
+      const now = new Date();
+      const validFor = payload.exp - payload.iat;
+      
+      console.log(`🔑 [API] JWT issued at: ${issuedAt}`);
+      console.log(`🔑 [API] JWT expires at: ${expiresAt}`);
+      console.log(`🔑 [API] Current time: ${now}`);
+      console.log(`🔑 [API] JWT valid for: ${validFor} seconds`);
+      console.log(`🔑 [API] JWT is: ${expiresAt > now ? '✅ VALID' : '❌ EXPIRED'}`);
+    } catch (e) {
+      console.warn(`🔑 [API] Could not decode JWT:`, e);
+    }
+
+    // Guardar token
+    setAuthToken(token);
+    console.log(`🔑 [API] ✅ Session persisted in browser storage`);
+
+    return { 
+      success: true, 
+      access_token: token,
+      user: data.user
+    };
+  } catch (error: any) {
+    console.error(`🔑 [API] Exception during signin:`, error);
+    return { 
+      success: false, 
+      error: error.message || 'Error de conexión' 
+    };
   }
 };
 

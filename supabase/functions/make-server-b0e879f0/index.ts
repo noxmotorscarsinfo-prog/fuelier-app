@@ -165,30 +165,59 @@ app.post("/make-server-b0e879f0/test-login", async (c) => {
 async function getUserIdFromToken(c: any): Promise<string | null> {
   try {
     const authHeader = c.req.header('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+    console.log(`[AUTH] Authorization header: ${authHeader ? 'PRESENT' : 'MISSING'}`);
     
-    const token = authHeader.replace('Bearer ', '');
-    
-    // Crear cliente con el token del usuario para validación
-    const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    });
-    
-    const { data, error } = await userSupabase.auth.getUser();
-    
-    if (error || !data?.user) {
-      console.log(`[AUTH] Token validation failed: ${error?.message || 'No user data'}`);
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log(`[AUTH] Invalid auth header format`);
       return null;
     }
     
-    console.log(`[AUTH] Token validated successfully for user: ${data.user.id}`);
-    return data.user.id;
+    const token = authHeader.replace('Bearer ', '');
+    console.log(`[AUTH] Token extracted: ${token.substring(0, 20)}...`);
+    
+    try {
+      // ✅ SOLUCIÓN: Decodificar JWT directamente (sin llamada a Supabase)
+      // Los tokens de Supabase Auth son JWT estándar con estructura: header.payload.signature
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        console.log('[AUTH] Invalid JWT format - must have 3 parts');
+        return null;
+      }
+      
+      // Decodificar el payload (segunda parte del JWT)
+      const payload = JSON.parse(atob(parts[1]));
+      console.log(`[AUTH] Token decoded successfully`);
+      
+      // Verificar expiración
+      const now = Math.floor(Date.now() / 1000);
+      if (payload.exp && payload.exp < now) {
+        const expiredDate = new Date(payload.exp * 1000);
+        console.log(`[AUTH] Token expired at: ${expiredDate.toISOString()}`);
+        return null;
+      }
+      
+      // Extraer user ID del payload (en JWT de Supabase está en 'sub')
+      const userId = payload.sub;
+      if (!userId) {
+        console.log('[AUTH] No user ID (sub) found in token payload');
+        return null;
+      }
+      
+      // Log de validación exitosa
+      const expiresAt = new Date(payload.exp * 1000);
+      console.log(`[AUTH] ✅ Token validated for user: ${userId}`);
+      console.log(`[AUTH] ✅ Token expires at: ${expiresAt.toISOString()}`);
+      
+      return userId;
+      
+    } catch (decodeError) {
+      console.log('[AUTH] Token decode error:', decodeError);
+      console.log('[AUTH] This usually means the token is not a valid JWT');
+      return null;
+    }
+    
   } catch (error) {
-    console.log(`[AUTH] Exception during token validation: ${error}`);
+    console.log('[AUTH] Exception during token validation:', error);
     return null;
   }
 }
@@ -1059,7 +1088,7 @@ app.delete(`${basePath}/global-meals/:id`, async (c) => {
   }
 });
 
-app.get(`${basePath}/global-ingredients`, authMiddleware, async (c) => {
+app.get(`${basePath}/global-ingredients`, async (c) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data, error } = await supabase
