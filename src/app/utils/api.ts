@@ -1011,19 +1011,48 @@ export const getCustomMeals = async (email: string): Promise<Meal[]> => {
     const data = await response.json();
     console.log(`🚀 [API] ✅ SUCCESS - Loaded ${data.length} custom meals`);
     
-    if (data.length > 0) {
+    // 🔧 MAPEO: Convertir campos de BD (meal_types, detailed_ingredients, etc.) a formato frontend
+    const mappedMeals = data.map((dbMeal: any) => ({
+      id: dbMeal.id,
+      name: dbMeal.name,
+      // 🔧 CRÍTICO: Mapear meal_types (BD) → type (Frontend)
+      // Si meal_types tiene 1 solo elemento, usar string; si tiene varios, usar array
+      type: Array.isArray(dbMeal.meal_types) 
+        ? (dbMeal.meal_types.length === 1 ? dbMeal.meal_types[0] : dbMeal.meal_types)
+        : dbMeal.meal_types || 'lunch',
+      variant: dbMeal.variant,
+      calories: dbMeal.calories,
+      protein: dbMeal.protein,
+      carbs: dbMeal.carbs,
+      fat: dbMeal.fat,
+      // Mapear detailed_ingredients → ingredientReferences
+      ingredientReferences: dbMeal.detailed_ingredients || [],
+      ingredients: dbMeal.ingredients || [], // Para compatibilidad con código legacy
+      baseQuantity: dbMeal.base_quantity || 100,
+      preparationSteps: dbMeal.preparation_steps || [],
+      tips: dbMeal.tips || [],
+      isFavorite: dbMeal.is_favorite || false,
+      isCustom: true,
+      // Campos de escalado
+      scalingType: dbMeal.scaling_type || 'scalable',
+      allowScaling: dbMeal.allow_scaling !== false,
+      is_scalable: dbMeal.is_scalable !== false
+    }));
+    
+    if (mappedMeals.length > 0) {
       console.log(`🚀 [API] Custom meals encontrados:`);
-      data.forEach((meal, i) => {
+      mappedMeals.forEach((meal, i) => {
         const isCafe = meal.name.toLowerCase().includes('café') || meal.name.toLowerCase().includes('cafe');
         const prefix = isCafe ? '☕' : '  ';
-        console.log(`${prefix} ${i + 1}. "${meal.name}"`);
+        const typeInfo = Array.isArray(meal.type) ? meal.type.join(', ') : meal.type;
+        console.log(`${prefix} ${i + 1}. "${meal.name}" (${typeInfo})`);
       });
     } else {
       console.log(`🚀 [API] ⚠️ NO SE ENCONTRARON CUSTOM MEALS`);
     }
     
     console.log(`🚀 [API] ============================================`);
-    return data;
+    return mappedMeals;
   } catch (error) {
     console.error(`🚀 [API] 💥 ERROR loading custom meals:`, error);
     return [];
