@@ -89,6 +89,20 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
+// Debug: Verificar variables de entorno críticas
+console.log('[ENV] ============================================');
+console.log('[ENV] VERIFICACIÓN DE VARIABLES DE ENTORNO');
+console.log('[ENV] ============================================');
+console.log(`[ENV] SUPABASE_URL exists: ${!!supabaseUrl}`);
+console.log(`[ENV] SUPABASE_ANON_KEY exists: ${!!supabaseAnonKey}`);
+console.log(`[ENV] SUPABASE_SERVICE_ROLE_KEY exists: ${!!supabaseServiceKey}`);
+if (supabaseAnonKey) {
+  console.log(`[ENV] SUPABASE_ANON_KEY preview: ${supabaseAnonKey.substring(0, 20)}...`);
+} else {
+  console.log('[ENV] ❌ CRÍTICO: SUPABASE_ANON_KEY está vacía');
+}
+console.log('[ENV] ============================================');
+
 app.use('*', logger((message) => console.log(`[HONO LOG] ${message}`)));
 
 app.use("/*", cors({
