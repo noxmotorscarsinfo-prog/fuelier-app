@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+# Disallow pages that don't need indexing
+Disallow: /admin
+Disallow: /adminfueliercardano
+Disallow: /technical-docs
+
+# Sitemap
+Sitemap: https://fuelier.com/sitemap.xml

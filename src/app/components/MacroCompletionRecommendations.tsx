@@ -90,22 +90,42 @@ export default function MacroCompletionRecommendations({
 
   // Solo mostrar si:
   // 1. Las 4 comidas están registradas
-  // 2. Faltan macros significativos por completar
-  // 3. No hay comidas complementarias ya añadidas (para evitar que se abra si el usuario ya tiene extras)
+  // 2. Faltan macros SIGNIFICATIVOS por completar (cantidades razonables)
+  // 3. No hay comidas complementarias ya añadidas
   const hasComplementaryMeals = (currentLog.extraFoods && currentLog.extraFoods.length > 0) || false;
   
   const shouldShow = mealsLogged === 4 && 
     !hasComplementaryMeals &&
     (
-      remainingMacros.calories >= 150 ||  // Aumentado de 80 a 150
-      (remainingMacros.protein >= 8 && remainingMacros.calories >= 100) ||  // Más estricto
-      (remainingMacros.carbs >= 15 && remainingMacros.calories >= 100) ||
-      (remainingMacros.fat >= 8 && remainingMacros.calories >= 100)
+      remainingMacros.calories >= 250 ||  // Mínimo 250 kcal restantes (cantidad razonable)
+      (remainingMacros.protein >= 15 && remainingMacros.calories >= 150) ||  // 15g proteína + 150 kcal
+      (remainingMacros.carbs >= 30 && remainingMacros.calories >= 150) ||   // 30g carbos + 150 kcal
+      (remainingMacros.fat >= 12 && remainingMacros.calories >= 150)        // 12g grasa + 150 kcal
     );
 
-  // Efecto para abrir automáticamente SOLO cuando se complete la cuarta comida
+  // Debug logging para entender cuándo se dispara
   useEffect(() => {
-    // Solo activar si exactamente acabamos de completar las 4 comidas
+    if (mealsLogged === 4) {
+      console.log('🎯 POPUP MACROS DEBUG:', {
+        mealsLogged,
+        hasComplementaryMeals,
+        remainingMacros,
+        shouldShow,
+        thresholds: {
+          calories: remainingMacros.calories >= 250,
+          protein: remainingMacros.protein >= 15 && remainingMacros.calories >= 150,
+          carbs: remainingMacros.carbs >= 30 && remainingMacros.calories >= 150,
+          fat: remainingMacros.fat >= 12 && remainingMacros.calories >= 150
+        }
+      });
+    }
+  }, [mealsLogged, remainingMacros, shouldShow]);
+
+  // Efecto para abrir automáticamente SOLO cuando:
+  // 1. Se completan exactamente las 4 comidas del día (desayuno, comida, merienda, cena)
+  // 2. Quedan macros SIGNIFICATIVOS por cubrir (cantidades razonables)
+  useEffect(() => {
+    // Solo activar si exactamente acabamos de completar las 4 comidas Y faltan macros razonables
     if (mealsLogged === 4 && shouldShow && !isVisible && !justClosed) {
       // Pequeño delay para permitir que se actualicen los totales
       const timer = setTimeout(() => {
@@ -181,9 +201,16 @@ export default function MacroCompletionRecommendations({
 
   // Determinar qué macro falta más
   const getMacroDeficit = () => {
-    const proteinPercent = (remainingMacros.protein / user.goals.protein) * 100;
-    const carbsPercent = (remainingMacros.carbs / user.goals.carbs) * 100;
-    const fatPercent = (remainingMacros.fat / user.goals.fat) * 100;
+    // Protección contra división por cero
+    const proteinPercent = user.goals.protein > 0 
+      ? (remainingMacros.protein / user.goals.protein) * 100 
+      : 0;
+    const carbsPercent = user.goals.carbs > 0 
+      ? (remainingMacros.carbs / user.goals.carbs) * 100 
+      : 0;
+    const fatPercent = user.goals.fat > 0 
+      ? (remainingMacros.fat / user.goals.fat) * 100 
+      : 0;
 
     return {
       protein: proteinPercent,
