@@ -37,12 +37,12 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
   const [activePreferenceTab, setActivePreferenceTab] = useState<'likes' | 'dislikes' | 'intolerances' | 'allergies'>('likes');
   const [customPreferenceInput, setCustomPreferenceInput] = useState('');
 
-  // NUEVO: Personalización de macros (con valores por defecto para evitar crash si goals es undefined)
+  // NUEVO: Personalización de macros
   const [isCustomMode, setIsCustomMode] = useState(false);
-  const [customCalories, setCustomCalories] = useState(user.goals?.calories ?? 2000);
-  const [customProtein, setCustomProtein] = useState(user.goals?.protein ?? 150);
-  const [customCarbs, setCustomCarbs] = useState(user.goals?.carbs ?? 200);
-  const [customFat, setCustomFat] = useState(user.goals?.fat ?? 70);
+  const [customCalories, setCustomCalories] = useState(user.goals.calories);
+  const [customProtein, setCustomProtein] = useState(user.goals.protein);
+  const [customCarbs, setCustomCarbs] = useState(user.goals.carbs);
+  const [customFat, setCustomFat] = useState(user.goals.fat);
 
   // NUEVO: Funciones para ajustar macros de forma proporcional
   const handleCaloriesChange = (newCalories: number) => {
@@ -50,16 +50,6 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
     
     // Calcular el factor de escala basado en el cambio de calorías
     const oldTotalCalories = (customProtein * 4) + (customCarbs * 4) + (customFat * 9);
-    
-    // Evitar división por cero si los macros actuales son 0
-    if (oldTotalCalories === 0) {
-      // Distribución por defecto: 30% proteína, 40% carbs, 30% grasa
-      setCustomProtein(Math.round((newCalories * 0.30 / 4) / 5) * 5);
-      setCustomCarbs(Math.round((newCalories * 0.40 / 4) / 5) * 5);
-      setCustomFat(Math.round((newCalories * 0.30 / 9) / 5) * 5);
-      return;
-    }
-    
     const scaleFactor = newCalories / oldTotalCalories;
     
     // Ajustar macros proporcionalmente
@@ -240,8 +230,6 @@ export default function Settings({ user, onBack, onUpdateGoals, onUpdateProfile,
   };
 
   const calculateBMI = () => {
-    // Protección contra división por cero
-    if (height <= 0 || weight <= 0) return '0.0';
     const heightInMeters = height / 100;
     return (weight / (heightInMeters * heightInMeters)).toFixed(1);
   };

@@ -1,22 +1,23 @@
 import { useState } from 'react';
 import { Plus, Minus, Trash2, Save, X, Search } from 'lucide-react';
 import { MealIngredient } from '../types';
-import { Ingredient, getIngredientById } from '../../data/ingredientTypes';
+import { getAllIngredients, getIngredientById, Ingredient } from '../../data/ingredientsDatabase';
 
 interface IngredientEditorProps {
   initialIngredients: MealIngredient[];
   onSave: (ingredients: MealIngredient[], totals: { calories: number; protein: number; carbs: number; fat: number }) => void;
   onCancel: () => void;
   onChange?: (ingredients: MealIngredient[], totals: { calories: number; protein: number; carbs: number; fat: number }) => void; // NUEVO: callback para tiempo real
-  allIngredients?: Ingredient[]; // ✅ 100% CLOUD: Lista combinada de ingredientes desde Supabase
+  customIngredients?: Ingredient[]; // ✅ NUEVO: ingredientes personalizados desde Supabase
 }
 
-export default function IngredientEditor({ initialIngredients, onSave, onCancel, onChange, allIngredients = [] }: IngredientEditorProps) {
+export default function IngredientEditor({ initialIngredients, onSave, onCancel, onChange, customIngredients = [] }: IngredientEditorProps) {
   const [editedIngredients, setEditedIngredients] = useState<MealIngredient[]>(initialIngredients);
   const [showIngredientPicker, setShowIngredientPicker] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // ✅ 100% CLOUD: Usar ingredientes pasados como prop
+  // ✅ Pasar ingredientes personalizados desde Supabase
+  const allIngredients = getAllIngredients(customIngredients);
   const filteredIngredients = allIngredients.filter(ing =>
     ing.name.toLowerCase().includes(searchTerm.toLowerCase())
   );

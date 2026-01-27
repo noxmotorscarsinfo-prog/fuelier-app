@@ -118,15 +118,6 @@ export const INGREDIENTS_DATABASE: Ingredient[] = [
     fatPer100g: 11
   },
   {
-    id: 'clara-huevo',
-    name: 'Clara de Huevo',
-    category: 'proteina',
-    caloriesPer100g: 52,
-    proteinPer100g: 11,
-    carbsPer100g: 0.7,
-    fatPer100g: 0.2
-  },
-  {
     id: 'tofu',
     name: 'Tofu',
     category: 'proteina',
@@ -583,7 +574,7 @@ export const INGREDIENTS_DATABASE: Ingredient[] = [
   {
     id: 'plato-generico',
     name: 'Plato Genérico',
-    category: 'condimento' as any, // 'otro' not in type
+    category: 'otro',
     caloriesPer100g: 0,
     proteinPer100g: 0,
     carbsPer100g: 0,
@@ -613,10 +604,7 @@ export function getAllIngredients(customIngredients: Ingredient[] = []): Ingredi
 }
 
 // Función para calcular macros de una lista de ingredientes
-export function calculateMacrosFromIngredients(
-  ingredients: MealIngredientReference[],
-  customIngredients: Ingredient[] = []  // ✅ AÑADIDO: Parámetro para ingredientes personalizados
-): {
+export function calculateMacrosFromIngredients(ingredients: MealIngredientReference[]): {
   calories: number;
   protein: number;
   carbs: number;
@@ -628,7 +616,7 @@ export function calculateMacrosFromIngredients(
   let totalFat = 0;
   
   for (const ref of ingredients) {
-    const ingredient = getIngredientById(ref.ingredientId, customIngredients); // ✅ Pasar customIngredients
+    const ingredient = getIngredientById(ref.ingredientId);
     if (!ingredient) continue;
     
     const factor = ref.amountInGrams / 100; // Convertir a factor de 100g
@@ -641,9 +629,8 @@ export function calculateMacrosFromIngredients(
   
   return {
     calories: Math.round(totalCalories),
-    // Siempre devolver enteros (sin decimales)
-    protein: Math.round(totalProtein),
-    carbs: Math.round(totalCarbs),
-    fat: Math.round(totalFat)
+    protein: Math.round(totalProtein * 10) / 10,
+    carbs: Math.round(totalCarbs * 10) / 10,
+    fat: Math.round(totalFat * 10) / 10
   };
 }

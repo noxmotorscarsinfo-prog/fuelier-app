@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ArrowLeft, Plus, X, Save, Info, ChefHat, Sparkles, Search, Check } from 'lucide-react';
 import { Meal, MealType } from '../types';
-import { Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
+import { INGREDIENTS_DATABASE, calculateMacrosFromIngredients, Ingredient as DBIngredient } from '../../data/ingredientsDatabase';
 import * as api from '../utils/api';
 
 interface CreateMealProps {
@@ -50,42 +50,39 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
   // ⭐ NUEVO: Estados para ingredientes de diferentes fuentes
   const [baseIngredients, setBaseIngredients] = useState<DBIngredient[]>([]); // Ingredientes globales de Supabase
   const [customIngredients, setCustomIngredients] = useState<DBIngredient[]>([]); // Ingredientes personalizados del usuario
-  
-  // NUEVO: Estado para tipo de escalado
-  const [scalingType, setScalingType] = useState<'scalable' | 'fixed'>('scalable');
 
   // ⭐ NUEVO: Cargar ingredientes globales y personalizados desde Supabase al montar
   useEffect(() => {
     const loadAllIngredients = async () => {
       try {
-        // 1. Cargar ingredientes globales usando API (evita RLS)
-        const globalIngredients = await api.getGlobalIngredients();
-        console.log(`✅ Loaded ${globalIngredients?.length || 0} global ingredients from API`);
+        // 1. Cargar ingredientes globales (creados por admin en Supabase)
+        const globalIngredients = await getBaseIngredients();
+        console.log(`✅ Loaded ${globalIngredients?.length || 0} global ingredients from Supabase`);
         
-        // 2. Cargar ingredientes personalizados del usuario usando API
-        const userIngredients = await api.getCustomIngredients(userEmail);
-        console.log(`✅ Loaded ${userIngredients?.length || 0} custom ingredients from API`);
+        // 2. Cargar ingredientes personalizados del usuario
+        const userIngredients = await getCustomIngredients(userEmail);
+        console.log(`✅ Loaded ${userIngredients?.length || 0} custom ingredients from Supabase`);
         
         // Convertir ingredientes de Supabase al formato DBIngredient
         const formattedGlobal = (globalIngredients || []).map((ing: any) => ({
           id: ing.id,
           name: ing.name,
           category: ing.category || 'otros',
-          caloriesPer100g: ing.caloriesPer100g || ing.calories_per_100g || ing.calories || 0,
-          proteinPer100g: ing.proteinPer100g || ing.protein_per_100g || ing.protein || 0,
-          carbsPer100g: ing.carbsPer100g || ing.carbs_per_100g || ing.carbs || 0,
-          fatPer100g: ing.fatPer100g || ing.fat_per_100g || ing.fat || 0,
+          caloriesPer100g: ing.calories_per_100g,
+          proteinPer100g: ing.protein_per_100g,
+          carbsPer100g: ing.carbs_per_100g,
+          fatPer100g: ing.fat_per_100g,
           isCustom: false
         }));
         
         const formattedCustom = (userIngredients || []).map((ing: any) => ({
           id: ing.id,
           name: ing.name,
-          category: ing.category || 'personalizado',
-          caloriesPer100g: ing.caloriesPer100g || ing.calories_per_100g || ing.calories || 0,
-          proteinPer100g: ing.proteinPer100g || ing.protein_per_100g || ing.protein || 0,
-          carbsPer100g: ing.carbsPer100g || ing.carbs_per_100g || ing.carbs || 0,
-          fatPer100g: ing.fatPer100g || ing.fat_per_100g || ing.fat || 0,
+          category: ing.category || 'otros',
+          caloriesPer100g: ing.calories_per_100g,
+          proteinPer100g: ing.protein_per_100g,
+          carbsPer100g: ing.carbs_per_100g,
+          fatPer100g: ing.fat_per_100g,
           isCustom: true
         }));
         
@@ -114,16 +111,14 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
       amountInGrams: parseFloat(ing.grams) || 0
     }));
 
-    // ⭐ FIXED: Pasar todos los ingredientes (base + custom de Supabase) para que pueda buscar por ID
-    const allSupabaseIngredients = [...baseIngredients, ...customIngredients];
-    const macros = calculateMacrosFromIngredients(ingredientReferences, allSupabaseIngredients);
+    const macros = calculateMacrosFromIngredients(ingredientReferences);
     const totalGrams = validIngredients.reduce((sum, ing) => sum + (parseFloat(ing.grams) || 0), 0);
 
     return {
       ...macros,
       totalGrams: Math.round(totalGrams)
     };
-  }, [ingredients, baseIngredients, customIngredients]);
+  }, [ingredients]);
 
   const getMealTypeLabel = () => {
     const labels = {
@@ -178,8 +173,8 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
   const getFilteredSuggestions = (searchText: string) => {
     if (!searchText || searchText.length < 1) return [];
     
-    // ⭐ 100% CLOUD: Solo ingredientes de Supabase (base + personalizados)
-    const allIngredients: DBIngredient[] = [...baseIngredients, ...customIngredients];
+    // ⭐ FIXED: Combinar ingredientes base + personalizados de forma síncrona
+    const allIngredients: DBIngredient[] = [...INGREDIENTS_DATABASE, ...baseIngredients, ...customIngredients];
     const lowerSearch = searchText.toLowerCase();
     
     return allIngredients
@@ -273,10 +268,7 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
       isCustom: true,
       ingredientReferences: ingredientReferences, // ⭐ NUEVO: Para escalado automático
       preparationSteps: preparationSteps.filter(step => step.trim()),
-      tips: tips.filter(tip => tip.trim()).length > 0 ? tips.filter(tip => tip.trim()) : undefined,
-      // ✨ NUEVO: Sistema de escalado configurable
-      allowScaling: scalingType === 'scalable',
-      scalingType: scalingType
+      tips: tips.filter(tip => tip.trim()).length > 0 ? tips.filter(tip => tip.trim()) : undefined
     };
 
     try {
@@ -288,19 +280,6 @@ export default function CreateMeal({ mealType, onBack, onSave, userEmail }: Crea
       
       if (success) {
         console.log('✅ Plato guardado en Supabase:', newMeal);
-        
-        // ✨ Mostrar mensaje de éxito más claro
-        alert(`✅ ¡Plato creado exitosamente!
-
-📊 "${newMeal.name}"
-
-🎯 Tipo: ${scalingType === 'scalable' ? '📊 Escalable - Se ajustará automáticamente' : '🔒 Fijo - Siempre igual'}
-
-${newMeal.calories} calorías | ${newMeal.protein}g proteína
-${newMeal.carbs}g carbohidratos | ${newMeal.fat}g grasas
-
-💾 Ya está disponible en "Mis Platos Creados"`);
-        
         onSave(newMeal); // ⭐ Pasar el meal creado
         // ❌ NO llamar a onBack() aquí - el callback onSave se encarga de la navegación
       } else {
@@ -324,9 +303,13 @@ ${newMeal.carbs}g carbohidratos | ${newMeal.fat}g grasas
     }
 
     try {
-      // ✅ 1. Crear el nuevo ingrediente
+      // ✅ 1. Obtener ingredientes existentes
+      const existingIngredients = await api.getCustomIngredients(userEmail);
+      
+      // ✅ 2. Crear el nuevo ingrediente con ID único
+      const ingredientId = `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const newCustomIngredient: DBIngredient = {
-        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: ingredientId,
         name: newIngredientData.name.trim(),
         category: 'personalizado',
         caloriesPer100g: parseFloat(newIngredientData.calories),
@@ -336,18 +319,28 @@ ${newMeal.carbs}g carbohidratos | ${newMeal.fat}g grasas
         isCustom: true
       };
 
-      // ✅ 2. Guardar SOLO el nuevo ingrediente en Supabase usando la API (evita RLS)
-      const success = await api.saveCustomIngredients(userEmail, [newCustomIngredient]);
+      // ✅ 3. Guardar en Supabase
+      const success = await api.saveCustomIngredients(userEmail, [...existingIngredients, newCustomIngredient]);
       
       if (!success) {
         throw new Error('Failed to save ingredient');
       }
 
-      // ✅ 3. Añadir al estado local inmediatamente para que aparezca en sugerencias
+      // ✅ 4. También guardar en la tabla de Supabase usando la función existente
+      await createCustomIngredient(userEmail, {
+        name: newIngredientData.name.trim(),
+        calories_per_100g: parseFloat(newIngredientData.calories),
+        protein_per_100g: parseFloat(newIngredientData.protein),
+        carbs_per_100g: parseFloat(newIngredientData.carbs),
+        fat_per_100g: parseFloat(newIngredientData.fat),
+        category: 'personalizado'
+      });
+
+      // ✅ 5. Añadir al estado local inmediatamente para que aparezca en sugerencias
       setCustomIngredients([...customIngredients, newCustomIngredient]);
       console.log('✅ Ingrediente personalizado guardado en Supabase');
 
-      // ✅ 4. Auto-seleccionar el ingrediente recién creado si se creó desde el input
+      // ✅ 6. Auto-seleccionar el ingrediente recién creado si se creó desde el input
       if (currentIngredientId) {
         setIngredients(ingredients.map(ing => 
           ing.id === currentIngredientId ? { ...ing, name: newCustomIngredient.name, ingredientId: newCustomIngredient.id, showSuggestions: false } : ing
@@ -744,86 +737,6 @@ ${newMeal.carbs}g carbohidratos | ${newMeal.fat}g grasas
             </div>
           )}
         </div>
-
-        {/* 🚀 Tipo de Escalado - NUEVA SECCIÓN */}
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-indigo-200">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-indigo-600 p-2 rounded-lg">
-              <div className="w-4 h-4 sm:w-5 sm:h-5 text-white">⚙️</div>
-            </div>
-            <div>
-              <h2 className="text-base sm:text-xl font-bold text-indigo-900">Comportamiento del Plato</h2>
-              <p className="text-[10px] sm:text-xs text-indigo-700">Define cómo se comportará este plato al agregarlo a tu día</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            {/* Opción Escalable */}
-            <div 
-              className={`relative border-2 rounded-xl p-4 cursor-pointer transition-all ${
-                scalingType === 'scalable'
-                  ? 'border-indigo-500 bg-indigo-100 shadow-md'
-                  : 'border-neutral-200 bg-white hover:border-indigo-300 hover:shadow-sm'
-              }`}
-              onClick={() => setScalingType('scalable')}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                  scalingType === 'scalable' ? 'border-indigo-500 bg-indigo-500' : 'border-neutral-300'
-                }`}>
-                  {scalingType === 'scalable' && <div className="w-2 h-2 rounded-full bg-white"></div>}
-                </div>
-                <div className="text-sm sm:text-base font-bold text-indigo-900">📊 Plato Escalable</div>
-              </div>
-              <p className="text-xs sm:text-sm text-indigo-700 leading-relaxed">
-                El plato se <strong>ajusta automáticamente</strong> para cumplir tus objetivos nutricionales diarios. 
-                Ideal para comidas principales como ensaladas, pollo con arroz, etc.
-              </p>
-            </div>
-
-            {/* Opción Fija */}
-            <div 
-              className={`relative border-2 rounded-xl p-4 cursor-pointer transition-all ${
-                scalingType === 'fixed'
-                  ? 'border-emerald-500 bg-emerald-100 shadow-md'
-                  : 'border-neutral-200 bg-white hover:border-emerald-300 hover:shadow-sm'
-              }`}
-              onClick={() => setScalingType('fixed')}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                  scalingType === 'fixed' ? 'border-emerald-500 bg-emerald-500' : 'border-neutral-300'
-                }`}>
-                  {scalingType === 'fixed' && <div className="w-2 h-2 rounded-full bg-white"></div>}
-                </div>
-                <div className="text-sm sm:text-base font-bold text-emerald-900">🔒 Plato Fijo</div>
-              </div>
-              <p className="text-xs sm:text-sm text-emerald-700 leading-relaxed">
-                El plato se mantiene <strong>exactamente como lo creaste</strong>. 
-                Ideal para bebidas, snacks específicos, café con proteínas, etc.
-              </p>
-            </div>
-          </div>
-
-          {/* Indicador visual del comportamiento seleccionado */}
-          <div className={`mt-4 p-3 rounded-lg border-2 border-dashed ${
-            scalingType === 'scalable' 
-              ? 'bg-indigo-50 border-indigo-300 text-indigo-800' 
-              : 'bg-emerald-50 border-emerald-300 text-emerald-800'
-          }`}>
-            <div className="flex items-center gap-2 text-sm">
-              <div className="text-lg">
-                {scalingType === 'scalable' ? '🎯' : '📌'}
-              </div>
-              <div className="font-medium">
-                {scalingType === 'scalable' 
-                  ? `Este plato se ajustará automáticamente para optimizar tus macros (${calculatedMacros.calories} cal base)`
-                  : `Este plato siempre tendrá exactamente ${calculatedMacros.calories} calorías y ${calculatedMacros.totalGrams}g`
-                }
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* 6️⃣ Botones de acción - STICKY BOTTOM */}
@@ -837,19 +750,10 @@ ${newMeal.carbs}g carbohidratos | ${newMeal.fat}g grasas
           </button>
           <button
             onClick={handleSave}
-            className={`flex-1 py-3 sm:py-4 rounded-xl transition-all font-semibold flex items-center justify-center gap-2 shadow-md text-sm sm:text-base active:scale-95 ${
-              scalingType === 'scalable' 
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700'
-                : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700'
-            }`}
+            className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 sm:py-4 rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all font-semibold flex items-center justify-center gap-2 shadow-md text-sm sm:text-base active:scale-95"
           >
             <Save className="w-4 h-4 sm:w-5 sm:h-5" />
-            <div className="flex flex-col items-center">
-              <span>Guardar {scalingType === 'scalable' ? 'Plato Escalable' : 'Plato Fijo'}</span>
-              <span className="text-xs opacity-75">
-                {scalingType === 'scalable' ? '📊 Se ajusta automáticamente' : '🔒 Valores exactos'}
-              </span>
-            </div>
+            Guardar Plato
           </button>
         </div>
       </div>

@@ -44,8 +44,8 @@ export default function ProgressHub({
       }
     });
 
-    if (log.extraFoods && log.extraFoods.length > 0) {
-      log.extraFoods.forEach(extra => {
+    if (log.extras && log.extras.length > 0) {
+      log.extras.forEach(extra => {
         totals.calories += extra.calories || 0;
         totals.protein += extra.protein || 0;
         totals.carbs += extra.carbs || 0;
@@ -114,19 +114,10 @@ export default function ProgressHub({
 
   const calculateScore = (log: DailyLog) => {
     const totals = getDayTotals(log);
-    // Evitar división por cero si goals son 0
-    const caloriesScore = user.goals.calories > 0 
-      ? Math.min((totals.calories / user.goals.calories) * 100, 100) 
-      : 0;
-    const proteinScore = user.goals.protein > 0 
-      ? Math.min((totals.protein / user.goals.protein) * 100, 100) 
-      : 0;
-    const carbsScore = user.goals.carbs > 0 
-      ? Math.min((totals.carbs / user.goals.carbs) * 100, 100) 
-      : 0;
-    const fatScore = user.goals.fat > 0 
-      ? Math.min((totals.fat / user.goals.fat) * 100, 100) 
-      : 0;
+    const caloriesScore = Math.min((totals.calories / user.goals.calories) * 100, 100);
+    const proteinScore = Math.min((totals.protein / user.goals.protein) * 100, 100);
+    const carbsScore = Math.min((totals.carbs / user.goals.carbs) * 100, 100);
+    const fatScore = Math.min((totals.fat / user.goals.fat) * 100, 100);
     return Math.round((caloriesScore + proteinScore + carbsScore + fatScore) / 4);
   };
 
@@ -577,10 +568,10 @@ export default function ProgressHub({
                   </div>
                 )}
 
-                {selectedDayLog.extraFoods && selectedDayLog.extraFoods.length > 0 && (
+                {selectedDayLog.extras && selectedDayLog.extras.length > 0 && (
                   <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4">
                     <h5 className="font-bold text-neutral-800 mb-2">➕ Extras</h5>
-                    {selectedDayLog.extraFoods.map((extra, idx) => (
+                    {selectedDayLog.extras.map((extra, idx) => (
                       <div key={idx} className="mb-2 last:mb-0">
                         <p className="text-neutral-700 font-medium">{extra.name}</p>
                         <div className="grid grid-cols-4 gap-2 mt-1 text-xs">

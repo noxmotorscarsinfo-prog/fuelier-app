@@ -227,16 +227,6 @@ export default function Dashboard({
       });
     }
 
-    // ✅ NUEVO: Añadir comidas extra
-    if (currentLog.extraFoods && currentLog.extraFoods.length > 0) {
-      currentLog.extraFoods.forEach(extra => {
-        baseTotals.calories += extra.calories;
-        baseTotals.protein += extra.protein;
-        baseTotals.carbs += extra.carbs;
-        baseTotals.fat += extra.fat;
-      });
-    }
-
     return baseTotals;
   };
 
@@ -1077,7 +1067,7 @@ export default function Dashboard({
                         if (e.key === 'Enter' && weightInput) {
                           const weight = parseFloat(weightInput);
                           if (weight > 0 && weight < 300) {
-                            onUpdateWeight(weight, currentLog.date);
+                            onUpdateWeight(weight);
                             setShowWeightSaved(true);
                             setTimeout(() => setShowWeightSaved(false), 2000);
                           }
@@ -1095,7 +1085,7 @@ export default function Dashboard({
                       if (weightInput) {
                         const weight = parseFloat(weightInput);
                         if (weight > 0 && weight < 300) {
-                          onUpdateWeight(weight, currentLog.date);
+                          onUpdateWeight(weight);
                           setShowWeightSaved(true);
                           setTimeout(() => setShowWeightSaved(false), 2000);
                           setShowMacrosUpdated(true);

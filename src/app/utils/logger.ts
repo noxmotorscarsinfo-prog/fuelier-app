@@ -27,15 +27,6 @@ export const logger = {
   },
 
   /**
-   * Información general (solo en desarrollo)
-   */
-  info: (...args: any[]) => {
-    if (isDev) {
-      console.log('[INFO]', ...args);
-    }
-  },
-
-  /**
    * Errores críticos (siempre se muestran)
    */
   error: (...args: any[]) => {

@@ -48,15 +48,15 @@ export default function CreateIngredient({ onBack, onCreated, userId }: CreateIn
       // ✅ Obtener ingredientes existentes desde Supabase
       const existingIngredients = await api.getCustomIngredients(userId);
       
-      // Crear nuevo ingrediente con formato camelCase (consistente con la app)
+      // Crear nuevo ingrediente con formato correcto
       const newIngredient = {
         id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: name.trim(),
         category: 'otros',
-        caloriesPer100g: cals,
-        proteinPer100g: prot,
-        carbsPer100g: carb,
-        fatPer100g: fats,
+        calories_per_100g: cals,
+        protein_per_100g: prot,
+        carbs_per_100g: carb,
+        fat_per_100g: fats,
         isCustom: true
       };
 

@@ -3,7 +3,7 @@ import { Meal, MealIngredient } from '../types';
 import { ArrowLeft, Check, Flame, Beef, Wheat, Droplet, ChefHat, Clock, Lightbulb, ShoppingBasket, ArrowRight, TrendingUp, TrendingDown, Edit, Target, UtensilsCrossed, Trash2, Plus, Zap } from 'lucide-react';
 import { generateDetailedIngredients, generatePreparationSteps, generateCookingTips, generateMealVariations } from '../utils/mealDetails';
 import { getMealsData } from '../data/meals';
-import { Ingredient, getIngredientById, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
+import { getAllIngredients } from '../../data/ingredientsDatabase';
 import IngredientEditor from './IngredientEditor';
 import ComplementSelector from './ComplementSelector';
 import { getMealGoals, getRemainingForMeal, calculateOptimalPortion, getMealTypeName } from '../utils/mealDistribution';
@@ -11,6 +11,7 @@ import { User, DailyLog } from '../types';
 import { MealType } from '../types';
 import { Complement } from '../data/complements';
 import { adaptMealToUser, getAdaptationLevel } from '../utils/intelligentMealAdaptation';
+import { getIngredientById, calculateMacrosFromIngredients, Ingredient } from '../../data/ingredientsDatabase';
 import * as api from '../utils/api';
 
 interface MealDetailProps {
@@ -27,27 +28,15 @@ interface MealDetailProps {
 }
 
 export default function MealDetail({ meal, onConfirm, onBack, onSelectVariation, user, currentLog, mealType, onEdit, onDelete, isFromDashboard }: MealDetailProps) {
-  // ✅ 100% CLOUD: Cargar ingredientes desde Supabase
-  const [allIngredients, setAllIngredients] = useState<Ingredient[]>([]);
+  // ✅ NUEVO: Cargar ingredientes personalizados desde Supabase
+  const [customIngredients, setCustomIngredients] = useState<Ingredient[]>([]);
 
   useEffect(() => {
-    const loadIngredients = async () => {
-      try {
-        // Cargar ingredientes globales
-        const globalIngredients = await api.getGlobalIngredients();
-        
-        // Cargar ingredientes personalizados
-        const customIngredients = user.email 
-          ? await api.getCustomIngredients(user.email)
-          : [];
-        
-        // Combinar ambos
-        setAllIngredients([...globalIngredients, ...customIngredients]);
-      } catch (error) {
-        console.error('Error cargando ingredientes:', error);
-      }
+    const loadCustomIngredients = async () => {
+      const ingredients = await api.getCustomIngredients(user.email);
+      setCustomIngredients(ingredients);
     };
-    loadIngredients();
+    loadCustomIngredients();
   }, [user.email]);
 
   // Detectar si es una comida combinada
@@ -87,8 +76,8 @@ export default function MealDetail({ meal, onConfirm, onBack, onSelectVariation,
     // ⭐ CLAVE: Los ingredientReferences YA vienen ESCALADOS desde intelligentMealScaling
     // NO necesitamos multiplicar por nada, solo calcular los macros
     const ingredients = meal.ingredientReferences.map((ref, index) => {
-      // ✅ 100% CLOUD: Usar ingredientes de Supabase
-      const ingredient = getIngredientById(ref.ingredientId, allIngredients);
+      // ✅ Pasar ingredientes personalizados desde Supabase
+      const ingredient = getIngredientById(ref.ingredientId, customIngredients);
       if (!ingredient) {
         console.warn(`⚠️ Ingrediente no encontrado: ${ref.ingredientId}`);
         return null;
@@ -183,7 +172,7 @@ export default function MealDetail({ meal, onConfirm, onBack, onSelectVariation,
     }
     
     return ingredients;
-  }, [meal.ingredientReferences, meal.calories, meal.protein, meal.carbs, meal.fat, meal.perfectMatch, allIngredients]);
+  }, [meal.ingredientReferences, meal.calories, meal.protein, meal.carbs, meal.fat, meal.perfectMatch, customIngredients]);
   
   // ⭐ Decidir qué ingredientes mostrar: REALES o GENERADOS
   const ingredientsToShow = realIngredients || detailedIngredients;
@@ -1031,7 +1020,7 @@ export default function MealDetail({ meal, onConfirm, onBack, onSelectVariation,
             onSave={handleSaveIngredients}
             onCancel={handleCancelEdit}
             onChange={handleIngredientsChange}
-            allIngredients={allIngredients}
+            customIngredients={customIngredients}
           />
         )}
 

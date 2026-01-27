@@ -240,21 +240,7 @@ export function TrainingDashboardNew({
           w.date >= weekStart && w.date <= weekEnd
         );
         console.log('[TrainingDashboard] 📅 Semana:', weekStart, '-', weekEnd, '| Completados esta semana:', thisWeekWorkouts.length);
-        
-        // Marcar automáticamente como descanso los días pasados sin entrenamiento
-        const updatedWorkouts = markPastDaysAsRest(thisWeekWorkouts, weekStart);
-        
-        setCompletedWorkouts(updatedWorkouts);
-        
-        // Si hubo cambios, guardar en Supabase
-        if (updatedWorkouts.length !== thisWeekWorkouts.length) {
-          try {
-            await api.saveCompletedWorkouts(user.email, updatedWorkouts);
-            console.log('[TrainingDashboard] ✅ Días pasados sin entrenamiento marcados como descanso');
-          } catch (error) {
-            console.error('Error guardando días de descanso automáticos:', error);
-          }
-        }
+        setCompletedWorkouts(thisWeekWorkouts);
       } catch (error) {
         console.error('Error loading completed workouts:', error);
         setCompletedWorkouts([]);
@@ -265,39 +251,6 @@ export function TrainingDashboardNew({
 
     loadCompletedWorkouts();
   }, [user.email]);
-
-  // Función para marcar automáticamente como descanso los días pasados sin entrenamiento
-  const markPastDaysAsRest = (workouts: CompletedWorkout[], weekStart: string): CompletedWorkout[] => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const weekStartDate = new Date(weekStart);
-    const updatedWorkouts = [...workouts];
-    
-    // Recorrer todos los días desde el inicio de la semana hasta ayer
-    const currentDate = new Date(weekStartDate);
-    while (currentDate < today) {
-      const dateStr = currentDate.toISOString().split('T')[0];
-      
-      // Si este día no tiene ningún entrenamiento registrado, marcarlo como descanso
-      const hasWorkout = workouts.some(w => w.date === dateStr);
-      
-      if (!hasWorkout) {
-        updatedWorkouts.push({
-          date: dateStr,
-          dayPlanIndex: -1, // -1 indica que es un día de descanso automático
-          dayPlanName: 'Descanso',
-          exerciseReps: {},
-          exerciseWeights: {}
-        });
-      }
-      
-      // Avanzar al siguiente día
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    return updatedWorkouts;
-  };
 
   // Guardar entrenamientos completados en Supabase
   const saveCompletedWorkouts = async (workouts: CompletedWorkout[]) => {
@@ -366,20 +319,16 @@ export function TrainingDashboardNew({
   // Usar useMemo para recalcular cuando cambien completedWorkouts o localWeekPlan
   const nextDayPlanIndex = useMemo(() => {
     // Obtener qué días del plan ya se completaron esta semana
-    // Filtrar values nulos/indefinidos para evitar comportamientos inesperados
-    const completedDayPlanIndices = completedWorkouts
-      .map(w => (typeof w.dayPlanIndex === 'number' ? w.dayPlanIndex : null))
-      .filter(i => i !== null) as number[];
+    const completedDayPlanIndices = completedWorkouts.map(w => w.dayPlanIndex);
     
     console.log('[TrainingDashboard] 🔍 Calculando siguiente día...');
     console.log('[TrainingDashboard] 📊 completedWorkouts:', completedWorkouts);
     console.log('[TrainingDashboard] 📋 completedDayPlanIndices:', JSON.stringify(completedDayPlanIndices));
     console.log('[TrainingDashboard] 📅 localWeekPlan length:', localWeekPlan.length);
     
-    const completedSet = new Set(completedDayPlanIndices);
     // Buscar el primer día del plan que no se ha completado
     for (let i = 0; i < localWeekPlan.length; i++) {
-      if (!completedSet.has(i)) {
+      if (!completedDayPlanIndices.includes(i)) {
         console.log(`[TrainingDashboard] ✅ Siguiente día encontrado: ${i} (Día ${i + 1})`);
         return i;
       }
@@ -393,9 +342,7 @@ export function TrainingDashboardNew({
   // Log para debugging - solo cuando cambia el siguiente día a entrenar
   useEffect(() => {
     if (completedWorkouts.length > 0) {
-      const completedDays = completedWorkouts
-        .map(w => (typeof w.dayPlanIndex === 'number' ? `Día ${w.dayPlanIndex + 1}` : 'Día ?'))
-        .join(', ');
+      const completedDays = completedWorkouts.map(w => `Día ${w.dayPlanIndex + 1}`).join(', ');
       console.log(`[TrainingDashboard] ✅ Días completados: ${completedDays} | ➡️ Siguiente: Día ${nextDayPlanIndex + 1}`);
     } else {
       console.log(`[TrainingDashboard] ➡️ Ningún día completado | Siguiente: Día ${nextDayPlanIndex + 1}`);
@@ -479,12 +426,6 @@ export function TrainingDashboardNew({
 
   // Entrenar un día específico
   const handleStartWorkout = (dayIndex: number) => {
-    // ✅ VALIDAR que el día existe y tiene ejercicios antes de iniciar
-    if (!localWeekPlan[dayIndex] || localWeekPlan[dayIndex].exercises.length === 0) {
-      alert('⚠️ Este día no tiene ejercicios configurados. Añade ejercicios antes de entrenar.');
-      return;
-    }
-    
     setSelectedDayToTrain(dayIndex);
     setShowDaySelector(false);
     
@@ -505,51 +446,34 @@ export function TrainingDashboardNew({
 
   // Actualizar repeticiones de un ejercicio en una serie específica
   const updateExerciseReps = (exerciseId: string, setIndex: number, reps: number) => {
-    setExerciseReps(prev => {
-      const currentArray = prev[exerciseId] || [];
-      return {
-        ...prev,
-        [exerciseId]: currentArray.map((r, i) => i === setIndex ? reps : r)
-      };
-    });
+    setExerciseReps(prev => ({
+      ...prev,
+      [exerciseId]: prev[exerciseId].map((r, i) => i === setIndex ? reps : r)
+    }));
   };
 
   // Actualizar pesos de un ejercicio en una serie específica
   const updateExerciseWeights = (exerciseId: string, setIndex: number, weight: number) => {
-    setExerciseWeights(prev => {
-      const currentArray = prev[exerciseId] || [];
-      return {
-        ...prev,
-        [exerciseId]: currentArray.map((w, i) => i === setIndex ? weight : w)
-      };
-    });
+    setExerciseWeights(prev => ({
+      ...prev,
+      [exerciseId]: prev[exerciseId].map((w, i) => i === setIndex ? weight : w)
+    }));
   };
 
   // Verificar si todas las series tienen repeticiones registradas
   const allSetsCompleted = () => {
     if (selectedDayToTrain === null) return false;
     
-    const currentExercises = localWeekPlan[selectedDayToTrain]?.exercises || [];
-    
-    // ✅ VALIDAR que hay al menos un ejercicio
-    if (currentExercises.length === 0) return false;
-    
+    const currentExercises = localWeekPlan[selectedDayToTrain].exercises;
     return currentExercises.every(exercise => {
       const reps = exerciseReps[exercise.id] || [];
-      // ✅ Verificar que hay reps Y que todas son > 0
-      return reps.length === exercise.sets && reps.every(r => r > 0);
+      return reps.every(r => r > 0);
     });
   };
 
   // Marcar entrenamiento como completado
   const handleCompleteWorkout = async () => {
     if (selectedDayToTrain === null) return;
-    
-    // Validar que el día del plan existe
-    if (!localWeekPlan[selectedDayToTrain]) {
-      alert('❌ Error: No se encontró el plan de entrenamiento para este día.');
-      return;
-    }
 
     if (!allSetsCompleted()) {
       alert('⚠️ Por favor, registra las repeticiones de todas las series antes de marcar como completado.');
@@ -695,7 +619,6 @@ export function TrainingDashboardNew({
                     const fullDate = weekFullDates[dayIndex];
                     const isCompleted = isDateCompleted(fullDate);
                     const completedWorkout = getWorkoutForDate(fullDate);
-                    const isRestDay = completedWorkout?.dayPlanIndex === -1; // Día de descanso automático
                     const dateNumber = weekDates[dayIndex];
                     const dayName = weekDays[dayIndex];
                     
@@ -712,9 +635,7 @@ export function TrainingDashboardNew({
                           rounded-lg transition-all duration-300 overflow-hidden
                           ${isToday ? 'ring-2 ring-emerald-500 shadow-lg' : ''}
                           ${isCompleted 
-                            ? isRestDay
-                              ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md'
-                              : 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-md'
+                            ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-md' 
                             : 'bg-white border border-neutral-200 shadow-sm'
                           }
                         `}>
@@ -739,15 +660,9 @@ export function TrainingDashboardNew({
                             {/* Indicador de estado */}
                             <div className="flex justify-center">
                               {isCompleted ? (
-                                isRestDay ? (
-                                  <div className="w-6 h-6 bg-amber-100 rounded-md flex items-center justify-center">
-                                    <span className="text-sm">😴</span>
-                                  </div>
-                                ) : (
-                                  <div className="w-6 h-6 bg-white/20 backdrop-blur-sm rounded-md flex items-center justify-center">
-                                    <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                                  </div>
-                                )
+                                <div className="w-6 h-6 bg-white/20 backdrop-blur-sm rounded-md flex items-center justify-center">
+                                  <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                                </div>
                               ) : isToday ? (
                                 <div className="w-6 h-6 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-md flex items-center justify-center shadow-sm">
                                   <Dumbbell className="w-3.5 h-3.5 text-white" />
@@ -775,7 +690,6 @@ export function TrainingDashboardNew({
                     const fullDate = weekFullDates[dayIndex];
                     const isCompleted = isDateCompleted(fullDate);
                     const completedWorkout = getWorkoutForDate(fullDate);
-                    const isRestDay = completedWorkout?.dayPlanIndex === -1; // Día de descanso automático
                     const dateNumber = weekDates[dayIndex];
                     const dayName = weekDays[dayIndex];
                     
@@ -817,35 +731,19 @@ export function TrainingDashboardNew({
                             {/* Indicador de estado */}
                             <div className="flex flex-col items-center gap-3">
                               {isCompleted ? (
-                                isRestDay ? (
-                                  <>
-                                    <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                                      <span className="text-4xl">😴</span>
-                                    </div>
-                                    <div className="text-center">
-                                      <span className="text-sm font-bold text-white block mb-1">
-                                        Descanso
-                                      </span>
-                                      <span className="text-xs font-medium text-amber-100">
-                                        Sin entrenar
-                                      </span>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <>
-                                    <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                                      <Check className="w-8 h-8 text-white stroke-[2.5]" />
-                                    </div>
-                                    <div className="text-center">
-                                      <span className="text-sm font-bold text-white block mb-1">
-                                        Completado
-                                      </span>
-                                      <span className="text-xs font-medium text-emerald-100">
-                                        {completedWorkout?.dayPlanName}
-                                      </span>
-                                    </div>
-                                  </>
-                                )
+                                <>
+                                  <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                                    <Check className="w-8 h-8 text-white stroke-[2.5]" />
+                                  </div>
+                                  <div className="text-center">
+                                    <span className="text-sm font-bold text-white block mb-1">
+                                      Completado
+                                    </span>
+                                    <span className="text-xs font-medium text-emerald-100">
+                                      {completedWorkout?.dayPlanName}
+                                    </span>
+                                  </div>
+                                </>
                               ) : isToday ? (
                                 <>
                                   <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
@@ -882,8 +780,7 @@ export function TrainingDashboardNew({
               const displayPlanIndex = nextDayPlanIndex;
               const todayPlan = displayPlanIndex !== null && localWeekPlan[displayPlanIndex];
               
-              // No mostrar botón de iniciar si es día de descanso
-              if (!isTodayCompleted && todayPlan && todayPlan.exercises.length > 0) {
+              if (!isTodayCompleted && todayPlan) {
                 return (
                   <div className="px-4 sm:px-6 md:px-8 pt-6 pb-4">
                     <div className="max-w-4xl mx-auto">
@@ -965,33 +862,19 @@ export function TrainingDashboardNew({
                       </div>
 
                       {/* Lista de ejercicios */}
-                      {todayPlan.exercises.length === 0 ? (
-                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 shadow-sm border-2 border-amber-200">
-                          <div className="text-center">
-                            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                              <span className="text-3xl">😴</span>
+                      <div className="bg-white rounded-2xl p-4 shadow-sm border border-neutral-200">
+                        <p className="text-sm font-bold text-neutral-600 mb-3">{todayPlan.exercises.length} ejercicios:</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {todayPlan.exercises.map((ex, idx) => (
+                            <div key={ex.id} className="flex items-center gap-2.5 bg-neutral-50 rounded-lg px-3 py-2.5">
+                              <span className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span className="text-sm font-medium text-neutral-800 truncate flex-1">{ex.name}</span>
                             </div>
-                            <h3 className="text-lg font-bold text-amber-900 mb-2">Día de Descanso</h3>
-                            <p className="text-sm text-amber-700">
-                              Hoy tu cuerpo se recupera y se fortalece. ¡Aprovecha para descansar!
-                            </p>
-                          </div>
+                          ))}
                         </div>
-                      ) : (
-                        <div className="bg-white rounded-2xl p-4 shadow-sm border border-neutral-200">
-                          <p className="text-sm font-bold text-neutral-600 mb-3">{todayPlan.exercises.length} ejercicios:</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {todayPlan.exercises.map((ex, idx) => (
-                              <div key={ex.id} className="flex items-center gap-2.5 bg-neutral-50 rounded-lg px-3 py-2.5">
-                                <span className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
-                                  {idx + 1}
-                                </span>
-                                <span className="text-sm font-medium text-neutral-800 truncate flex-1">{ex.name}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1040,14 +923,10 @@ export function TrainingDashboardNew({
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className="text-sm sm:text-base font-bold text-neutral-800 truncate">
-                            {day.dayName}{day.exercises.length > 0 && getMuscleGroups(day.exercises) && `: ${getMuscleGroups(day.exercises)}`}
+                            {day.dayName}{getMuscleGroups(day.exercises) && `: ${getMuscleGroups(day.exercises)}`}
                           </h3>
                           <p className="text-xs text-neutral-500">
-                            {day.exercises.length === 0 ? (
-                              <span className="text-amber-600 font-semibold">Día de descanso</span>
-                            ) : (
-                              `${day.exercises.length} ejercicio${day.exercises.length !== 1 ? 's' : ''}`
-                            )}
+                            {day.exercises.length} ejercicio{day.exercises.length !== 1 ? 's' : ''}
                           </p>
                         </div>
                         {isCompleted && (

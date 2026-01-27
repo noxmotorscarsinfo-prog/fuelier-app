@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Meal, MealType, DailyLog, SavedDiet, BugReport, MacroGoals, MealDistribution } from './types';
 import LoginAuth from './components/LoginAuth';
 import AdminLogin from './components/AdminLogin';
@@ -26,20 +26,17 @@ import AdminPanel from './components/AdminPanel';
 import TechnicalDocumentation from './components/TechnicalDocumentation';
 import DayCompletedModal from './components/DayCompletedModal';
 import AdaptiveNotification from './components/AdaptiveNotification';
-import { PrivacyPolicy, TermsOfService } from './components/legal';
+import { BackendDebug } from './components/BackendDebug';
 import { analyzeProgress, applyAutomaticAdjustment, detectMetabolicAdaptation, generateWeeklyProgress } from './utils/adaptiveSystem';
 import { calculateMacrosFromUser, calculateBMR, calculateTDEE, calculateMacros } from './utils/macroCalculations';
 import { calculateIntelligentTarget } from './utils/automaticTargetCalculator';
 import { scaleToExactTarget } from './utils/intelligentMealScaling';
-import { Ingredient } from '../data/ingredientTypes';
 import * as api from './utils/api';
 import logger from './utils/logger';
 
 type Screen = 
   | 'login'
   | 'admin-login'
-  | 'privacy-policy'
-  | 'terms-of-service'
   | 'onboarding-sex'
   | 'onboarding-age'
   | 'onboarding-weight'
@@ -88,7 +85,7 @@ export default function App() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [macroRecommendationShownToday, setMacroRecommendationShownToday] = useState(false); // NUEVO: Controla si ya se mostró el modal de recomendaciones hoy
   const [previousScreen, setPreviousScreen] = useState<Screen | null>(null); // NUEVO: Para recordar de dónde venimos
-  const [customMealsRefreshTrigger, setCustomMealsRefreshTrigger] = useState(0); // NUEVO: Para refrescar custom meals
+  const [showDebugPanel, setShowDebugPanel] = useState(false); // DEBUG: Panel de diagnóstico
   
   // NUEVO: Estados para notificaciones adaptativas
   const [showAdaptiveNotification, setShowAdaptiveNotification] = useState(false);
@@ -100,14 +97,17 @@ export default function App() {
     warnings?: string[];
   } | null>(null);
 
-  // Estados para ingredientes (100% cloud)
-  const [globalIngredients, setGlobalIngredients] = useState<Ingredient[]>([]);
-  const [customIngredients, setCustomIngredients] = useState<Ingredient[]>([]);
-
-  // Combinar ingredientes globales + personalizados
-  const allIngredients = useMemo(() => {
-    return [...globalIngredients, ...customIngredients];
-  }, [globalIngredients, customIngredients]);
+  // DEBUG: Listener para mostrar panel de debug con Ctrl+Shift+D
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        setShowDebugPanel(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // NUEVO: Detectar ruta de admin al montar
   useEffect(() => {
@@ -159,97 +159,9 @@ export default function App() {
       return;
     }
     
-    const recoverSession = async () => {
-      try {
-        console.log('🔄 [App] Checking for existing session...');
-        
-        // ✅ Inicializar sistema de autenticación con renovación automática
-        await api.initializeAuth();
-        console.log('🔄 [App] Auth system initialized');
-        
-        // Verificar si el usuario quiere recordar sesión
-        const rememberSession = localStorage.getItem('fuelier_remember_session');
-        console.log(`🔄 [App] Remember session preference: ${rememberSession}`);
-        
-        if (rememberSession !== 'true') {
-          console.log('🔄 [App] User does not want to remember session');
-          setIsLoading(false);
-          return;
-        }
-        
-        // Intentar recuperar sesión de Supabase
-        const { supabase } = await import('../utils/supabaseClient');
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.log('🔄 [App] Error getting session:', error.message);
-          setIsLoading(false);
-          return;
-        }
-        
-        if (!session?.user) {
-          console.log('🔄 [App] No active session found');
-          setIsLoading(false);
-          return;
-        }
-        
-        console.log('✅ [App] Session recovered for:', session.user.email);
-        
-        // ✅ CRÍTICO: Detectar y rechazar tokens ES256 incompatibles
-        if (session.access_token) {
-          try {
-            const tokenParts = session.access_token.split('.');
-            if (tokenParts.length === 3) {
-              const header = JSON.parse(atob(tokenParts[0].replace(/-/g, '+').replace(/_/g, '/')));
-              console.log('🔍 [App] Token algorithm:', header.alg);
-              
-              if (header.alg === 'ES256') {
-                console.warn('⚠️ [App] ES256 token detected - forcing re-login for compatibility');
-                console.warn('⚠️ [App] Clearing session and redirecting to login...');
-                
-                // Limpiar sesión
-                await supabase.auth.signOut();
-                localStorage.removeItem('fuelier_remember_session');
-                
-                // Mostrar mensaje al usuario
-                alert('Tu sesión ha expirado. Por favor, inicia sesión de nuevo con tu email y contraseña (no uses "Sign in with Google").');
-                
-                setIsLoading(false);
-                return;
-              }
-            }
-          } catch (tokenCheckError) {
-            console.log('⚠️ [App] Could not check token algorithm:', tokenCheckError);
-          }
-          
-          api.setAuthToken(session.access_token);
-          console.log('✅ [App] Access token set in API client');
-        }
-        
-        // Cargar datos del usuario desde base de datos
-        const userData = await api.getUser(session.user.email!);
-        
-        if (userData) {
-          console.log('✅ [App] User data loaded from database');
-          setUser(userData);
-          setCurrentScreen('dashboard');
-        } else {
-          console.log('⚠️ [App] User authenticated but no profile found - starting onboarding');
-          setTempData({ 
-            email: session.user.email!, 
-            name: session.user.user_metadata?.name || 'Usuario' 
-          });
-          setCurrentScreen('onboarding-sex');
-        }
-        
-      } catch (error) {
-        console.error('❌ [App] Error recovering session:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    recoverSession();
+    // ✅ SOLO SUPABASE - No usar localStorage
+    console.log('🔄 App mounted - User must login to load from Supabase');
+    setIsLoading(false);
   }, []);
 
   // Load data from Supabase when user changes
@@ -335,25 +247,6 @@ export default function App() {
     };
     
     loadUserData();
-    
-    // Cargar ingredientes globales y personalizados
-    const loadIngredients = async () => {
-      if (!user?.email) return;
-      
-      try {
-        const [baseIngredients, userIngredients] = await Promise.all([
-          api.getGlobalIngredients(),
-          api.getCustomIngredients(user.email)
-        ]);
-        setGlobalIngredients(baseIngredients);
-        setCustomIngredients(userIngredients);
-        logger.log(`✅ Ingredientes cargados: ${baseIngredients.length} globales, ${userIngredients.length} personalizados`);
-      } catch (error) {
-        logger.error('Error loading ingredients:', error);
-      }
-    };
-    
-    loadIngredients();
   }, [user]);
 
   // Save user to Supabase ONLY whenever it changes
@@ -372,8 +265,19 @@ export default function App() {
   useEffect(() => {
     if (user && dailyLogs.length >= 0) {
       console.log(`📝 [Effect] Daily logs changed, saving ${dailyLogs.length} logs for: ${user.email}`);
-      api.saveDailyLogs(user.email, dailyLogs)
-        .then(() => console.log(`✅ [Effect] Daily logs saved successfully: ${dailyLogs.length} logs`))
+      
+      // 🔍 DEBUG: Verificar que todos los logs tengan date
+      const logsWithoutDate = dailyLogs.filter(log => !log.date);
+      if (logsWithoutDate.length > 0) {
+        console.error(`❌ [CRITICAL] ${logsWithoutDate.length} logs SIN DATE:`, logsWithoutDate);
+      }
+      
+      // Solo enviar logs con date
+      const validLogs = dailyLogs.filter(log => log.date);
+      console.log(`📤 Enviando ${validLogs.length} logs válidos (de ${dailyLogs.length} totales)`);
+      
+      api.saveDailyLogs(user.email, validLogs)
+        .then(() => console.log(`✅ [Effect] Daily logs saved successfully: ${validLogs.length} logs`))
         .catch(error => {
           console.error('❌ [CRITICAL] Error saving daily logs to Supabase:', error);
         });
@@ -620,8 +524,7 @@ export default function App() {
         const scaledMeal = scaleToExactTarget(
           meal,
           intelligentTarget,
-          intelligentTarget.isLastMeal,
-          allIngredients
+          intelligentTarget.isLastMeal
         );
         
         return scaledMeal;
@@ -724,7 +627,6 @@ export default function App() {
           goalCalories: userData.goals?.calories
         });
         setUser(userData);
-        
         setCurrentScreen('dashboard');
       } else {
         console.log(`[handleLogin] ⚠️ Perfil NO encontrado en base de datos`);
@@ -741,7 +643,6 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('[handleLogin] ❌ Error inesperado durante login:', error);
-      
       alert(`❌ Error al iniciar sesión: ${error.message || 'Error desconocido'}`);
     }
     
@@ -873,10 +774,8 @@ export default function App() {
       // El token ya se guardó en api.signup, solo iniciar onboarding
       console.log(`[handleSignup] ✅ Auth token set, starting onboarding`);
       
-      // Guardar credenciales temporalmente (INCLUYENDO EL ID del usuario de Supabase Auth)
-      const userId = result.user?.id;
-      console.log(`[handleSignup] 👤 User ID from signup: ${userId}`);
-      setTempData({ email, name, id: userId });
+      // Guardar credenciales temporalmente
+      setTempData({ email, name });
       setCurrentScreen('onboarding-sex');
     } catch (error: any) {
       console.error('[handleSignup] Error during signup:', error);
@@ -952,7 +851,6 @@ export default function App() {
       const isAdmin = adminEmails.includes(tempData.email.toLowerCase());
       
       const newUser: User = {
-        id: (tempData as any).id, // CRÍTICO: ID del usuario de Supabase Auth
         email: tempData.email,
         name: tempData.name,
         sex: tempData.sex,
@@ -1050,25 +948,16 @@ export default function App() {
 
   // NUEVA FUNCIÓN: Actualizar preferencias alimenticias
   const handleUpdatePreferences = (preferences: { likes: string[]; dislikes: string[]; intolerances: string[]; allergies: string[] }) => {
-    setUser(prev => {
-      if (!prev) return prev; // ✅ Proteger contra null
-      return {
-        ...prev,
-        preferences
-      };
-    });
+    setUser(prev => ({
+      ...prev,
+      preferences
+    }));
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  const handleLogout = async () => {
-    // Limpiar sesión en Supabase y localStorage
-    try {
-      await api.signout();
-      console.log('[handleLogout] ✅ Sesión cerrada correctamente');
-    } catch (error) {
-      console.error('[handleLogout] Error al cerrar sesión:', error);
-    }
+  const handleLogout = () => {
+    // Solo limpiar estado, no hay localStorage
     setUser(null);
     setCurrentScreen('login');
   };
@@ -1383,15 +1272,6 @@ export default function App() {
     return <AdminLogin onLogin={handleAdminLogin} />;
   }
 
-  // Show legal pages
-  if (currentScreen === 'privacy-policy') {
-    return <PrivacyPolicy onBack={() => setCurrentScreen('login')} />;
-  }
-
-  if (currentScreen === 'terms-of-service') {
-    return <TermsOfService onBack={() => setCurrentScreen('login')} />;
-  }
-
   // Show login if no user
   if (!user || currentScreen === 'login') {
     return <LoginAuth 
@@ -1402,9 +1282,7 @@ export default function App() {
         console.log('Current screen before:', currentScreen);
         setCurrentScreen('admin-login');
         console.log('Setting screen to: admin-login');
-      }}
-      onShowPrivacy={() => setCurrentScreen('privacy-policy')}
-      onShowTerms={() => setCurrentScreen('terms-of-service')}
+      }} 
     />;
   }
 
@@ -1488,7 +1366,6 @@ export default function App() {
             favoriteMealIds={favoriteMealIds}
             onToggleFavorite={handleToggleFavorite}
             onNavigateToCreateMeal={() => setCurrentScreen('create-meal')}
-            refreshTrigger={customMealsRefreshTrigger}
           />
         )}
         {currentScreen === 'detail' && selectedMeal && selectedMealType && (
@@ -1547,10 +1424,9 @@ export default function App() {
             }}
           />
         )}
-        {currentScreen === 'create-meal' && user && (
+        {currentScreen === 'create-meal' && (
           <CreateMeal
             mealType={selectedMealType || undefined}
-            userEmail={user.email}
             onBack={handleBack}
             onSave={(createdMeal: Meal) => {
               try {
@@ -1574,8 +1450,7 @@ export default function App() {
                   const scaledMeal = scaleToExactTarget(
                     createdMeal,
                     intelligentTarget,
-                    intelligentTarget.isLastMeal,
-                    allIngredients
+                    intelligentTarget.isLastMeal
                   );
                   
                   console.log('📏 Plato escalado:', scaledMeal);
@@ -1585,9 +1460,6 @@ export default function App() {
                 } else {
                   console.log('ℹ️ No hay selectedMealType o user, solo guardando plato');
                 }
-                
-                // ✅ NUEVO: Incrementar trigger para refrescar custom meals en UI
-                setCustomMealsRefreshTrigger(prev => prev + 1);
                 
                 // Limpiar estados y volver al dashboard
                 setSelectedMeal(null);
@@ -1630,10 +1502,9 @@ export default function App() {
 
       {showExtraFood && (
         <ExtraFood
-          user={user!}
           currentLog={getCurrentLog()}
           onClose={() => setShowExtraFood(false)}
-          onAdd={(food) => {
+          onSave={(food) => {
             const currentLogData = getCurrentLog();
             const updatedLog: DailyLog = {
               ...currentLogData,
@@ -1642,6 +1513,17 @@ export default function App() {
             const filteredLogs = dailyLogs.filter(log => log.date !== updatedLog.date);
             setDailyLogs([...filteredLogs, updatedLog]);
             setShowExtraFood(false);
+          }}
+          onDelete={(index) => {
+            const currentLogData = getCurrentLog();
+            const updatedExtras = [...(currentLogData.extraFoods || [])];
+            updatedExtras.splice(index, 1);
+            const updatedLog: DailyLog = {
+              ...currentLogData,
+              extraFoods: updatedExtras
+            };
+            const filteredLogs = dailyLogs.filter(log => log.date !== currentDate);
+            setDailyLogs([...filteredLogs, updatedLog]);
           }}
         />
       )}
@@ -1669,8 +1551,7 @@ export default function App() {
               const scaledMeal = scaleToExactTarget(
                 meal,
                 intelligentTarget,
-                intelligentTarget.isLastMeal,
-                allIngredients
+                intelligentTarget.isLastMeal
               );
               
               return scaledMeal;
@@ -1712,6 +1593,9 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Panel de debug del backend - Ctrl+Shift+D para abrir */}
+      {showDebugPanel && <BackendDebug />}
     </div>
   );
 }

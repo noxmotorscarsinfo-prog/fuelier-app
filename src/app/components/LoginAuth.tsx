@@ -5,18 +5,15 @@ interface LoginAuthProps {
   onLoginSuccess: (email: string, password: string, name: string) => void;
   onSignupSuccess?: (email: string, password: string, name: string) => void;
   onAdminAccess?: () => void;
-  onShowPrivacy?: () => void;
-  onShowTerms?: () => void;
 }
 
-export default function LoginAuth({ onLoginSuccess, onSignupSuccess, onAdminAccess, onShowPrivacy, onShowTerms }: LoginAuthProps) {
+export default function LoginAuth({ onLoginSuccess, onSignupSuccess, onAdminAccess }: LoginAuthProps) {
   const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
-  const [rememberMe, setRememberMe] = useState(true); // Por defecto activado
 
   const validateEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -41,9 +38,6 @@ export default function LoginAuth({ onLoginSuccess, onSignupSuccess, onAdminAcce
       return;
     }
 
-    // Guardar preferencia de recordar sesión
-    localStorage.setItem('fuelier_remember_session', JSON.stringify(rememberMe));
-    
     if (isSignup) {
       if (onSignupSuccess) {
         onSignupSuccess(email, password, name);
@@ -162,22 +156,6 @@ export default function LoginAuth({ onLoginSuccess, onSignupSuccess, onAdminAcce
               </div>
             </div>
 
-            {/* Checkbox de recordar sesión */}
-            {!isSignup && (
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="rememberMe"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 text-emerald-600 border-neutral-300 rounded focus:ring-emerald-500 focus:ring-2 cursor-pointer"
-                />
-                <label htmlFor="rememberMe" className="ml-2 text-sm text-neutral-700 cursor-pointer select-none">
-                  Mantener sesión iniciada
-                </label>
-              </div>
-            )}
-
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
                 {error}
@@ -221,23 +199,6 @@ export default function LoginAuth({ onLoginSuccess, onSignupSuccess, onAdminAcce
         <div className="mt-6 text-center text-emerald-50 text-sm">
           <p>✨ Tus datos se guardan en la nube de forma segura</p>
           <p className="mt-1">🔒 Accede desde cualquier dispositivo</p>
-          
-          {/* Enlaces legales */}
-          <div className="mt-4 flex justify-center gap-4 text-xs">
-            <button
-              onClick={() => onShowPrivacy && onShowPrivacy()}
-              className="text-emerald-100 hover:text-white underline"
-            >
-              Política de Privacidad
-            </button>
-            <span className="text-emerald-200">•</span>
-            <button
-              onClick={() => onShowTerms && onShowTerms()}
-              className="text-emerald-100 hover:text-white underline"
-            >
-              Términos de Uso
-            </button>
-          </div>
         </div>
       </div>
     </div>

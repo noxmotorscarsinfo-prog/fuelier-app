@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Meal, MealType, User, Ingredient } from '../types';
+import { BREAKFASTS_FROM_DB, LUNCHES_FROM_DB, SNACKS_FROM_DB, DINNERS_FROM_DB } from '../../data/mealsWithIngredients';
 import { ArrowLeft, Plus, Edit, Trash2, Save, X, Coffee, UtensilsCrossed, Apple, Moon, FileText, Package, Search, Check, Sparkles, AlertCircle, Upload, Download } from 'lucide-react';
 import { generateSystemDocumentationPDF } from '../utils/generateSystemDocumentation';
 import * as api from '../utils/api';
-import { MealIngredientReference, Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
+import { INGREDIENTS_DATABASE, getAllIngredients } from '../../data/ingredientsDatabase';
+import { MealIngredientReference, Ingredient as DBIngredient, calculateMacrosFromIngredients } from '../../data/ingredientsDatabase';
 import { migrateMealsToStructured } from '../utils/mealMigration';
 import CSVImporter from './CSVImporter';
 import * as XLSX from 'xlsx';
@@ -114,9 +116,8 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     console.log(`📊 Recibidos del servidor: ${meals.length} platos, ${ingredients.length} ingredientes`);
     
     // 🔄 MIGRACIÓN AUTOMÁTICA: Convertir platos viejos sin ingredientes
-    // Necesitamos los ingredientes para la migración
     const originalMealsCount = meals.length;
-    meals = migrateMealsToStructured(meals, ingredients);
+    meals = migrateMealsToStructured(meals);
     
     // Si se migraron platos, guardarlos automáticamente
     const hadMigrations = meals.some((meal: any) => meal._migrated);
@@ -126,44 +127,26 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       console.log('✅ Platos migrados guardados correctamente');
     }
     
-    // 🌍 100% SUPABASE: Cargar solo de Supabase
+    // Si no hay datos en el backend, cargar los platos e ingredientes existentes de la app
     let allMeals = meals;
     let allIngredients = ingredients;
     
-    // 🚨 Auto-sincronizar si Supabase está vacío
     if (meals.length === 0) {
-      console.error('🚨 [AdminPanel] Supabase vacío (base_meals) - auto-sincronizando...');
-      
-      // Importar platos locales dinámicamente para sincronización inicial
-      const { BREAKFASTS_FROM_DB, LUNCHES_FROM_DB, SNACKS_FROM_DB, DINNERS_FROM_DB } = 
-        await import('../../data/mealsWithIngredients');
-      
-      const mealsToSync = [
+      // Cargar SOLO platos con ingredientes detallados de mealsWithIngredients
+      const existingMeals = [
         ...BREAKFASTS_FROM_DB,
         ...LUNCHES_FROM_DB,
         ...SNACKS_FROM_DB,
         ...DINNERS_FROM_DB
       ];
-      
-      try {
-        const syncSuccess = await api.saveGlobalMeals(mealsToSync);
-        if (syncSuccess) {
-          console.log(`✅ [AdminPanel] Auto-sincronización: ${mealsToSync.length} platos guardados`);
-          // Recargar desde Supabase
-          const reloadedMeals = await api.getGlobalMeals();
-          allMeals = reloadedMeals;
-        } else {
-          console.error('❌ [AdminPanel] Auto-sincronización de platos falló');
-          allMeals = []; // Dejar vacío
-        }
-      } catch (syncError) {
-        console.error('❌ [AdminPanel] Error en auto-sincronización:', syncError);
-        allMeals = []; // Dejar vacío
-      }
+      allMeals = existingMeals;
+      console.log('✅ Cargados', existingMeals.length, 'platos con ingredientes detallados desde hardcode');
     }
     
     if (ingredients.length === 0) {
-      console.warn('⚠️ No hay ingredientes en Supabase - ejecutar sincronización de ingredientes');
+      // Cargar ingredientes existentes de la app (sistema + personalizados)
+      allIngredients = INGREDIENTS_DATABASE;
+      console.log('✅ Cargados', INGREDIENTS_DATABASE.length, 'ingredientes del sistema desde hardcode');
     } else {
       console.log(`✅ Usando ${ingredients.length} ingredientes del servidor`);
     }
@@ -335,31 +318,23 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
 
   // ==================== FUNCIONES DE INGREDIENTES PARA PLATOS ====================
 
-  // Función auxiliar para buscar un ingrediente - 100% CLOUD (solo Supabase)
+  // Función auxiliar para buscar un ingrediente en todas las fuentes disponibles
   const findIngredientById = (ingredientId: string): DBIngredient | null => {
-    // Validar que globalIngredients existe
-    if (!globalIngredients || !Array.isArray(globalIngredients)) {
-      console.warn('⚠️ globalIngredients no está disponible aún');
-      return null;
-    }
+    // 1. Buscar en INGREDIENTS_DATABASE (hardcodeados)
+    const fromDB = INGREDIENTS_DATABASE.find(ing => ing.id === ingredientId);
+    if (fromDB) return fromDB;
     
-    // Buscar en globalIngredients (creados por admin en Supabase)
+    // 2. Buscar en globalIngredients (creados por admin en Supabase)
     const fromGlobal = globalIngredients.find(gi => gi.id === ingredientId);
     if (fromGlobal) {
-      // Soportar ambos formatos: caloriesPer100g o calories
-      const calories = (fromGlobal as any).caloriesPer100g ?? fromGlobal.calories ?? 0;
-      const protein = (fromGlobal as any).proteinPer100g ?? fromGlobal.protein ?? 0;
-      const carbs = (fromGlobal as any).carbsPer100g ?? fromGlobal.carbs ?? 0;
-      const fat = (fromGlobal as any).fatPer100g ?? fromGlobal.fat ?? 0;
-      
       return {
         id: fromGlobal.id,
         name: fromGlobal.name,
         category: fromGlobal.category as any,
-        caloriesPer100g: calories,
-        proteinPer100g: protein,
-        carbsPer100g: carbs,
-        fatPer100g: fat,
+        caloriesPer100g: fromGlobal.calories,
+        proteinPer100g: fromGlobal.protein,
+        carbsPer100g: fromGlobal.carbs,
+        fatPer100g: fromGlobal.fat,
         isCustom: false
       };
     }
@@ -404,35 +379,28 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     if (selectedMealIngredients.length === 0) {
       return { calories: 0, protein: 0, carbs: 0, fat: 0 };
     }
-    // Validar que globalIngredients existe
-    if (!globalIngredients || !Array.isArray(globalIngredients)) {
-      console.warn('⚠️ globalIngredients no disponible para calcular macros');
-      return { calories: 0, protein: 0, carbs: 0, fat: 0 };
-    }
-    return calculateMacrosFromIngredients(selectedMealIngredients, globalIngredients);
-  }, [selectedMealIngredients, globalIngredients]);
+    return calculateMacrosFromIngredients(selectedMealIngredients);
+  }, [selectedMealIngredients]);
 
   // Filtrar ingredientes para el selector
   const filteredIngredients = useMemo(() => {
-    // Validar que globalIngredients existe
-    if (!globalIngredients || !Array.isArray(globalIngredients)) {
-      console.warn('⚠️ globalIngredients no disponible para filtrar');
-      return [];
-    }
+    // ⭐ FIXED: Combinar ingredientes hardcodeados + ingredientes globales de Supabase
+    const allAvailableIngredients: DBIngredient[] = [
+      ...INGREDIENTS_DATABASE,
+      // Convertir globalIngredients (formato Ingredient) a DBIngredient
+      ...globalIngredients.map(gi => ({
+        id: gi.id,
+        name: gi.name,
+        category: gi.category as any,
+        caloriesPer100g: gi.calories,
+        proteinPer100g: gi.protein,
+        carbsPer100g: gi.carbs,
+        fatPer100g: gi.fat,
+        isCustom: false
+      }))
+    ];
     
-    // ⭐ 100% CLOUD: Solo ingredientes de Supabase (globalIngredients)
-    const allAvailableIngredients: DBIngredient[] = globalIngredients.map(gi => ({
-      id: gi.id,
-      name: gi.name,
-      category: gi.category as any,
-      caloriesPer100g: (gi as any).caloriesPer100g ?? gi.calories ?? 0,
-      proteinPer100g: (gi as any).proteinPer100g ?? gi.protein ?? 0,
-      carbsPer100g: (gi as any).carbsPer100g ?? gi.carbs ?? 0,
-      fatPer100g: (gi as any).fatPer100g ?? gi.fat ?? 0,
-      isCustom: false
-    }));
-    
-    // Eliminar duplicados por NOMBRE (case-insensitive)
+    // Eliminar duplicados por NOMBRE (case-insensitive) - prioriza ingredientes hardcodeados
     const seenNames = new Set<string>();
     const uniqueIngredients = allAvailableIngredients.filter(ing => {
       const nameLower = ing.name.toLowerCase();
@@ -537,8 +505,6 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
   };
 
   const handleSaveMeal = async () => {
-    console.log('🔵 [handleSaveMeal] Iniciando guardado de plato...');
-    
     if (!mealFormData.name) {
       alert('Por favor ingresa el nombre del plato');
       return;
@@ -553,12 +519,6 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       alert('Por favor añade al menos un ingrediente');
       return;
     }
-
-    console.log('🔵 [handleSaveMeal] Datos del formulario:', {
-      name: mealFormData.name,
-      types: mealFormData.types,
-      ingredientsCount: selectedMealIngredients.length
-    });
 
     // Convertir SelectedIngredient[] a MealIngredientReference[]
     const ingredientReferences: MealIngredientReference[] = selectedMealIngredients.map(si => ({
@@ -595,12 +555,9 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
         : undefined
     };
 
-    console.log('🔵 [handleSaveMeal] Plato creado:', newMeal);
-
     let updatedMeals: Meal[];
     
     if (editingMeal) {
-      console.log('🔵 [handleSaveMeal] Modo: EDITAR plato existente');
       // Actualizar comida existente
       updatedMeals = [
         ...globalMeals.breakfast,
@@ -609,7 +566,6 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
         ...globalMeals.dinner
       ].map(m => m.id === editingMeal.id ? newMeal : m);
     } else {
-      console.log('🔵 [handleSaveMeal] Modo: CREAR plato nuevo');
       // Crear nueva comida
       updatedMeals = [
         ...globalMeals.breakfast,
@@ -620,47 +576,27 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       ];
     }
 
-    console.log('🔵 [handleSaveMeal] Total platos a guardar:', updatedMeals.length);
+    // Guardar en Supabase
+    await api.saveGlobalMeals(updatedMeals);
+    
+    // Recargar datos
+    await loadGlobalData();
 
-    // Guardar en Supabase con manejo de errores
-    try {
-      console.log('🔵 [handleSaveMeal] Llamando a api.saveGlobalMeals...');
-      const result = await api.saveGlobalMeals(updatedMeals);
-      console.log('🔵 [handleSaveMeal] Resultado de guardado:', result);
-      
-      if (!result) {
-        throw new Error('saveGlobalMeals retornó false');
-      }
-      
-      console.log('✅ [handleSaveMeal] Plato guardado exitosamente');
-      
-      // Recargar datos
-      console.log('🔵 [handleSaveMeal] Recargando datos globales...');
-      await loadGlobalData();
-      console.log('✅ [handleSaveMeal] Datos recargados');
-
-      // Limpiar formulario
-      handleCancel();
-      
-      alert('✅ Plato guardado exitosamente');
-    } catch (error) {
-      console.error('❌ [handleSaveMeal] Error al guardar plato:', error);
-      alert(`❌ Error al guardar el plato: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-    }
+    // Limpiar formulario
+    handleCancel();
   };
 
   const handleDeleteMeal = async (mealId: string) => {
     if (confirm('¿Estás seguro de eliminar este plato? Esto lo quitará para TODOS los usuarios.')) {
-      try {
-        const success = await api.deleteGlobalMeal(mealId);
-        if (!success) {
-          throw new Error('Delete failed');
-        }
-        await loadGlobalData();
-      } catch (error) {
-        console.error('Error al eliminar plato:', error);
-        alert('Error al eliminar el plato. Por favor inténtalo de nuevo.');
-      }
+      const updatedMeals = [
+        ...globalMeals.breakfast,
+        ...globalMeals.lunch,
+        ...globalMeals.snack,
+        ...globalMeals.dinner
+      ].filter(m => m.id !== mealId);
+      
+      await api.saveGlobalMeals(updatedMeals);
+      await loadGlobalData();
     }
   };
 
@@ -728,32 +664,22 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
       updatedIngredients = [...globalIngredients, newIngredient];
     }
 
-    // Guardar en Supabase con manejo de errores
-    try {
-      await api.saveGlobalIngredients(updatedIngredients);
-      
-      // Recargar datos
-      await loadGlobalData();
+    // Guardar en Supabase
+    await api.saveGlobalIngredients(updatedIngredients);
+    
+    // Recargar datos
+    await loadGlobalData();
 
-      // Limpiar formulario
-      handleCancel();
-    } catch (error) {
-      console.error('Error al guardar ingrediente:', error);
-      alert('Error al guardar el ingrediente. Por favor inténtalo de nuevo.');
-    }
+    // Limpiar formulario
+    handleCancel();
   };
 
   const handleDeleteIngredient = async (ingredientId: string) => {
     if (confirm('¿Estás seguro de eliminar este ingrediente? Esto lo quitará para TODOS los usuarios.')) {
-      try {
-        const updatedIngredients = globalIngredients.filter(ing => ing.id !== ingredientId);
-        
-        await api.saveGlobalIngredients(updatedIngredients);
-        await loadGlobalData();
-      } catch (error) {
-        console.error('Error al eliminar ingrediente:', error);
-        alert('Error al eliminar el ingrediente. Por favor inténtalo de nuevo.');
-      }
+      const updatedIngredients = globalIngredients.filter(ing => ing.id !== ingredientId);
+      
+      await api.saveGlobalIngredients(updatedIngredients);
+      await loadGlobalData();
     }
   };
 
@@ -787,18 +713,13 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     }
 
     if (confirm(`¿Estás seguro de eliminar ${selectedIngredientIds.size} ingrediente(s)? Esto lo quitará para TODOS los usuarios.`)) {
-      try {
-        const updatedIngredients = globalIngredients.filter(
-          ing => !selectedIngredientIds.has(ing.id)
-        );
-        
-        await api.saveGlobalIngredients(updatedIngredients);
-        await loadGlobalData();
-        setSelectedIngredientIds(new Set());
-      } catch (error) {
-        console.error('Error al eliminar ingredientes:', error);
-        alert('Error al eliminar los ingredientes. Por favor inténtalo de nuevo.');
-      }
+      const updatedIngredients = globalIngredients.filter(
+        ing => !selectedIngredientIds.has(ing.id)
+      );
+      
+      await api.saveGlobalIngredients(updatedIngredients);
+      await loadGlobalData();
+      setSelectedIngredientIds(new Set());
     }
   };
 
@@ -818,18 +739,13 @@ export default function AdminPanel({ onBack, user }: AdminPanelProps) {
     const ingredientsToDelete = globalIngredients.length - startIndex + 1;
     
     if (confirm(`¿Estás seguro de eliminar ${ingredientsToDelete} ingrediente(s) desde el #${startIndex} hasta el #${globalIngredients.length}? Esto lo quitará para TODOS los usuarios.`)) {
-      try {
-        // Mantener solo los ingredientes antes del índice especificado
-        const updatedIngredients = globalIngredients.slice(0, startIndex - 1);
-        
-        await api.saveGlobalIngredients(updatedIngredients);
-        await loadGlobalData();
-        setSelectedIngredientIds(new Set());
-        setDeleteFromNumber('');
-      } catch (error) {
-        console.error('Error al eliminar ingredientes:', error);
-        alert('Error al eliminar los ingredientes. Por favor inténtalo de nuevo.');
-      }
+      // Mantener solo los ingredientes antes del índice especificado
+      const updatedIngredients = globalIngredients.slice(0, startIndex - 1);
+      
+      await api.saveGlobalIngredients(updatedIngredients);
+      await loadGlobalData();
+      setSelectedIngredientIds(new Set());
+      setDeleteFromNumber('');
     }
   };
 

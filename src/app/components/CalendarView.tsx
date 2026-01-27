@@ -19,7 +19,7 @@ export default function CalendarView({ dailyLogs, onBack, onCopyDay, user }: Cal
 
   const calculateTotals = (log: DailyLog) => {
     const meals = [log.breakfast, log.lunch, log.snack, log.dinner];
-    const totals = meals.reduce(
+    return meals.reduce(
       (acc, meal) => {
         if (meal) {
           acc.calories += meal.calories;
@@ -31,18 +31,6 @@ export default function CalendarView({ dailyLogs, onBack, onCopyDay, user }: Cal
       },
       { calories: 0, protein: 0, carbs: 0, fat: 0 }
     );
-
-    // ✅ NUEVO: Agregar comidas extra
-    if (log.extraFoods && log.extraFoods.length > 0) {
-      log.extraFoods.forEach(extra => {
-        totals.calories += extra.calories;
-        totals.protein += extra.protein;
-        totals.carbs += extra.carbs;
-        totals.fat += extra.fat;
-      });
-    }
-
-    return totals;
   };
 
   const getMealCount = (log: DailyLog) => {
@@ -51,19 +39,10 @@ export default function CalendarView({ dailyLogs, onBack, onCopyDay, user }: Cal
 
   const calculateScore = (log: DailyLog) => {
     const totals = calculateTotals(log);
-    // Protección contra división por cero
-    const caloriesScore = user.goals.calories > 0 
-      ? Math.min((totals.calories / user.goals.calories) * 100, 100) 
-      : 0;
-    const proteinScore = user.goals.protein > 0 
-      ? Math.min((totals.protein / user.goals.protein) * 100, 100) 
-      : 0;
-    const carbsScore = user.goals.carbs > 0 
-      ? Math.min((totals.carbs / user.goals.carbs) * 100, 100) 
-      : 0;
-    const fatScore = user.goals.fat > 0 
-      ? Math.min((totals.fat / user.goals.fat) * 100, 100) 
-      : 0;
+    const caloriesScore = Math.min((totals.calories / user.goals.calories) * 100, 100);
+    const proteinScore = Math.min((totals.protein / user.goals.protein) * 100, 100);
+    const carbsScore = Math.min((totals.carbs / user.goals.carbs) * 100, 100);
+    const fatScore = Math.min((totals.fat / user.goals.fat) * 100, 100);
     
     return Math.round((caloriesScore + proteinScore + carbsScore + fatScore) / 4);
   };
@@ -644,32 +623,6 @@ export default function CalendarView({ dailyLogs, onBack, onCopyDay, user }: Cal
                       <span>🥩 {selectedDay.dinner.protein}g</span>
                       <span>🌾 {selectedDay.dinner.carbs}g</span>
                       <span>💧 {selectedDay.dinner.fat}g</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* ✅ NUEVO: Comidas Extra */}
-                {selectedDay.extraFoods && selectedDay.extraFoods.length > 0 && (
-                  <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-5 border-2 border-orange-200">
-                    <div className="mb-4">
-                      <span className="text-sm text-orange-700 font-bold uppercase flex items-center gap-2">
-                        <span className="text-2xl">🍪</span> Comidas Extra
-                      </span>
-                    </div>
-                    <div className="space-y-3">
-                      {selectedDay.extraFoods.map((extra, index) => (
-                        <div key={index} className="bg-white/50 rounded-lg p-3 border border-orange-100">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="font-semibold text-neutral-800">{extra.name}</p>
-                            <span className="text-sm text-neutral-800 font-bold">{extra.calories} kcal</span>
-                          </div>
-                          <div className="flex gap-4 text-xs font-medium text-neutral-700">
-                            <span>🥩 {extra.protein}g</span>
-                            <span>🌾 {extra.carbs}g</span>
-                            <span>💧 {extra.fat}g</span>
-                          </div>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 )}

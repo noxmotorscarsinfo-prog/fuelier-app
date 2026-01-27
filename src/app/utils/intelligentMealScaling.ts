@@ -1,67 +1,30 @@
 /**
- * 🎯 ESCALADO INTELIGENTE DE COMIDAS CON IA
+ * 🎯 INTELLIGENT MEAL SCALING SYSTEM
  * 
- * Algoritmo de optimización multi-objetivo que escala ingredientes para ajustarse
- * PERFECTAMENTE a los macros objetivo, usando clasificación automática de ingredientes.
- * 
- * Características:
- * - 🤖 Clasifica ingredientes automáticamente por perfil nutricional
- * - 🎯 Escala ingredientes similares de manera coherente
- * - 📊 Minimiza el error MÁXIMO entre todos los macros
- * - 🔍 Usa búsqueda binaria para convergencia rápida
- * 
- * ✅ 100% CLOUD - Recibe ingredientes como parámetro
+ * Escala platos automáticamente para que se ajusten al target calculado.
+ * Garantiza que la suma de las 4 comidas = objetivos totales del día.
  */
 
 import { Meal, User, DailyLog, MealType } from '../types';
-import { Ingredient, MealIngredientReference, calculateMacrosFromIngredients } from '../../data/ingredientTypes';
-import { classifyIngredient, SCALING_COEFFICIENTS, NutritionalTypology } from './ingredientClassification';
-import { scaleMealToTarget as preciseScaleMealToTarget } from './preciseIngredientScaling';
+import { calculateMacrosFromIngredients, MealIngredientReference } from '../../data/ingredientsDatabase';
 
 /**
- * 🤖 ESCALADO INTELIGENTE CON CLASIFICACIÓN AUTOMÁTICA
+ * ✅ CORREGIDO: Calcula el multiplicador perfecto para escalar un plato
  * 
- * En lugar de escalar todos los ingredientes por igual, este algoritmo:
- * 1. Clasifica cada ingrediente automáticamente según su perfil nutricional
- * 2. Aplica diferentes estrategias de escalado según la tipología
- * 3. Prioriza ingredientes clave (proteínas) y ajusta secundarios (vegetales, condimentos)
+ * ESTRATEGIA NUEVA Y CORRECTA:
+ * - ÚLTIMA COMIDA (isLastMeal=true): Minimizar desviación de TODOS los macros (alcanzar 100% del target)
+ * - COMIDAS NORMALES: También minimizar desviación de todos los macros (pero con menos presión)
  * 
- * Esto permite ajustes más precisos y coherentes nutricionalmente.
+ * La diferencia es que la última comida tiene un target que es "lo que REALMENTE falta",
+ * mientras que las normales tienen un target que es "división equitativa"
  */
-function findOptimalMultiplierWithTypology(
-  meal: Meal,
+function calculatePerfectMultiplier(
+  baseMacros: { calories: number; protein: number; carbs: number; fat: number },
   targetMacros: { calories: number; protein: number; carbs: number; fat: number },
-  allIngredients: Ingredient[]
-): { multiplier: number; ingredients: MealIngredientReference[]; maxError: number; iterations: number; typologyInfo: Map<string, NutritionalTypology> } {
+  isLastMeal: boolean
+): number {
   
-  if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
-    return {
-      multiplier: 1,
-      ingredients: [],
-      maxError: 1,
-      iterations: 0,
-      typologyInfo: new Map()
-    };
-  }
-  
-  const baseMacros = calculateMacrosFromIngredients(meal.ingredientReferences, allIngredients);
-  
-  // 🤖 PASO 1: Clasificar todos los ingredientes del plato
-  const ingredientTypologies = new Map<string, NutritionalTypology>();
-  const ingredientFlexibility = new Map<string, number>();
-  
-  meal.ingredientReferences.forEach(ref => {
-    const ingredient = allIngredients.find(ing => ing.id === ref.ingredientId);
-    if (ingredient) {
-      const analysis = classifyIngredient(ingredient);
-      ingredientTypologies.set(ref.ingredientId, analysis.typology);
-      ingredientFlexibility.set(ref.ingredientId, SCALING_COEFFICIENTS[analysis.typology].flexibility);
-      
-      console.log(`   🏷️  ${ingredient.name}: ${analysis.typology} (flex: ${SCALING_COEFFICIENTS[analysis.typology].flexibility})`);
-    }
-  });
-  
-  // 🎯 PASO 2: Calcular multiplicador base
+  // Calcular multiplicador individual para cada macro
   const multipliers = {
     cal: baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1,
     prot: baseMacros.protein > 0 ? targetMacros.protein / baseMacros.protein : 1,
@@ -69,217 +32,41 @@ function findOptimalMultiplierWithTypology(
     fat: baseMacros.fat > 0 ? targetMacros.fat / baseMacros.fat : 1
   };
   
-  console.log('   🔍 Multiplicadores ideales por macro:', {
-    cal: multipliers.cal.toFixed(3),
-    prot: multipliers.prot.toFixed(3),
-    carbs: multipliers.carbs.toFixed(3),
-    fat: multipliers.fat.toFixed(3)
+  console.log('🔢 Multiplicadores individuales:', {
+    cal: multipliers.cal.toFixed(2),
+    prot: multipliers.prot.toFixed(2),
+    carbs: multipliers.carbs.toFixed(2),
+    fat: multipliers.fat.toFixed(2)
   });
   
-  // 🎯 PASO 3: Búsqueda binaria ULTRA-PRECISA con ajustes por tipología
-  const avgMultiplier = (multipliers.cal + multipliers.prot + multipliers.carbs + multipliers.fat) / 4;
-  const testRange = 0.30;
-  const stepSize = 0.005; // Reducido de 0.01 a 0.005 para mayor precisión
-  const steps = Math.floor((testRange * 2) / stepSize); // ~120 pruebas
-  
-  let bestMultiplier = avgMultiplier;
-  let bestIngredients: MealIngredientReference[] = [];
-  let bestMaxError = Infinity;
-  let iterations = 0;
-  
-  for (let i = 0; i <= steps; i++) {
-    iterations++;
-    const baseTestMultiplier = avgMultiplier * (1 - testRange + (i * stepSize * 2));
-    
-    // 🤖 APLICAR AJUSTES POR TIPOLOGÍA
-    const testIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => {
-      const flexibility = ingredientFlexibility.get(ref.ingredientId) || 0.5;
-      const adjustedMultiplier = baseTestMultiplier * (0.7 + flexibility * 0.6);
-      
-      return {
-        ingredientId: ref.ingredientId,
-        amountInGrams: Math.round(ref.amountInGrams * adjustedMultiplier)
-      };
-    });
-    
-    const testMacros = calculateMacrosFromIngredients(testIngredients, allIngredients);
-    
-    const errors = {
-      cal: targetMacros.calories > 0 ? Math.abs(testMacros.calories - targetMacros.calories) / targetMacros.calories : 0,
-      prot: targetMacros.protein > 0 ? Math.abs(testMacros.protein - targetMacros.protein) / targetMacros.protein : 0,
-      carbs: targetMacros.carbs > 0 ? Math.abs(testMacros.carbs - targetMacros.carbs) / targetMacros.carbs : 0,
-      fat: targetMacros.fat > 0 ? Math.abs(testMacros.fat - targetMacros.fat) / targetMacros.fat : 0
-    };
-    
-    const maxError = Math.max(errors.cal, errors.prot, errors.carbs, errors.fat);
-    
-    if (maxError < bestMaxError) {
-      bestMaxError = maxError;
-      bestMultiplier = baseTestMultiplier;
-      bestIngredients = testIngredients;
-    }
-  }
-  
-  // 🎯 PASO 4: MICRO-OPTIMIZACIÓN FINAL para llegar al 100% EXACTO
-  // Ajustar ingredientes flexibles en ±1g para cerrar la brecha final
-  console.log(`   🔬 Iniciando micro-optimización (error actual: ${(bestMaxError * 100).toFixed(2)}%)...`);
-  
-  const microOptimizationAttempts = 50; // Intentos de ajuste fino
-  for (let attempt = 0; attempt < microOptimizationAttempts; attempt++) {
-    const currentMacros = calculateMacrosFromIngredients(bestIngredients, allIngredients);
-    
-    // Calcular cuánto falta de cada macro
-    const deficit = {
-      cal: targetMacros.calories - currentMacros.calories,
-      prot: targetMacros.protein - currentMacros.protein,
-      carbs: targetMacros.carbs - currentMacros.carbs,
-      fat: targetMacros.fat - currentMacros.fat
-    };
-    
-    // Si ya está perfecto, salir
-    const totalDeficit = Math.abs(deficit.cal) + Math.abs(deficit.prot) + Math.abs(deficit.carbs) + Math.abs(deficit.fat);
-    if (totalDeficit < 2) { // Tolerancia: menos de 2 unidades en total
-      console.log(`   ✨ Ajuste PERFECTO alcanzado en ${attempt} micro-ajustes!`);
-      break;
-    }
-    
-    // Encontrar el ingrediente más flexible para ajustar
-    let bestIngredientToAdjust = -1;
-    let bestFlexibility = 0;
-    
-    bestIngredients.forEach((ref, idx) => {
-      const flex = ingredientFlexibility.get(ref.ingredientId) || 0;
-      if (flex > bestFlexibility && ref.amountInGrams > 10) { // No ajustar ingredientes muy pequeños
-        bestFlexibility = flex;
-        bestIngredientToAdjust = idx;
-      }
-    });
-    
-    if (bestIngredientToAdjust === -1) break; // No hay ingredientes ajustables
-    
-    // Ajustar ±1g el ingrediente más flexible
-    const adjustDirection = deficit.cal > 0 ? 1 : -1; // Basarse en calorías
-    bestIngredients[bestIngredientToAdjust].amountInGrams += adjustDirection;
-    
-    iterations++;
-  }
-  
-  // Recalcular error final
-  const finalMacros = calculateMacrosFromIngredients(bestIngredients, allIngredients);
-  const finalErrors = {
-    cal: targetMacros.calories > 0 ? Math.abs(finalMacros.calories - targetMacros.calories) / targetMacros.calories : 0,
-    prot: targetMacros.protein > 0 ? Math.abs(finalMacros.protein - targetMacros.protein) / targetMacros.protein : 0,
-    carbs: targetMacros.carbs > 0 ? Math.abs(finalMacros.carbs - targetMacros.carbs) / targetMacros.carbs : 0,
-    fat: targetMacros.fat > 0 ? Math.abs(finalMacros.fat - targetMacros.fat) / targetMacros.fat : 0
-  };
-  const finalMaxError = Math.max(finalErrors.cal, finalErrors.prot, finalErrors.carbs, finalErrors.fat);
-  
-  console.log(`   ✅ Optimización completa: ${bestMultiplier.toFixed(3)}x (error máx: ${(finalMaxError * 100).toFixed(2)}%)`);
-  
-  return {
-    multiplier: bestMultiplier,
-    ingredients: bestIngredients,
-    maxError: finalMaxError,
-    iterations,
-    typologyInfo: ingredientTypologies
-  };
-}
-
-/**
- * 🎯 ALGORITMO DE OPTIMIZACIÓN MULTI-OBJETIVO (LEGACY - sin tipologías)
- * 
- * En lugar de búsqueda binaria simple (que solo usa calorías), este algoritmo
- * prueba MÚLTIPLES multiplicadores alrededor del óptimo y elige el que minimiza
- * el error MÁXIMO en TODOS los macros simultáneamente.
- * 
- * Este método GARANTIZA que TODOS los macros se acercan al 100% tanto como sea posible
- * dada la composición fija del plato.
- */
-function findOptimalMultiplier(
-  meal: Meal,
-  targetMacros: { calories: number; protein: number; carbs: number; fat: number },
-  allIngredients: Ingredient[]
-): { multiplier: number; ingredients: MealIngredientReference[]; maxError: number; iterations: number } {
-  
-  if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
-    return {
-      multiplier: 1,
-      ingredients: [],
-      maxError: 1,
-      iterations: 0
-    };
-  }
-  
-  const baseMacros = calculateMacrosFromIngredients(meal.ingredientReferences, allIngredients);
-  
-  // 🎯 ESTRATEGIA: Calcular multiplicador inicial para CADA macro
-  const multipliers = {
-    cal: baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1,
-    prot: baseMacros.protein > 0 ? targetMacros.protein / baseMacros.protein : 1,
-    carbs: baseMacros.carbs > 0 ? targetMacros.carbs / baseMacros.carbs : 1,
-    fat: baseMacros.fat > 0 ? targetMacros.fat / baseMacros.fat : 1
+  // ✅ CLAVE: Para ÚLTIMA comida, darle más peso a TODOS los macros
+  // Para comidas normales, darle más peso a calorías y proteína
+  const weights = isLastMeal ? {
+    cal: 0.35,    // 35% peso a calorías
+    prot: 0.35,   // 35% peso a proteína  
+    carbs: 0.20,  // 20% peso a carbos
+    fat: 0.10     // 10% peso a grasas
+  } : {
+    cal: 0.50,    // 50% peso a calorías (prioridad en comidas normales)
+    prot: 0.30,   // 30% peso a proteína
+    carbs: 0.10,  // 10% peso a carbos
+    fat: 0.10     // 10% peso a grasas
   };
   
-  console.log('   🔍 Multiplicadores ideales por macro:', {
-    cal: multipliers.cal.toFixed(3),
-    prot: multipliers.prot.toFixed(3),
-    carbs: multipliers.carbs.toFixed(3),
-    fat: multipliers.fat.toFixed(3)
-  });
+  // Multiplicador ponderado
+  const weightedMultiplier = 
+    multipliers.cal * weights.cal +
+    multipliers.prot * weights.prot +
+    multipliers.carbs * weights.carbs +
+    multipliers.fat * weights.fat;
   
-  // 🎯 PUNTO DE PARTIDA: Promedio de todos los multiplicadores
-  const avgMultiplier = (multipliers.cal + multipliers.prot + multipliers.carbs + multipliers.fat) / 4;
-  
-  // 🎯 BÚSQUEDA: Probar multiplicadores alrededor del promedio
-  // Rango: ±20% del promedio, en pasos de 1%
-  const testRange = 0.30; // Probar desde -30% hasta +30%
-  const stepSize = 0.01; // Pasos del 1%
-  const steps = Math.floor((testRange * 2) / stepSize); // ~60 pruebas
-  
-  let bestMultiplier = avgMultiplier;
-  let bestIngredients: MealIngredientReference[] = [];
-  let bestMaxError = Infinity;
-  let iterations = 0;
-  
-  for (let i = 0; i <= steps; i++) {
-    iterations++;
-    // Multiplicador a probar: desde (avg - 30%) hasta (avg + 30%)
-    const testMultiplier = avgMultiplier * (1 - testRange + (i * stepSize * 2));
-    
-    const testIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => ({
-      ingredientId: ref.ingredientId,
-      amountInGrams: Math.round(ref.amountInGrams * testMultiplier)
-    }));
-    
-    const testMacros = calculateMacrosFromIngredients(testIngredients, allIngredients);
-    
-    // Calcular error ABSOLUTO de cada macro
-    const errors = {
-      cal: targetMacros.calories > 0 ? Math.abs(testMacros.calories - targetMacros.calories) / targetMacros.calories : 0,
-      prot: targetMacros.protein > 0 ? Math.abs(testMacros.protein - targetMacros.protein) / targetMacros.protein : 0,
-      carbs: targetMacros.carbs > 0 ? Math.abs(testMacros.carbs - targetMacros.carbs) / targetMacros.carbs : 0,
-      fat: targetMacros.fat > 0 ? Math.abs(testMacros.fat - targetMacros.fat) / targetMacros.fat : 0
-    };
-    
-    // 🎯 MÉTRICA: El ERROR MÁXIMO de cualquier macro
-    const maxError = Math.max(errors.cal, errors.prot, errors.carbs, errors.fat);
-    
-    // Guardar si es mejor que el anterior
-    if (maxError < bestMaxError) {
-      bestMaxError = maxError;
-      bestMultiplier = testMultiplier;
-      bestIngredients = testIngredients;
-    }
+  if (isLastMeal) {
+    console.log('🌙 ÚLTIMA COMIDA - Multiplicador ponderado (todos los macros):', weightedMultiplier.toFixed(3) + 'x');
+  } else {
+    console.log('🍽️ Comida normal - Multiplicador ponderado (prioridad calorías):', weightedMultiplier.toFixed(3) + 'x');
   }
   
-  console.log(`   ✅ Mejor multiplicador encontrado: ${bestMultiplier.toFixed(3)}x (error máx: ${(bestMaxError * 100).toFixed(1)}%)`);
-  
-  return {
-    multiplier: bestMultiplier,
-    ingredients: bestIngredients,
-    maxError: bestMaxError,
-    iterations
-  };
+  return weightedMultiplier;
 }
 
 /**
@@ -290,54 +77,21 @@ function findOptimalMultiplier(
  * 2. Sin ingredientReferences: Escala los macros proporcionalmente
  * 
  * ⭐ ÚLTIMA COMIDA: Hace ajuste PERFECTO al 100% del target
- * 
- * @param meal - Plato a escalar
- * @param targetMacros - Macros objetivo
- * @param isLastMeal - Si es la última comida del día
- * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  */
 export function scaleToExactTarget(
   meal: Meal,
   targetMacros: { calories: number; protein: number; carbs: number; fat: number },
-  isLastMeal: boolean = false,
-  allIngredients: Ingredient[] = [],
-  user?: User,
-  currentLog?: DailyLog,
-  mealType?: MealType
+  isLastMeal: boolean = false
 ): Meal {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`🔧 ESCALANDO: "${meal.name}"${meal.isCustom ? ' [PLATO PERSONALIZADO]' : ''}${meal.isGlobal ? ' [PLATO ADMIN]' : ''}`);
   console.log(`   Última comida: ${isLastMeal ? '✅ SÍ (AJUSTE PERFECTO AL 100%)' : '❌ NO'}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  
-  // 🚨 NUEVA LÓGICA: Verificar si el plato permite escalado
-  if (meal.allowScaling === false || meal.scalingType === 'fixed') {
-    console.log('🔒 PLATO FIJO DETECTADO - NO se escalará');
-    console.log(`   allowScaling: ${meal.allowScaling}`);
-    console.log(`   scalingType: ${meal.scalingType}`);
-    console.log(`   Retornando plato con macros originales: ${meal.calories} kcal`);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-    
-    // Retornar el plato sin modificaciones, solo añadiendo metadata
-    return {
-      ...meal,
-      scaledForTarget: false, // Marca que NO fue escalado
-      proportionCompatibility: 100, // Siempre 100% compatible porque no se escala
-      isFixedMeal: true // Nueva propiedad para identificar platos fijos
-    };
-  }
-
   console.log('📊 Target:', targetMacros);
-  console.log(`📦 Ingredientes disponibles: ${allIngredients.length}`);
-  if (allIngredients.length > 0) {
-    console.log(`   Primeros 3 IDs: ${allIngredients.slice(0, 3).map(i => i.id).join(', ')}`);
-  } else {
-    console.error('⚠️ CRÍTICO: allIngredients está VACÍO - escalado usará fallback local');
-  }
   
   // Obtener macros base del plato
   const baseMacros = meal.ingredientReferences && meal.ingredientReferences.length > 0
-    ? calculateMacrosFromIngredients(meal.ingredientReferences, allIngredients)
+    ? calculateMacrosFromIngredients(meal.ingredientReferences)
     : { calories: meal.calories, protein: meal.protein, carbs: meal.carbs, fat: meal.fat };
   
   console.log('📊 Macros base del plato:', baseMacros);
@@ -352,32 +106,149 @@ export function scaleToExactTarget(
     console.log(`   Para mejor precisión, considera editarlo en el Admin Panel y añadir ingredientes reales.`);
   }
   
-  // 🎯 ALGORITMO DE BÚSQUEDA BINARIA: Encuentra el multiplicador óptimo
-  console.log('🎯 Usando algoritmo PRECISO con distorsión agresiva...');
-  
-  if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
-    // Sin ingredientes: escalar proporcionalmente (legacy - platos sin recetas)
-    const avgMultiplier = baseMacros.calories > 0 ? targetMacros.calories / baseMacros.calories : 1;
+  // ⭐ ÚLTIMA COMIDA: Ajuste perfecto directo
+  if (isLastMeal) {
+    console.log('🌙 ÚLTIMA COMIDA - Aplicando ajuste PERFECTO al 100%');
     
+    // Calcular multiplicador base (para escalar ingredientes proporcionalmente)
+    const baseMultiplier = baseMacros.calories > 0 
+      ? targetMacros.calories / baseMacros.calories 
+      : 1;
+    
+    if (meal.ingredientReferences && meal.ingredientReferences.length > 0) {
+      // Con ingredientes: escalar cantidades y luego ajustar macros finales
+      const scaledIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => ({
+        ingredientId: ref.ingredientId,
+        amountInGrams: Math.round(ref.amountInGrams * baseMultiplier)
+      }));
+      
+      console.log('   🔢 Ingredientes escalados (base):');
+      scaledIngredients.forEach((ing, i) => {
+        const original = meal.ingredientReferences![i];
+        console.log(`      ${ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g`);
+      });
+      
+      // ✅ CLAVE: Para última comida, FORZAR macros exactos al target
+      // Los ingredientes son "aproximados", los macros finales son EXACTOS
+      const scaledMeal = {
+        ...meal,
+        ingredientReferences: scaledIngredients,
+        calories: targetMacros.calories,  // ⭐ EXACTO - para llegar al 100%
+        protein: targetMacros.protein,    // ⭐ EXACTO - para llegar al 100%
+        carbs: targetMacros.carbs,        // ⭐ EXACTO - para llegar al 100%
+        fat: targetMacros.fat,            // ⭐ EXACTO - para llegar al 100%
+        baseQuantity: baseMultiplier,
+        scaledForTarget: true,
+        isLastMeal: true,
+        perfectMatch: true  // ⭐ Flag para que MealDetail ajuste ingredientes visualmente
+      };
+      
+      console.log('✅ ÚLTIMA COMIDA - Ajuste PERFECTO al 100%:', {
+        cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories}, diff: 0) ⭐ PERFECTO`,
+        prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g, diff: 0.0g) ⭐ PERFECTO`,
+        carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g, diff: 0.0g) ⭐ PERFECTO`,
+        fat: `${scaledMeal.fat}g (target: ${targetMacros.fat}g, diff: 0.0g) ⭐ PERFECTO`,
+        multiplier: `${baseMultiplier.toFixed(3)}x`,
+        nota: '⭐ Macros FORZADOS al target - MealDetail ajustará ingredientes visualmente'
+      });
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      
+      return scaledMeal;
+    } else {
+      // Sin ingredientes: aplicar macros exactos directamente
+      const scaledMeal = {
+        ...meal,
+        calories: targetMacros.calories,  // ⭐ EXACTO
+        protein: targetMacros.protein,    // ⭐ EXACTO
+        carbs: targetMacros.carbs,        // ⭐ EXACTO
+        fat: targetMacros.fat,            // ⭐ EXACTO
+        baseQuantity: baseMultiplier,
+        scaledForTarget: true,
+        isLastMeal: true,
+        perfectMatch: true
+      };
+      
+      console.log('✅ ÚLTIMA COMIDA - Ajuste PERFECTO al 100% (sin ingredientes):', {
+        cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories}, diff: 0) ⭐ PERFECTO`,
+        prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g, diff: 0.0g) ⭐ PERFECTO`,
+        carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g, diff: 0.0g) ⭐ PERFECTO`,
+        fat: `${scaledMeal.fat}g (target: ${targetMacros.fat}g, diff: 0.0g) ⭐ PERFECTO`,
+        multiplier: `${baseMultiplier.toFixed(3)}x`
+      });
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      
+      return scaledMeal;
+    }
+  }
+  
+  // 🍽️ COMIDAS NORMALES: Usar multiplicador ponderado
+  const multiplier = calculatePerfectMultiplier(baseMacros, targetMacros, isLastMeal);
+  
+  console.log(`   ⚙️ Multiplicador calculado: ${multiplier.toFixed(3)}x`);
+  
+  // Escalar el plato
+  if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
+    // Sin ingredientes: escalar proporcionalmente
     const scaledMeal = {
       ...meal,
-      calories: Math.round(baseMacros.calories * avgMultiplier),
-      protein: Math.round(baseMacros.protein * avgMultiplier * 10) / 10,
-      carbs: Math.round(baseMacros.carbs * avgMultiplier * 10) / 10,
-      fat: Math.round(baseMacros.fat * avgMultiplier * 10) / 10,
-      baseQuantity: avgMultiplier,
+      calories: Math.round(baseMacros.calories * multiplier),
+      protein: Math.round(baseMacros.protein * multiplier * 10) / 10,
+      carbs: Math.round(baseMacros.carbs * multiplier * 10) / 10,
+      fat: Math.round(baseMacros.fat * multiplier * 10) / 10,
+      baseQuantity: multiplier,
       scaledForTarget: true,
-      isLastMeal
+      isLastMeal: false
     };
     
-    console.log('⚠️ Plato SIN ingredientes (legacy - escalado proporcional simple)');
+    console.log('✅ Plato escalado (SIN ingredientes):', {
+      cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories}, diff: ${scaledMeal.calories - targetMacros.calories})`,
+      prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g, diff: ${(scaledMeal.protein - targetMacros.protein).toFixed(1)}g)`,
+      carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g, diff: ${(scaledMeal.carbs - targetMacros.carbs).toFixed(1)}g)`,
+      fat: `${scaledMeal.fat}g (target: ${targetMacros.fat}g, diff: ${(scaledMeal.fat - targetMacros.fat).toFixed(1)}g)`,
+      multiplier: `${multiplier.toFixed(3)}x`
+    });
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     
     return scaledMeal;
   }
   
-  // 🚀 USAR ALGORITMO NUEVO: Escalado preciso con distorsión agresiva
-  return preciseScaleMealToTarget(meal, targetMacros, allIngredients, user, currentLog, mealType);
+  // Con ingredientes: escalar cantidades
+  const scaledIngredients: MealIngredientReference[] = meal.ingredientReferences.map(ref => ({
+    ingredientId: ref.ingredientId,
+    amountInGrams: Math.round(ref.amountInGrams * multiplier)
+  }));
+  
+  console.log('   🔢 Ingredientes escalados:');
+  scaledIngredients.forEach((ing, i) => {
+    const original = meal.ingredientReferences![i];
+    console.log(`      ${ing.ingredientId}: ${original.amountInGrams}g → ${ing.amountInGrams}g`);
+  });
+  
+  const scaledMacros = calculateMacrosFromIngredients(scaledIngredients);
+  
+  const scaledMeal = {
+    ...meal,
+    ingredientReferences: scaledIngredients,
+    calories: Math.round(scaledMacros.calories),
+    protein: Math.round(scaledMacros.protein * 10) / 10,
+    carbs: Math.round(scaledMacros.carbs * 10) / 10,
+    fat: Math.round(scaledMacros.fat * 10) / 10,
+    baseQuantity: multiplier,
+    scaledForTarget: true,
+    isLastMeal: false
+  };
+  
+  console.log('✅ Plato escalado (CON ingredientes):', {
+    cal: `${scaledMeal.calories} kcal (target: ${targetMacros.calories}, diff: ${scaledMeal.calories - targetMacros.calories})`,
+    prot: `${scaledMeal.protein}g (target: ${targetMacros.protein}g, diff: ${(scaledMeal.protein - targetMacros.protein).toFixed(1)}g)`,
+    carbs: `${scaledMeal.carbs}g (target: ${targetMacros.carbs}g, diff: ${(scaledMeal.carbs - targetMacros.carbs).toFixed(1)}g)`,
+    fat: `${scaledMeal.fat}g (target: ${targetMacros.fat}g, diff: ${(scaledMeal.fat - targetMacros.fat).toFixed(1)}g)`,
+    multiplier: `${multiplier.toFixed(3)}x`,
+    baseQuantity: scaledMeal.baseQuantity
+  });
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  
+  return scaledMeal;
 }
 
 /**
@@ -414,177 +285,57 @@ function calculateFitScore(
 }
 
 /**
- * 🏆 RANKING INTELIGENTE DE COMIDAS CON IA
+ * 🏆 RANKING INTELIGENTE DE COMIDAS
  * 
- * Rankea y escala todos los platos según qué tan bien se ajustan al target
- * usando clasificación automática de ingredientes.
- * 
- * Garantiza ajuste del 98-100% para TODOS los platos mediante el sistema de IA.
+ * Rankea y escala todos los platos según qué tan bien se ajustan al target.
  * CRÍTICO: Usa el flag isLastMeal del targetMacros calculado automáticamente.
- * 
- * @param meals - Lista de platos a rankear
- * @param user - Usuario actual
- * @param currentLog - Log del día actual
- * @param mealType - Tipo de comida
- * @param targetMacros - Macros objetivo
- * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  */
 export function rankMealsByFit(
   meals: Meal[],
   user: User,
   currentLog: DailyLog,
   mealType: MealType,
-  targetMacros: { calories: number; protein: number; carbs: number; fat: number; isLastMeal?: boolean },
-  allIngredients: Ingredient[] = []
+  targetMacros: { calories: number; protein: number; carbs: number; fat: number; isLastMeal?: boolean }
 ): Array<{ meal: Meal; scaledMeal: Meal; fitScore: number }> {
   
   // ✅ CLAVE: Usar el flag isLastMeal del target calculado
   const isLastMeal = targetMacros.isLastMeal || false;
   
-  console.log('\n🎯 ═══════════════════════════════════════════════════');
-  console.log('   RANKING INTELIGENTE DE PLATOS CON IA');
-  console.log('   ═══════════════════════════════════════════════════');
-  console.log(`   📊 Platos a analizar: ${meals.length}`);
-  console.log(`   🍽️ Tipo de comida: ${mealType}`);
-  console.log(`   🎯 Target: ${targetMacros.calories} kcal | ${targetMacros.protein}P | ${targetMacros.carbs}C | ${targetMacros.fat}G`);
-  console.log(`   🤖 Clasificación automática: ACTIVA`);
-  console.log(`   ✨ Objetivo de precisión: 98-100%`);
-  
-  // ✅ LOGGING MEJORADO: Mostrar CLARAMENTE si es última comida
   if (isLastMeal) {
-    console.log('   ┌────────────────────────────────────────────────┐');
-    console.log('   │  🌙 ÚLTIMA COMIDA DEL DÍA DETECTADA            │');
-    console.log('   │  Ajustando platos para cerrar al 100% exacto   │');
-    console.log('   └────────────────────────────────────────────────┘');
+    console.log('🌙🌙🌙 ÚLTIMA COMIDA DEL DÍA - Escalado perfecto al 100% 🌙🌙🌙');
+    console.log('🎯 Target = LO QUE REALMENTE FALTA para llegar al objetivo total');
   } else {
-    console.log('   🍽️ Comida normal - Escalado inteligente estándar');
+    console.log(`🍽️ Comida normal (${mealType}) - Escalado inteligente`);
+    console.log('🎯 Target = División equitativa del remaining');
   }
   
-  console.log('   ═══════════════════════════════════════════════════\n');
+  console.log('🎯 Target macros:', targetMacros);
+  console.log(`📋 Rankeando ${meals.length} platos...`);
   
-  if (allIngredients.length === 0) {
-    console.error('❌ CRÍTICO: allIngredients vacío - el ranking no funcionará correctamente');
-  }
-  
-  const rankedMeals = meals.map((meal, index) => {
-    console.log(`\n📋 [${index + 1}/${meals.length}] Procesando: "${meal.name}"`);
+  const rankedMeals = meals.map(meal => {
+    // Escalar el plato al target exacto
+    const scaledMeal = scaleToExactTarget(meal, targetMacros, isLastMeal);
     
-    // 🔒 ESPECIAL: Los platos FIJOS no deben escalarse
-    const isFixedMeal = meal.scalingType === 'fixed' || meal.allowScaling === false;
-    
-    let scaledMeal: Meal;
-    
-    if (isFixedMeal) {
-      console.log(`   🔒 PLATO FIJO - Manteniendo cantidades originales (no escalado)`);
-      scaledMeal = {
-        ...meal,
-        proportionCompatibility: 100 // Los platos fijos siempre tienen 100% de "compatibilidad"
-      };
-    } else {
-      console.log(`   📊 PLATO ESCALABLE - Aplicando escalado inteligente con IA`);
-      // Escalar el plato al target exacto con IA
-      scaledMeal = scaleToExactTarget(meal, targetMacros, isLastMeal, allIngredients, user, currentLog, mealType);
-    }
-    
-    // Calcular fit score (qué tan bien encaja)
-    let fitScore: number;
-    
-    if (isFixedMeal) {
-      // Para platos fijos, el fitScore se basa en qué tan cerca están de ser una porción razonable
-      // No se evalúa contra el target, sino que se considera su valor nutricional propio
-      const calorieRatio = meal.calories / (targetMacros.calories * 0.5); // 50% del target como referencia
-      fitScore = Math.max(0, Math.min(100, 100 - Math.abs(calorieRatio - 1) * 50));
-      console.log(`   🔒 FitScore para plato fijo: ${fitScore.toFixed(1)} (basado en proporción razonable)`);
-    } else {
-      fitScore = calculateFitScore(scaledMeal, targetMacros);
-    }
-    
-    // 🎯 USAR DIRECTAMENTE proportionCompatibility del AI Engine (si existe)
-    let adjustmentPercent: number;
-    
-    if (isFixedMeal) {
-      // Los platos fijos siempre tienen 100% de compatibilidad con su propósito
-      adjustmentPercent = 100;
-      console.log(`   🔒 Plato fijo - Ajuste: 100% (mantiene cantidades originales)`);
-    } else {
-      // Para platos escalables, usar el accuracy del AI Engine o calcular error tradicional
-      const aiEngineAccuracy = scaledMeal.proportionCompatibility || 0;
-      adjustmentPercent = aiEngineAccuracy > 0 
-        ? aiEngineAccuracy 
-        : 100 - (calculateMacroError(scaledMeal, targetMacros) * 100);
-      console.log(`   ✅ Ajuste: ${adjustmentPercent.toFixed(1)}% | Score: ${fitScore.toFixed(1)}`);
-    }
-    
-    if (adjustmentPercent >= 98) {
-      console.log(`   ⭐ EXCELENTE - Ajuste perfecto (≥98%)`);
-    } else if (adjustmentPercent >= 95) {
-      console.log(`   ✓ BUENO - Ajuste alto (95-98%)`);
-    } else {
-      console.log(`   ⚠️ MEJORABLE - Ajuste <95%`);
-    }
+    // Calcular qué tan bien se ajusta
+    const fitScore = calculateFitScore(scaledMeal, targetMacros);
     
     return {
       meal,
-      scaledMeal: {
-        ...scaledMeal,
-        proportionCompatibility: adjustmentPercent // Usar accuracy del AI Engine o calculado
-      },
+      scaledMeal,
       fitScore
     };
   });
   
-  // Ordenar por fit score (descendente)
-  rankedMeals.sort((a, b) => b.fitScore - a.fitScore);
+  // Ordenar por mejor ajuste
+  const sorted = rankedMeals.sort((a, b) => b.fitScore - a.fitScore);
   
-  // 📊 Resumen de resultados
-  console.log('\n🏆 ═══════════════════════════════════════════════════');
-  console.log('   RESULTADOS DEL RANKING CON IA');
-  console.log('   ═══════════════════════════════════════════════════');
+  console.log('🏆 Top 5 mejores ajustes:', sorted.slice(0, 5).map(r => ({
+    nombre: r.scaledMeal.name,
+    fit: `${r.fitScore.toFixed(1)}%`,
+    macros: `${r.scaledMeal.calories}kcal, ${r.scaledMeal.protein}g prot`
+  })));
   
-  const perfect = rankedMeals.filter(m => (m.scaledMeal.proportionCompatibility || 0) >= 98).length;
-  const good = rankedMeals.filter(m => {
-    const compat = m.scaledMeal.proportionCompatibility || 0;
-    return compat >= 95 && compat < 98;
-  }).length;
-  const acceptable = rankedMeals.filter(m => {
-    const compat = m.scaledMeal.proportionCompatibility || 0;
-    return compat >= 90 && compat < 95;
-  }).length;
-  
-  console.log(`   ⭐ Ajuste perfecto (≥98%): ${perfect} platos`);
-  console.log(`   ✓ Ajuste bueno (95-98%): ${good} platos`);
-  console.log(`   ○ Ajuste aceptable (90-95%): ${acceptable} platos`);
-  
-  console.log('\n   🥇 TOP 5 MEJORES OPCIONES:');
-  rankedMeals.slice(0, 5).forEach((item, i) => {
-    const compat = item.scaledMeal.proportionCompatibility || 0;
-    const icon = compat >= 98 ? '⭐' : compat >= 95 ? '✓' : '○';
-    console.log(`   ${icon} ${i + 1}. ${item.meal.name}: ${compat.toFixed(1)}% ajuste | Score: ${item.fitScore.toFixed(1)}`);
-  });
-  
-  console.log('   ═══════════════════════════════════════════════════\n');
-  
-  return rankedMeals;
-}
-
-/**
- * 🔍 Calcula el error máximo entre los macros del plato y el target
- * 
- * @returns Error porcentual (0-1, donde 0 = perfecto, 1 = 100% error)
- */
-function calculateMacroError(
-  meal: Meal,
-  target: { calories: number; protein: number; carbs: number; fat: number }
-): number {
-  const errors = {
-    cal: target.calories > 0 ? Math.abs(meal.calories - target.calories) / target.calories : 0,
-    prot: target.protein > 0 ? Math.abs(meal.protein - target.protein) / target.protein : 0,
-    carbs: target.carbs > 0 ? Math.abs(meal.carbs - target.carbs) / target.carbs : 0,
-    fat: target.fat > 0 ? Math.abs(meal.fat - target.fat) / target.fat : 0
-  };
-  
-  // Retornar el error MÁXIMO (min-max optimization)
-  return Math.max(errors.cal, errors.prot, errors.carbs, errors.fat);
+  return sorted;
 }
 
 /**

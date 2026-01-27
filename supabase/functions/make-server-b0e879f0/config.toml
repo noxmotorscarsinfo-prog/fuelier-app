@@ -1,0 +1,3 @@
+# Deshabilitar verificación JWT para permitir requests sin autenticación
+# Nuestro código maneja la autenticación internamente con SERVICE_ROLE_KEY
+verify_jwt = false

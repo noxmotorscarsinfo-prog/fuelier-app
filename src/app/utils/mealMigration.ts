@@ -3,12 +3,10 @@
  * 
  * Convierte platos viejos sin ingredientReferences a platos con ingredientes estructurados.
  * Esto garantiza que TODOS los platos puedan escalarse correctamente.
- * 
- * ✅ 100% CLOUD - No usa datos locales, recibe ingredientes de Supabase
  */
 
 import { Meal, MealIngredientReference } from '../types';
-import { Ingredient } from '../../data/ingredientTypes';
+import { INGREDIENTS_DATABASE } from '../../data/ingredientsDatabase';
 
 /**
  * 🔍 NUEVA FUNCIÓN: Extrae cantidad y nombre de un string de ingrediente
@@ -30,21 +28,19 @@ function parseIngredientString(ingredientStr: string): { grams: number; name: st
 }
 
 /**
- * 🔍 Busca un ingrediente en la lista de ingredientes por similitud de nombre
- * @param name - Nombre del ingrediente a buscar
- * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
+ * 🔍 Busca un ingrediente en la base de datos por similitud de nombre
  */
-function findIngredientByName(name: string, allIngredients: Ingredient[]): string | null {
+function findIngredientByName(name: string): string | null {
   const normalizedName = name.toLowerCase().trim();
   
   // 1. Búsqueda exacta
-  const exactMatch = allIngredients.find(
+  const exactMatch = INGREDIENTS_DATABASE.find(
     ing => ing.name.toLowerCase() === normalizedName
   );
   if (exactMatch) return exactMatch.id;
   
   // 2. Búsqueda por inclusión (el nombre contiene o está contenido)
-  const partialMatch = allIngredients.find(ing => {
+  const partialMatch = INGREDIENTS_DATABASE.find(ing => {
     const dbName = ing.name.toLowerCase();
     return dbName.includes(normalizedName) || normalizedName.includes(dbName);
   });
@@ -141,10 +137,8 @@ function findIngredientByName(name: string, allIngredients: Ingredient[]): strin
 /**
  * 🆕 NUEVA ESTRATEGIA: Intenta inferir ingredientes desde el campo "ingredients"
  * Este campo contiene strings como ["50g salmón ahumado", "100g aguacate"]
- * @param meal - El plato a analizar
- * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  */
-function inferIngredientsFromStrings(meal: Meal, allIngredients: Ingredient[]): MealIngredientReference[] {
+function inferIngredientsFromStrings(meal: Meal): MealIngredientReference[] {
   const references: MealIngredientReference[] = [];
   
   // Si el plato tiene el campo "ingredients" (array de strings)
@@ -159,7 +153,7 @@ function inferIngredientsFromStrings(meal: Meal, allIngredients: Ingredient[]): 
         continue;
       }
       
-      const ingredientId = findIngredientByName(parsed.name, allIngredients);
+      const ingredientId = findIngredientByName(parsed.name);
       
       if (ingredientId) {
         references.push({
@@ -181,16 +175,14 @@ function inferIngredientsFromStrings(meal: Meal, allIngredients: Ingredient[]): 
   
   // Si no hay ingredients o no se pudo mapear nada, usar estrategia de respaldo
   console.log(`   ⚠️ No se pudieron mapear ingredientes. Usando inferencia por macros...`);
-  return inferIngredientsFromMacros(meal, allIngredients);
+  return inferIngredientsFromMacros(meal);
 }
 
 /**
  * Intenta inferir ingredientes basándose en los macros del plato
  * Esta es una solución de respaldo para platos sin ingredientes
- * @param meal - El plato a analizar
- * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  */
-function inferIngredientsFromMacros(meal: Meal, allIngredients: Ingredient[]): MealIngredientReference[] {
+function inferIngredientsFromMacros(meal: Meal): MealIngredientReference[] {
   const references: MealIngredientReference[] = [];
   
   // Estrategia: Crear un plato "genérico" que coincida con los macros
@@ -199,7 +191,7 @@ function inferIngredientsFromMacros(meal: Meal, allIngredients: Ingredient[]): M
   // 1. Calcular proteína necesaria (usar pechuga de pollo como base)
   const proteinNeeded = meal.protein;
   if (proteinNeeded > 0) {
-    const chickenBreast = allIngredients.find(i => i.id === 'pollo-pechuga');
+    const chickenBreast = INGREDIENTS_DATABASE.find(i => i.id === 'pollo-pechuga');
     if (chickenBreast) {
       // Pechuga de pollo: ~23g proteína por 100g
       const gramsNeeded = Math.round((proteinNeeded / chickenBreast.proteinPer100g) * 100);
@@ -213,7 +205,7 @@ function inferIngredientsFromMacros(meal: Meal, allIngredients: Ingredient[]): M
   // 2. Calcular carbohidratos necesarios (usar arroz como base)
   const carbsNeeded = meal.carbs;
   if (carbsNeeded > 0) {
-    const rice = allIngredients.find(i => i.id === 'arroz-blanco');
+    const rice = INGREDIENTS_DATABASE.find(i => i.id === 'arroz-blanco');
     if (rice) {
       // Arroz: ~28g carbos por 100g
       const gramsNeeded = Math.round((carbsNeeded / rice.carbsPer100g) * 100);
@@ -227,7 +219,7 @@ function inferIngredientsFromMacros(meal: Meal, allIngredients: Ingredient[]): M
   // 3. Calcular grasas necesarias (usar aceite de oliva como base)
   const fatNeeded = meal.fat;
   if (fatNeeded > 0) {
-    const oil = allIngredients.find(i => i.id === 'aceite-oliva');
+    const oil = INGREDIENTS_DATABASE.find(i => i.id === 'aceite-oliva');
     if (oil) {
       // Aceite: ~100g grasa por 100g
       const gramsNeeded = Math.round((fatNeeded / oil.fatPer100g) * 100);
@@ -243,10 +235,8 @@ function inferIngredientsFromMacros(meal: Meal, allIngredients: Ingredient[]): M
 
 /**
  * Migra un plato sin ingredientReferences a uno con ingredientes estructurados
- * @param meal - El plato a migrar
- * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  */
-export function migrateMealToStructured(meal: Meal, allIngredients: Ingredient[]): Meal {
+export function migrateMealToStructured(meal: Meal): Meal {
   // Si ya tiene ingredientReferences, no hacer nada
   if (meal.ingredientReferences && meal.ingredientReferences.length > 0) {
     return meal;
@@ -255,7 +245,7 @@ export function migrateMealToStructured(meal: Meal, allIngredients: Ingredient[]
   console.log(`   🔄 Migrando "${meal.name}"...`);
   
   // 🆕 NUEVA ESTRATEGIA: Intentar mapear desde el campo "ingredients"
-  const inferredIngredients = inferIngredientsFromStrings(meal, allIngredients);
+  const inferredIngredients = inferIngredientsFromStrings(meal);
   
   // Si no se pudieron inferir ingredientes, crear un ingrediente genérico
   if (inferredIngredients.length === 0) {
@@ -284,16 +274,8 @@ export function migrateMealToStructured(meal: Meal, allIngredients: Ingredient[]
 /**
  * Migra un array de platos, convirtiendo todos los que no tengan ingredientes
  * ⚠️ INTENTA REPARAR AUTOMÁTICAMENTE usando el campo "ingredients"
- * @param meals - Lista de platos a migrar
- * @param allIngredients - Lista de ingredientes de Supabase (base + custom)
  */
-export function migrateMealsToStructured(meals: Meal[], allIngredients: Ingredient[]): Meal[] {
-  // Si no hay ingredientes disponibles, no se puede migrar
-  if (!allIngredients || allIngredients.length === 0) {
-    console.warn('⚠️ No hay ingredientes disponibles para la migración');
-    return meals;
-  }
-  
+export function migrateMealsToStructured(meals: Meal[]): Meal[] {
   // Separar platos globales y personalizados
   const globalMeals = meals.filter(meal => !meal.isCustom);
   const customMeals = meals.filter(meal => meal.isCustom);
@@ -324,7 +306,7 @@ export function migrateMealsToStructured(meals: Meal[], allIngredients: Ingredie
   const migratedGlobalMeals = globalMeals.map(meal => {
     if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
       migratedGlobalCount++;
-      return migrateMealToStructured(meal, allIngredients);
+      return migrateMealToStructured(meal);
     }
     return meal;
   });
@@ -336,7 +318,7 @@ export function migrateMealsToStructured(meals: Meal[], allIngredients: Ingredie
     if (!meal.ingredientReferences || meal.ingredientReferences.length === 0) {
       migratedCustomCount++;
       console.log(`   🔧 Reparando plato personalizado: "${meal.name}"`);
-      return migrateMealToStructured(meal, allIngredients);
+      return migrateMealToStructured(meal);
     }
     return meal;
   });
