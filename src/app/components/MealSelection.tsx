@@ -424,6 +424,16 @@ export default function MealSelection({
   };
 
   // ✅ Filtrar platos personalizados por el tipo de comida actual  
+  // 🔍 DEBUG: Log de todos los customMeals y sus tipos antes de filtrar
+  useEffect(() => {
+    if (customMeals && customMeals.length > 0) {
+      console.log('[DEBUG][Mis Platos] customMeals recibidos:', customMeals.map(m => ({ name: m.name, type: m.type })));
+      console.log('[DEBUG][Mis Platos] mealType actual:', mealType);
+    } else {
+      console.log('[DEBUG][Mis Platos] customMeals está vacío');
+    }
+  }, [customMeals, mealType]);
+
   const customMealsOfType = useMemo(() => {
     return customMeals.filter(meal => {
       if (Array.isArray(meal.type)) {
